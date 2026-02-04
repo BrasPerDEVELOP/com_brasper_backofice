@@ -1,0 +1,2 @@
+// Enumeraciones compartidas
+export {}
