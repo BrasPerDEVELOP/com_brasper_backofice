@@ -2,9 +2,24 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
 import { router } from '@/interface/router'
-import '@/interface/styles/global.css'
+import { setAuthCallbacks } from '@/interface/api/client'
+import { useAuthStore } from '@modules/auth/presentation/controllers/useAuthStore'
+import '@/interface/styles/main.css'
 
+const pinia = createPinia()
 const app = createApp(App)
-app.use(createPinia())
+app.use(pinia)
 app.use(router)
+
+setAuthCallbacks(
+  () => {
+    const store = useAuthStore()
+    return store.token ?? null
+  },
+  () => {
+    useAuthStore().logout()
+    router.push('/')
+  }
+)
+
 app.mount('#app')

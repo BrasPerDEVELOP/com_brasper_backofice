@@ -1,0 +1,10 @@
+@import "tailwindcss";
+@config "../../../tailwind.config.js";
+@layer base {
+  body {
+    @apply antialiased bg-surface text-on-surface font-sans;
+  }
+  #app {
+    @apply w-full min-h-screen;
+  }
+}
