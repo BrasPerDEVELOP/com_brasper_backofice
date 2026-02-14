@@ -55,20 +55,27 @@ export const useCalculatorStore = defineStore('calculator', {
       return found?.rate ?? 0
     },
 
-    /** Comisión del par actual (desde API commission). */
-    currentCommission(state): CommissionRange | null {
-      return (
-        state.commissions.find(
-          (c) => c.coin_a === state.currencyFrom && c.coin_b === state.currencyTo
-        ) ?? null
+    /** Comisiones del par actual (puede haber varios rangos por par). */
+    commissionsForPair(state): CommissionRange[] {
+      return state.commissions.filter(
+        (c) => c.coin_a === state.currencyFrom && c.coin_b === state.currencyTo
       )
+    },
+
+    /** Comisión cuyo rango contiene el monto actual (o null si no hay match). */
+    currentCommission(state): CommissionRange | null {
+      const pairCommissions = this.commissionsForPair
+      const amount = state.amountSend || state.amountReceive
+      if (amount <= 0) return pairCommissions[0] ?? null
+      const match = pairCommissions.find(
+        (c) => amount >= c.min_amount && amount <= c.max_amount
+      )
+      return match ?? pairCommissions[pairCommissions.length - 1] ?? null
     },
 
     /** Porcentaje de comisión aplicable al monto (respeta min_amount/max_amount). */
     currentCommissionPercentage(state): number {
-      const c = state.commissions.find(
-        (c) => c.coin_a === state.currencyFrom && c.coin_b === state.currencyTo
-      )
+      const c = this.currentCommission
       if (!c) return 0
       const amount = state.amountSend || state.amountReceive
       if (amount <= 0) return 0
@@ -82,16 +89,14 @@ export const useCalculatorStore = defineStore('calculator', {
         (r) => r.from === state.currencyFrom && r.to === state.currencyTo
       )?.rate
       if (!rate || rate <= 0) return null
-      const commissionDef = state.commissions.find(
-        (c) => c.coin_a === state.currencyFrom && c.coin_b === state.currencyTo
-      )
+      const pairCommissions = this.commissionsForPair
       const amount =
         state.amountSend > 0 ? state.amountSend : state.amountReceive > 0 ? state.amountReceive / rate : 0
       if (amount <= 0) return null
-      const commissionRate =
-        commissionDef && amount >= commissionDef.min_amount && amount <= commissionDef.max_amount
-          ? commissionDef.percentage / 100
-          : 0
+      const commissionDef = pairCommissions.find(
+        (c) => amount >= c.min_amount && amount <= c.max_amount
+      ) ?? pairCommissions[pairCommissions.length - 1]
+      const commissionRate = commissionDef ? commissionDef.percentage / 100 : 0
       const commission = amount * commissionRate
       const totalToSend = amount - commission
       const amountReceive = totalToSend * rate
@@ -108,17 +113,15 @@ export const useCalculatorStore = defineStore('calculator', {
     },
 
     minAmount(state): number {
-      const c = state.commissions.find(
-        (c) => c.coin_a === state.currencyFrom && c.coin_b === state.currencyTo
-      )
-      return c?.min_amount ?? 100
+      const pair = this.commissionsForPair
+      if (pair.length === 0) return 100
+      return Math.min(...pair.map((c) => c.min_amount))
     },
 
     maxAmount(state): number {
-      const c = state.commissions.find(
-        (c) => c.coin_a === state.currencyFrom && c.coin_b === state.currencyTo
-      )
-      return c?.max_amount ?? 50000
+      const pair = this.commissionsForPair
+      if (pair.length === 0) return 50000
+      return Math.max(...pair.map((c) => c.max_amount))
     }
   },
 
@@ -150,9 +153,7 @@ export const useCalculatorStore = defineStore('calculator', {
     updateSelectedIds() {
       const pair = getCurrencyPairKey(this.currencyFrom, this.currencyTo)
       const rate = this.taxRates.find((r) => r.pair === pair)
-      const commission = this.commissions.find(
-        (c) => c.coin_a === this.currencyFrom && c.coin_b === this.currencyTo
-      )
+      const commission = this.currentCommission
       this.selectedTaxRateId = rate?.id ?? null
       this.selectedCommissionId = commission?.id ?? null
     },
@@ -174,6 +175,7 @@ export const useCalculatorStore = defineStore('calculator', {
       this.amountReceive = 0
       const res = this.result
       if (res) this.amountReceive = res.amountReceive
+      this.updateSelectedIds()
     },
 
     setAmountReceive(value: number) {
@@ -181,16 +183,19 @@ export const useCalculatorStore = defineStore('calculator', {
       this.amountSend = 0
       const res = this.result
       if (res) this.amountSend = res.amountSend
+      this.updateSelectedIds()
     },
 
     recalcFromSend() {
       const res = this.result
       if (res && this.amountSend > 0) this.amountReceive = res.amountReceive
+      this.updateSelectedIds()
     },
 
     recalcFromReceive() {
       const res = this.result
       if (res && this.amountReceive > 0) this.amountSend = res.amountSend
+      this.updateSelectedIds()
     },
 
     resetAmounts() {

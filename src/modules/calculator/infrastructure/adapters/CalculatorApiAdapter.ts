@@ -77,30 +77,34 @@ export class CalculatorApiAdapter implements CalculatorRepository {
     return this.useDemo ? Domain.http('transactions/demo') : Domain.http('transactions')
   }
 
-  async getCurrencies(): Promise<CurrencyReadDTO[]> {
+  private endpoint(suffix: string): string {
     const base = this.coinBase()
-    const url = base.endsWith('/') ? `${base}currencies` : `${base}/currencies`
+    const path = this.useDemo ? `${suffix}-trial` : suffix
+    return base.endsWith('/') ? `${base}${path}` : `${base}/${path}`
+  }
+
+  async getCurrencies(): Promise<CurrencyReadDTO[]> {
+    const url = this.endpoint('currencies')
     const response = await apiClient.get<unknown>(url).catch(() => ({ data: [] }))
     return parseCurrencies(response.data ?? [])
   }
 
   async getTaxRates(): Promise<ExchangeRate[]> {
-    const base = this.coinBase()
-    const url = base.endsWith('/') ? `${base}tax-rate` : `${base}/tax-rate`
+    const url = this.endpoint('tax-rate')
     const response = await apiClient.get<unknown>(url).catch(() => ({ data: [] }))
     return parseTaxRates(Array.isArray(response.data) ? response.data : [])
   }
 
   async getCommissions(): Promise<CommissionRange[]> {
-    const base = this.coinBase()
-    const url = base.endsWith('/') ? `${base}commission` : `${base}/commission`
+    const url = this.endpoint('commission')
     const response = await apiClient.get<unknown>(url).catch(() => ({ data: [] }))
     return parseCommissions(Array.isArray(response.data) ? response.data : [])
   }
 
   async getAutomaticCoupons(): Promise<Coupon[]> {
     const base = this.transactionsBase()
-    const url = base.endsWith('/') ? `${base}coupons/automatic/` : `${base}/coupons/automatic/`
+    const path = this.useDemo ? 'coupons/automatic-trial/' : 'coupons/automatic/'
+    const url = base.endsWith('/') ? `${base}${path}` : `${base}/${path}`
     const response = await apiClient.get<unknown>(url).catch(() => ({ data: [] }))
     return parseCoupons(response.data ?? [])
   }
