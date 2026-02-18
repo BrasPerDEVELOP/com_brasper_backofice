@@ -77,14 +77,14 @@ export class CalculatorApiAdapter implements CalculatorRepository {
     return Domain.http('transactions')
   }
 
-  private endpoint(suffix: string): string {
+  private endpoint(suffix: string, useTrial = true): string {
     const base = this.coinBase()
-    const path = this.useDemo ? `${suffix}-trial` : suffix
+    const path = this.useDemo && useTrial ? `${suffix}-trial` : suffix
     return base.endsWith('/') ? `${base}${path}` : `${base}/${path}`
   }
 
   async getCurrencies(): Promise<CurrencyReadDTO[]> {
-    const url = this.endpoint('currencies')
+    const url = this.endpoint('currencies', false)
     const response = await apiClient.get<unknown>(url).catch(() => ({ data: [] }))
     return parseCurrencies(response.data ?? [])
   }
