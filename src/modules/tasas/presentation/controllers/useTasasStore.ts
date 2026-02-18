@@ -1,14 +1,23 @@
 import { defineStore } from 'pinia'
-import type { TaxRate } from '../../domain/models'
+import type { TaxRate, TaxRateHistoryEntry } from '../../domain/models'
 import type { TasasRepository } from '../../infrastructure/adapters/TasasRepository'
 import { TasasApiAdapter } from '../../infrastructure/adapters'
-import { GetTaxRatesUseCase, UpdateTaxRateUseCase, CreateTaxRateUseCase } from '../../application/use_cases'
+import {
+  GetTaxRatesUseCase,
+  GetTaxRateHistoryUseCase,
+  UpdateTaxRateUseCase,
+  CreateTaxRateUseCase,
+  DeleteTaxRateUseCase
+} from '../../application/use_cases'
 
 interface TasasState {
   taxRates: TaxRate[]
   isLoading: boolean
   error: string | null
   savingId: string | null
+  deletingId: string | null
+  loadingHistoryId: string | null
+  historyByTaxRateId: Record<string, TaxRateHistoryEntry[]>
 }
 
 function getRepository(): TasasRepository {
@@ -20,7 +29,10 @@ export const useTasasStore = defineStore('tasas', {
     taxRates: [],
     isLoading: false,
     error: null,
-    savingId: null
+    savingId: null,
+    deletingId: null,
+    loadingHistoryId: null,
+    historyByTaxRateId: {}
   }),
 
   actions: {
@@ -73,6 +85,40 @@ export const useTasasStore = defineStore('tasas', {
         this.error = e instanceof Error ? e.message : 'Error al agregar tasa'
       } finally {
         this.savingId = null
+      }
+    },
+
+    async deleteTaxRate(id: string) {
+      this.deletingId = id
+      this.error = null
+      try {
+        const repo = getRepository()
+        const useCase = new DeleteTaxRateUseCase(repo)
+        await useCase.execute(id)
+        this.taxRates = this.taxRates.filter((rate) => rate.id !== id)
+      } catch (e) {
+        this.error = e instanceof Error ? e.message : 'Error al eliminar tasa'
+      } finally {
+        this.deletingId = null
+      }
+    },
+
+    async loadTaxRateHistory(id: string, force = false) {
+      if (!force && this.historyByTaxRateId[id]) return
+      this.loadingHistoryId = id
+      this.error = null
+      try {
+        const repo = getRepository()
+        const useCase = new GetTaxRateHistoryUseCase(repo)
+        const history = await useCase.execute(id)
+        this.historyByTaxRateId = {
+          ...this.historyByTaxRateId,
+          [id]: history
+        }
+      } catch (e) {
+        this.error = e instanceof Error ? e.message : 'Error al cargar historial de tasa'
+      } finally {
+        this.loadingHistoryId = null
       }
     }
   }

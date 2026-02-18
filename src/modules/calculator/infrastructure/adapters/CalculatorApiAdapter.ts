@@ -70,11 +70,11 @@ export class CalculatorApiAdapter implements CalculatorRepository {
   constructor(private readonly useDemo = false) {}
 
   private coinBase(): string {
-    return this.useDemo ? Domain.http('coin/demo') : Domain.http('coin')
+    return this.useDemo ? Domain.http('coin') : Domain.http('coin')
   }
 
   private transactionsBase(): string {
-    return this.useDemo ? Domain.http('transactions/demo') : Domain.http('transactions')
+    return Domain.http('transactions')
   }
 
   private endpoint(suffix: string): string {

@@ -1,9 +1,11 @@
 @import "tailwindcss";
 @config "../../../tailwind.config.js";
+
 @layer base {
   body {
-    @apply antialiased bg-surface text-on-surface font-sans;
+    @apply antialiased font-sans bg-brasper-bg text-brasper-text;
   }
+
   #app {
     @apply w-full min-h-screen;
   }

@@ -6,7 +6,7 @@ import { LoadCalculatorDataUseCase } from '../../application/use_cases'
 import { CalculatorApiAdapter } from '../../infrastructure/adapters'
 
 interface CalculatorState {
-  /** Si true, las peticiones usan rutas con /demo (coin/demo, transactions/demo). */
+  /** Si true, modo demo: URLs con sufijo -trial (coin/tax-rate-trial, coin/currencies-trial, etc.) sin /demo en la ruta. */
   demoMode: boolean
   currencies: CurrencyReadDTO[]
   currencyFrom: CurrencyCode

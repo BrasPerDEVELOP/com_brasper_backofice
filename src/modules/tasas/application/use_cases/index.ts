@@ -1,3 +1,5 @@
 export { GetTaxRatesUseCase } from './GetTaxRatesUseCase'
+export { GetTaxRateHistoryUseCase } from './GetTaxRateHistoryUseCase'
 export { UpdateTaxRateUseCase } from './UpdateTaxRateUseCase'
 export { CreateTaxRateUseCase } from './CreateTaxRateUseCase'
+export { DeleteTaxRateUseCase } from './DeleteTaxRateUseCase'

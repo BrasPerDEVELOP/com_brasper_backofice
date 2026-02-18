@@ -1,1 +1,5 @@
 export { GetCommissionsUseCase } from './GetCommissionsUseCase'
+export { GetCommissionHistoryUseCase } from './GetCommissionHistoryUseCase'
+export { CreateCommissionUseCase } from './CreateCommissionUseCase'
+export { UpdateCommissionUseCase } from './UpdateCommissionUseCase'
+export { DeleteCommissionUseCase } from './DeleteCommissionUseCase'

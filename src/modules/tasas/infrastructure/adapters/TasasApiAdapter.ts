@@ -1,7 +1,7 @@
 import { apiClient } from '@/interface/api/client'
 import { Domain } from '@/interface/infrastructure/services'
 import type { TasasRepository } from './TasasRepository'
-import type { TaxRate } from '../../domain/models'
+import type { TaxRate, TaxRateHistoryEntry } from '../../domain/models'
 
 function parseTaxRate(item: Record<string, unknown>): TaxRate {
   const tax = Number(item.tax ?? 0)
@@ -23,13 +23,28 @@ function parseTaxRates(data: unknown): TaxRate[] {
     .filter((r) => r.id && r.coin_a && r.coin_b)
 }
 
+function parseTaxRateHistory(data: unknown): TaxRateHistoryEntry[] {
+  if (!Array.isArray(data)) return []
+  return data
+    .filter((item): item is Record<string, unknown> => item != null && typeof item === 'object')
+    .map((item, index) => ({
+      ...item,
+      id: String(item.id ?? item.history_id ?? item.updated_at ?? item.created_at ?? index)
+    }))
+}
+
 export class TasasApiAdapter implements TasasRepository {
   private base(): string {
     return Domain.http('coin')
   }
 
+  private endpoint(path: string): string {
+    const base = this.base()
+    return base.endsWith('/') ? `${base}${path}` : `${base}/${path}`
+  }
+
   async getTaxRates(): Promise<TaxRate[]> {
-    const url = `${this.base()}/tax-rate`
+    const url = this.endpoint('tax-rate/')
     const response = await apiClient.get<unknown>(url)
     const data = Array.isArray(response.data) ? response.data : []
     return parseTaxRates(data)
@@ -39,9 +54,10 @@ export class TasasApiAdapter implements TasasRepository {
     id: string,
     payload: { coin_a: string; coin_b: string; tax: string }
   ): Promise<TaxRate> {
-    const url = `${this.base()}/tax-rate/${id}`
+    const url = this.endpoint('tax-rate/')
+    const body = { ...payload, id }
     try {
-      const response = await apiClient.patch<unknown>(url, payload)
+      const response = await apiClient.put<unknown>(url, body)
       return parseTaxRate(
         response.data != null && typeof response.data === 'object'
           ? (response.data as Record<string, unknown>)
@@ -56,12 +72,17 @@ export class TasasApiAdapter implements TasasRepository {
     }
   }
 
+  async deleteTaxRate(id: string): Promise<void> {
+    const url = this.endpoint(`tax-rate/${id}/`)
+    await apiClient.delete(url)
+  }
+
   async createTaxRate(payload: {
     coin_a: string
     coin_b: string
     tax: string
   }): Promise<TaxRate> {
-    const url = `${this.base()}/tax-rate`
+    const url = this.endpoint('tax-rate/')
     try {
       const response = await apiClient.post<unknown>(url, payload)
       return parseTaxRate(
@@ -76,5 +97,11 @@ export class TasasApiAdapter implements TasasRepository {
       }
       throw err
     }
+  }
+
+  async getTaxRateHistory(id: string): Promise<TaxRateHistoryEntry[]> {
+    const url = this.endpoint(`tax-rate/${id}/history`)
+    const response = await apiClient.get<unknown>(url)
+    return parseTaxRateHistory(response.data)
   }
 }

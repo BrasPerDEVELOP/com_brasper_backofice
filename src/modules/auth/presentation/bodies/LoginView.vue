@@ -1,39 +1,59 @@
 <template>
-  <div class="flex min-h-screen items-center justify-center bg-slate-100">
-    <div class="w-full max-w-[400px] rounded-lg bg-white p-8 shadow-md">
-      <h1 class="mb-6 text-center text-2xl font-semibold text-slate-800">
-        Iniciar sesión
-      </h1>
-      <form class="flex flex-col gap-4" @submit.prevent="handleLogin">
-        <div>
-          <label class="mb-1 block text-sm font-medium text-slate-700">Usuario</label>
-          <input
-            v-model="username"
-            type="text"
-            required
-            class="w-full rounded border border-slate-300 px-3 py-2 text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
-        </div>
-        <div>
-          <label class="mb-1 block text-sm font-medium text-slate-700">Contraseña</label>
-          <input
-            v-model="password"
-            type="password"
-            required
-            class="w-full rounded border border-slate-300 px-3 py-2 text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
-        </div>
-        <button
-          type="submit"
-          :disabled="authStore.isLoading"
-          class="w-full rounded bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-        >
-          {{ authStore.isLoading ? '...' : 'Entrar' }}
-        </button>
-        <p v-if="authStore.error" class="text-center text-sm text-red-600">
-          {{ authStore.error }}
+  <div
+    class="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_15%_20%,_rgba(163,134,255,0.28),_transparent_35%),radial-gradient(circle_at_85%_10%,_rgba(0,123,255,0.22),_transparent_38%),linear-gradient(to_bottom,_#f9f9f9,_#f3f4f6)] px-4 py-8"
+  >
+    <div class="grid w-full max-w-5xl overflow-hidden rounded-3xl border border-[#d8e5fb] bg-white shadow-2xl lg:grid-cols-2">
+      <div class="hidden bg-gradient-to-br from-[#0F123E] via-[#232b4d] to-[#4A52D8] p-10 text-white lg:block">
+        <p class="text-xs font-semibold uppercase tracking-[0.3em] text-[#e6ff00]">Brasper</p>
+        <h2 class="mt-3 text-3xl font-semibold leading-tight">
+          Backoffice
+          <span class="block text-[#5ED6B3]">Administración central</span>
+        </h2>
+        <p class="mt-5 max-w-xs text-sm text-[#d3dcfb]">
+          Controla tasas, comisiones y operaciones desde un panel seguro y moderno.
         </p>
-      </form>
+      </div>
+
+      <div class="p-8 md:p-10">
+        <div class="mb-8">
+          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[#066ac9]">Acceso seguro</p>
+          <h1 class="mt-2 text-3xl font-semibold text-[#232b4d]">Iniciar sesión</h1>
+          <p class="mt-2 text-sm text-[#666]">Ingresa con tu cuenta de administrador de Brasper.</p>
+        </div>
+
+        <form class="flex flex-col gap-5" @submit.prevent="handleLogin">
+          <div>
+            <label class="mb-1.5 block text-sm font-medium text-[#333]">Usuario</label>
+            <input
+              v-model="username"
+              type="text"
+              required
+              class="w-full rounded-xl border border-[#cfdbef] bg-white px-3 py-2.5 text-[#333] outline-none transition focus:border-[#007bff] focus:ring-4 focus:ring-[#007bff]/20"
+            />
+          </div>
+          <div>
+            <label class="mb-1.5 block text-sm font-medium text-[#333]">Contraseña</label>
+            <input
+              v-model="password"
+              type="password"
+              required
+              class="w-full rounded-xl border border-[#cfdbef] bg-white px-3 py-2.5 text-[#333] outline-none transition focus:border-[#007bff] focus:ring-4 focus:ring-[#007bff]/20"
+            />
+          </div>
+
+          <button
+            type="submit"
+            :disabled="authStore.isLoading"
+            class="mt-2 w-full rounded-xl bg-gradient-to-r from-[#007bff] to-[#3b82f6] px-4 py-2.5 font-semibold text-white shadow-lg shadow-[#007bff]/30 transition hover:from-[#007aff] hover:to-[#4484f3] disabled:opacity-50"
+          >
+            {{ authStore.isLoading ? 'Ingresando...' : 'Entrar al panel' }}
+          </button>
+
+          <p v-if="authStore.error" class="rounded-lg bg-[#dc3545]/10 px-3 py-2 text-center text-sm text-[#dc3545]">
+            {{ authStore.error }}
+          </p>
+        </form>
+      </div>
     </div>
   </div>
 </template>
