@@ -112,13 +112,13 @@ export const useCalculatorStore = defineStore('calculator', {
       }
     },
 
-    minAmount(state): number {
+    minAmount(_state): number {
       const pair = this.commissionsForPair
       if (pair.length === 0) return 100
       return Math.min(...pair.map((c) => c.min_amount))
     },
 
-    maxAmount(state): number {
+    maxAmount(_state): number {
       const pair = this.commissionsForPair
       if (pair.length === 0) return 50000
       return Math.max(...pair.map((c) => c.max_amount))

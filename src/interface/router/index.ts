@@ -17,7 +17,13 @@ const routes: RouteRecordRaw[] = [
     children: [
       {
         path: '',
-        redirect: '/app/calculator'
+        redirect: '/app/dashboard'
+      },
+      {
+        path: 'dashboard',
+        name: 'dashboard',
+        component: () => import('@/interface/views/DashboardView.vue'),
+        meta: { breadcrumb: 'Inicio > Dashboard' }
       },
       {
         path: 'calculator',
@@ -38,9 +44,16 @@ const routes: RouteRecordRaw[] = [
         path: 'tasas',
         name: 'tasas',
         component: () => import('@modules/tasas/presentation/bodies/TasasView.vue')
+      },
+      {
+        path: 'perfil',
+        name: 'perfil',
+        component: () => import('@modules/auth/presentation/bodies/ProfileView.vue')
       }
     ]
   },
+  { path: '/dashboard', redirect: '/app/dashboard' },
+  { path: '/perfil', redirect: '/app/perfil' },
   { path: '/comisiones', redirect: '/app/comisiones' },
   { path: '/tasas', redirect: '/app/tasas' },
   { path: '/calculator', redirect: '/app/calculator' },

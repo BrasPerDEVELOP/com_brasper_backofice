@@ -39,14 +39,6 @@
                 >
                   Editar
                 </button>
-                <button
-                  type="button"
-                  class="rounded-lg border border-[#dc3545]/30 bg-[#dc3545]/10 px-3 py-1.5 text-sm font-medium text-[#dc3545] hover:bg-[#dc3545]/20 disabled:opacity-60"
-                  :disabled="tasasStore.deletingId === rate.id || tasasStore.savingId === rate.id"
-                  @click="deleteRate(rate.id)"
-                >
-                  {{ tasasStore.deletingId === rate.id ? 'Eliminando...' : 'Eliminar' }}
-                </button>
               </div>
             </div>
 
@@ -183,13 +175,6 @@ async function saveRate(id: string, coinA: string, coinB: string): Promise<void>
     tax: String(parsedTax)
   })
   if (!tasasStore.error) cancelEditing()
-}
-
-async function deleteRate(id: string): Promise<void> {
-  const confirmed = window.confirm('¿Seguro que deseas eliminar esta tasa?')
-  if (!confirmed) return
-  await tasasStore.deleteTaxRate(id)
-  if (editingId.value === id) cancelEditing()
 }
 
 function getHistoryEntries(taxRateId: string): Array<Record<string, unknown>> {
