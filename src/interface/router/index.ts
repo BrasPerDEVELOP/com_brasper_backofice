@@ -23,7 +23,13 @@ const routes: RouteRecordRaw[] = [
         path: 'dashboard',
         name: 'dashboard',
         component: () => import('@/interface/views/DashboardView.vue'),
-        meta: { breadcrumb: 'Inicio > Dashboard' }
+        meta: { breadcrumb: 'Inicio' }
+      },
+      {
+        path: 'transacciones',
+        name: 'transacciones',
+        component: () => import('@/interface/views/TransaccionesView.vue'),
+        meta: { breadcrumb: 'Operaciones > Transacciones' }
       },
       {
         path: 'calculator',
@@ -53,6 +59,7 @@ const routes: RouteRecordRaw[] = [
     ]
   },
   { path: '/dashboard', redirect: '/app/dashboard' },
+  { path: '/transacciones', redirect: '/app/transacciones' },
   { path: '/perfil', redirect: '/app/perfil' },
   { path: '/comisiones', redirect: '/app/comisiones' },
   { path: '/tasas', redirect: '/app/tasas' },

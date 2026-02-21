@@ -2,8 +2,8 @@
   <div class="space-y-8">
     <section class="overflow-hidden rounded-3xl border border-[#d8e5fb] bg-white p-8 shadow-lg shadow-[#007bff]/5">
       <div class="mb-6">
-        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[#066ac9]">Comercial</p>
-        <h1 class="text-2xl font-semibold text-[#232b4d]">Gestión de clientes: Base de clientes</h1>
+        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[#066ac9]">Inicio</p>
+        <h1 class="text-2xl font-semibold text-[#232b4d]">Dashboard</h1>
       </div>
 
       <!-- Buscador y filtros -->

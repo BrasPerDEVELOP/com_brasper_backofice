@@ -1,7 +1,7 @@
 import { apiClient } from '@/interface/api/client'
 import { Domain } from '@/interface/infrastructure/services'
 import { createLoggerWithContext } from '@/interface/infrastructure/logger'
-import type { AuthRepository, LoginResponse } from './AuthRepository'
+import type { AuthRepository, LoginResponse, UpdateProfilePayload } from './AuthRepository'
 import type { User } from '../../domain/models'
 
 const log = createLoggerWithContext('auth')
@@ -81,6 +81,22 @@ export class AuthApiAdapter implements AuthRepository {
   async getCurrentUser(): Promise<User | null> {
     const url = `${this.base()}/me/`
     const response = await apiClient.get<unknown>(url).catch(() => ({ data: null }))
+    return parseUser(response?.data ?? null)
+  }
+
+  async updateProfile(payload: UpdateProfilePayload): Promise<User | null> {
+    const url = `${this.base()}/me/`
+    const response = await apiClient.patch<unknown>(url, payload, {
+      headers: { 'Content-Type': 'application/json' }
+    })
+    return parseUser(response?.data ?? null)
+  }
+
+  async uploadProfileImage(file: File): Promise<User | null> {
+    const url = `${this.base()}/me/`
+    const formData = new FormData()
+    formData.append('profile_image', file)
+    const response = await apiClient.patch<unknown>(url, formData)
     return parseUser(response?.data ?? null)
   }
 }

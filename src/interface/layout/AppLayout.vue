@@ -16,12 +16,13 @@ async function handleLogout() {
 const showSidebar = computed(() => route.path.startsWith('/app'))
 
 const navItems = [
+  { to: '/app/perfil', label: 'Perfil', icon: 'user' },
   { to: '/app/dashboard', label: 'Dashboard', icon: 'chart' },
+  { to: '/app/transacciones', label: 'Transacciones', icon: 'transactions' },
   { to: '/app/calculator', label: 'Calculadora', icon: 'calc' },
   { to: '/app/calculator-demo', label: 'Calculadora Demo', icon: 'demo' },
   { to: '/app/comisiones', label: 'Comisiones', icon: 'folder' },
-  { to: '/app/tasas', label: 'Tasas', icon: 'exchange' },
-  { to: '/app/perfil', label: 'Perfil', icon: 'user' }
+  { to: '/app/tasas', label: 'Tasas', icon: 'exchange' }
 ]
 
 const settingsItem = { to: '/app/tasas', label: 'Configuración', icon: 'settings' }
@@ -31,7 +32,8 @@ const breadcrumbs = computed(() => {
   const meta = (route.meta?.breadcrumb as string) ?? ''
   if (meta) return meta
   const map: Record<string, string> = {
-    dashboard: 'Inicio > Dashboard',
+    dashboard: 'Inicio',
+    transacciones: 'Operaciones > Transacciones',
     calculator: 'Operaciones > Calculadora',
     'calculator-demo': 'Operaciones > Calculadora Demo',
     comisiones: 'Comercial > Comisiones',
@@ -57,8 +59,12 @@ const userInitial = computed(() => {
       v-if="showSidebar"
       class="fixed inset-y-0 left-0 z-20 w-16 flex flex-col border-r border-[#223160] bg-gradient-to-b from-[#0F123E] via-[#1c284c] to-[#232b4d] shadow-xl"
     >
-      <div class="flex h-14 items-center justify-center border-b border-white/10">
-        <span class="text-lg font-bold text-[#A386FF]">B</span>
+      <div class="flex h-14 items-center justify-center border-b border-white/10 px-2">
+        <img
+          src="/images/logo_completo.png"
+          alt="Brasper"
+          class="h-8 w-auto max-w-full object-contain"
+        />
       </div>
       <nav class="flex-1 space-y-1 px-2 py-4">
         <RouterLink

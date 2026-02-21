@@ -128,6 +128,42 @@ export const useAuthStore = defineStore('auth', {
       } catch {
         // Errores de red u otros: no forzamos logout; el 401 lo gestiona el interceptor
       }
+    },
+
+    async updateProfile(payload: { names?: string | null; lastnames?: string | null; document_number?: string | null }) {
+      this.isLoading = true
+      this.error = null
+      try {
+        const repository = new AuthApiAdapter()
+        const user = await repository.updateProfile(payload)
+        if (user) {
+          this.user = user
+          localStorage.setItem(USER_KEY, JSON.stringify(user))
+        }
+      } catch (e) {
+        this.error = e instanceof Error ? e.message : 'Error al actualizar perfil'
+        throw e
+      } finally {
+        this.isLoading = false
+      }
+    },
+
+    async uploadProfileImage(file: File) {
+      this.isLoading = true
+      this.error = null
+      try {
+        const repository = new AuthApiAdapter()
+        const user = await repository.uploadProfileImage(file)
+        if (user) {
+          this.user = user
+          localStorage.setItem(USER_KEY, JSON.stringify(user))
+        }
+      } catch (e) {
+        this.error = e instanceof Error ? e.message : 'Error al subir la imagen'
+        throw e
+      } finally {
+        this.isLoading = false
+      }
     }
   }
 })
