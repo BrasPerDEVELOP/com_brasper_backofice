@@ -55,6 +55,20 @@ export const useAuthStore = defineStore('auth', {
   },
 
   actions: {
+    setSession(user: User, token: string) {
+      this.user = user
+      this.token = token
+      localStorage.setItem(TOKEN_KEY, token)
+      localStorage.setItem(USER_KEY, JSON.stringify(user))
+    },
+
+    clearSession() {
+      this.user = null
+      this.token = null
+      localStorage.removeItem(TOKEN_KEY)
+      localStorage.removeItem(USER_KEY)
+    },
+
     async login(username: string, password: string) {
       this.isLoading = true
       this.error = null
@@ -63,19 +77,10 @@ export const useAuthStore = defineStore('auth', {
         const repository = new AuthApiAdapter()
         const loginUseCase = new LoginUseCase(repository)
         const { user, token } = await loginUseCase.execute(username, password)
-        
-        // Guardar usuario y token en el estado
-        this.user = user
-        this.token = token
-        
-        // Guardar en localStorage
-        if (token) localStorage.setItem(TOKEN_KEY, token)
-        if (user) {
-          localStorage.setItem(USER_KEY, JSON.stringify(user))
-          // Log para depuración (solo en desarrollo)
-          if (import.meta.env.DEV) {
-            console.log('Usuario guardado:', { id: user.id, email: user.email, role: user.role })
-          }
+
+        this.setSession(user, token)
+        if (import.meta.env.DEV) {
+          console.log('Usuario guardado:', { id: user.id, email: user.email, role: user.role })
         }
       } catch (error) {
         this.error = error instanceof Error ? error.message : 'Error al iniciar sesión'
@@ -88,10 +93,7 @@ export const useAuthStore = defineStore('auth', {
     async logout() {
       const repository = new AuthApiAdapter()
       await repository.logout()
-      this.user = null
-      this.token = null
-      localStorage.removeItem(TOKEN_KEY)
-      localStorage.removeItem(USER_KEY)
+      this.clearSession()
     },
 
     /** Restaurar usuario solo desde localStorage (sin validar en backend). */

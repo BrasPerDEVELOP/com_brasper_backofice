@@ -55,5 +55,17 @@ export const env = {
   /** Nivel de log: debug | info | warn | error (en prod por defecto: warn) */
   get logLevel(): string {
     return getEnv('VITE_LOG_LEVEL', import.meta.env.PROD ? 'warn' : 'debug')
+  },
+
+  /** Secreto compartido para descifrar redirección SSO admin. */
+  get adminRedirectSecret(): string {
+    return getEnv('VITE_ADMIN_REDIRECT_SECRET', '')
+  },
+
+  /** Ventana máxima (segundos) para aceptar payload SSO. */
+  get adminSsoMaxAgeSeconds(): number {
+    const raw = getEnv('VITE_ADMIN_SSO_MAX_AGE_SECONDS', '60')
+    const parsed = Number(raw)
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 60
   }
 }

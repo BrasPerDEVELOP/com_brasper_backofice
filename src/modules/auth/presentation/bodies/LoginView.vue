@@ -43,10 +43,10 @@
 
           <button
             type="submit"
-            :disabled="authStore.isLoading"
+            :disabled="authStore.isLoading || isSsoProcessing"
             class="mt-2 w-full rounded-xl bg-gradient-to-r from-[#007bff] to-[#3b82f6] px-4 py-2.5 font-semibold text-white shadow-lg shadow-[#007bff]/30 transition hover:from-[#007aff] hover:to-[#4484f3] disabled:opacity-50"
           >
-            {{ authStore.isLoading ? 'Ingresando...' : 'Entrar al panel' }}
+            {{ isSsoProcessing ? 'Validando SSO...' : authStore.isLoading ? 'Ingresando...' : 'Entrar al panel' }}
           </button>
 
           <p v-if="authStore.error" class="rounded-lg bg-[#dc3545]/10 px-3 py-2 text-center text-sm text-[#dc3545]">
@@ -60,19 +60,47 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { env } from '@/interface/config/env'
 import { useAuthStore } from '../controllers/useAuthStore'
+import { useAdminSso } from '../composables/useAdminSso'
 
+const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const { processFromQuery } = useAdminSso()
 
 const username = ref(env.username)
 const password = ref(env.password)
+const isSsoProcessing = ref(false)
+
+async function tryAdminSsoLogin() {
+  const query = new URLSearchParams(window.location.search)
+  const hasSsoSignal = ['data', 'iv', 'salt', 'v'].some((key) => query.has(key))
+  if (!hasSsoSignal) return
+
+  isSsoProcessing.value = true
+  authStore.error = null
+  try {
+    const success = await processFromQuery(query)
+    if (success) {
+      await router.replace('/app/dashboard')
+      return
+    }
+  } catch (error) {
+    authStore.clearSession()
+    authStore.error = error instanceof Error ? error.message : 'SSO inválido o expirado.'
+  } finally {
+    isSsoProcessing.value = false
+  }
+
+  await router.replace({ path: route.path, query: {} })
+}
 
 onMounted(() => {
   if (!username.value) username.value = env.username
   if (!password.value) password.value = env.password
+  void tryAdminSsoLogin()
 })
 
 const handleLogin = async () => {
@@ -108,9 +136,9 @@ const handleLogin = async () => {
       return
     }
     
-    console.log('Usuario es admin, redirigiendo a /app/calculator...')
+    console.log('Usuario es admin, redirigiendo a /app/dashboard...')
     // Redirigir a la aplicación
-    const result = await router.push('/app/calculator')
+    const result = await router.push('/app/dashboard')
     console.log('Resultado de router.push:', result)
     console.log('Ruta actual después del push:', router.currentRoute.value.path)
   } catch (error) {
