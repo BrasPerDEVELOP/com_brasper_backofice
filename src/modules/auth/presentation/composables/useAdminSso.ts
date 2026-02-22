@@ -65,6 +65,8 @@ function normalizeUser(raw: unknown): User {
   const lastnames = o.lastnames != null ? String(o.lastnames) : null
   const emailValue = String(email)
   const name = [names, lastnames].filter(Boolean).join(' ') || emailValue
+  const phoneVal = o.phone ?? o.telefono
+  const phone = typeof phoneVal === 'number' ? phoneVal : (typeof phoneVal === 'string' && phoneVal ? Number(phoneVal) : null)
   return {
     id: String(id),
     email: emailValue,
@@ -72,8 +74,12 @@ function normalizeUser(raw: unknown): User {
     lastnames,
     name,
     document_number: o.document_number != null ? String(o.document_number) : null,
+    document_type: o.document_type != null ? String(o.document_type) : null,
     profile_image: o.profile_image != null ? String(o.profile_image) : null,
-    role: o.role != null ? String(o.role) : null
+    is_agent: Boolean(o.is_agent),
+    role: o.role != null ? String(o.role) : null,
+    phone: Number.isFinite(phone) ? phone : null,
+    code_phone: o.code_phone != null ? String(o.code_phone) : null
   }
 }
 

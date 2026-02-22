@@ -1,4 +1,10 @@
 import axios, { type AxiosInstance } from 'axios'
+
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    skipAuthRedirect?: boolean
+  }
+}
 import { Domain } from '@/interface/infrastructure/services'
 import { createLoggerWithContext } from '@/interface/infrastructure/logger'
 
@@ -17,7 +23,7 @@ let onUnauthorized: OnUnauthorizedFn = () => {
     localStorage.removeItem('token')
     localStorage.removeItem('auth_user')
   }
-  if (typeof window !== 'undefined') window.location.href = '/auth'
+  if (typeof window !== 'undefined') window.location.href = '/'
 }
 
 /**
@@ -48,6 +54,9 @@ apiClient.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type']
+    }
     if (import.meta.env.DEV && config.url) {
       const method = (config.method ?? 'GET').toUpperCase()
       const url = config.url ?? ''
@@ -67,8 +76,9 @@ apiClient.interceptors.response.use(
   (err) => {
     const status = err.response?.status
     const url = err.config?.url ?? err.request?.url
+    const skipAuthRedirect = (err.config as { skipAuthRedirect?: boolean })?.skipAuthRedirect === true
 
-    if (status === 401) {
+    if (status === 401 && !skipAuthRedirect) {
       log.warn('401 Unauthorized', url, '→ cerrando sesión')
       onUnauthorized()
       return Promise.reject(err)

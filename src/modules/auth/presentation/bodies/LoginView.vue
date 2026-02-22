@@ -84,7 +84,7 @@ async function tryAdminSsoLogin() {
   try {
     const success = await processFromQuery(query)
     if (success) {
-      await router.replace('/app/dashboard')
+      await router.replace('/app/transacciones')
       return
     }
   } catch (error) {
@@ -136,9 +136,9 @@ const handleLogin = async () => {
       return
     }
     
-    console.log('Usuario es admin, redirigiendo a /app/dashboard...')
+    console.log('Usuario es admin, redirigiendo a /app/transacciones...')
     // Redirigir a la aplicación
-    const result = await router.push('/app/dashboard')
+    const result = await router.push('/app/transacciones')
     console.log('Resultado de router.push:', result)
     console.log('Ruta actual después del push:', router.currentRoute.value.path)
   } catch (error) {

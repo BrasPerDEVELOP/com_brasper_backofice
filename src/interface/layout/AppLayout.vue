@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter, RouterLink, RouterView } from 'vue-router'
 import { useAuthStore } from '@modules/auth/presentation/controllers/useAuthStore'
+import { Domain } from '@/interface/infrastructure/services'
 import { getNavIcon } from './navIcons'
 
 const route = useRoute()
@@ -17,10 +18,10 @@ const showSidebar = computed(() => route.path.startsWith('/app'))
 
 const navItems = [
   { to: '/app/perfil', label: 'Perfil', icon: 'user' },
-  { to: '/app/dashboard', label: 'Dashboard', icon: 'chart' },
   { to: '/app/transacciones', label: 'Transacciones', icon: 'transactions' },
   { to: '/app/calculator', label: 'Calculadora', icon: 'calc' },
-  { to: '/app/calculator-demo', label: 'Calculadora Demo', icon: 'demo' },
+  { to: '/app/calculator?demo=1', label: 'Calculadora Demo', icon: 'demo' },
+  { to: '/app/cuentas', label: 'Cuentas', icon: 'bank' },
   { to: '/app/comisiones', label: 'Comisiones', icon: 'folder' },
   { to: '/app/tasas', label: 'Tasas', icon: 'exchange' }
 ]
@@ -31,25 +32,44 @@ const breadcrumbs = computed(() => {
   const name = (route.name as string) ?? ''
   const meta = (route.meta?.breadcrumb as string) ?? ''
   if (meta) return meta
+  if (name === 'calculator' && route.query.demo === '1') return 'Operaciones > Calculadora Demo'
   const map: Record<string, string> = {
-    dashboard: 'Inicio',
     transacciones: 'Operaciones > Transacciones',
     calculator: 'Operaciones > Calculadora',
-    'calculator-demo': 'Operaciones > Calculadora Demo',
     comisiones: 'Comercial > Comisiones',
+    cuentas: 'Configuración > Cuentas',
     tasas: 'Configuración > Tasas de cambio',
     perfil: 'Cuenta > Perfil'
   }
   return map[name] ?? 'Panel Brasper'
 })
 
-const isActive = (path: string) => route.path === path || route.path.startsWith(path + '/')
+const isActive = (to: string | { path: string; query?: Record<string, string> }) => {
+  const path = typeof to === 'string' ? to.split('?')[0] : to.path
+  const queryDemo = typeof to === 'string' ? to.includes('demo=1') : to.query?.demo === '1'
+  const routeDemo = route.query.demo === '1'
+  if (path === '/app/calculator' && queryDemo) return route.path === '/app/calculator' && routeDemo
+  if (path === '/app/calculator' && !queryDemo) return route.path === '/app/calculator' && !routeDemo
+  return route.path === path || route.path.startsWith(path + '/')
+}
 
 const userInitial = computed(() => {
   const email = authStore.user?.email
   if (!email) return '?'
   return (email[0] ?? '?').toUpperCase()
 })
+
+const profileImageUrl = computed(() => {
+  const img = authStore.user?.profile_image
+  if (!img) return ''
+  return Domain.mediaUrl(img)
+})
+
+const navbarImageError = ref(false)
+watch(
+  () => authStore.user?.profile_image,
+  () => { navbarImageError.value = false }
+)
 </script>
 
 <template>
@@ -125,9 +145,16 @@ const userInitial = computed(() => {
           </button>
           <RouterLink
             to="/app/perfil"
-            class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-[#4A52D8]/30 to-[#007aff]/30 text-sm font-bold text-[#232b4d] transition hover:from-[#4A52D8]/50 hover:to-[#007aff]/50"
+            class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#4A52D8]/30 to-[#007aff]/30 text-sm font-bold text-[#232b4d] transition hover:from-[#4A52D8]/50 hover:to-[#007aff]/50"
           >
-            {{ userInitial }}
+            <img
+              v-if="profileImageUrl && !navbarImageError"
+              :src="profileImageUrl"
+              :alt="authStore.user?.name ?? ''"
+              class="h-full w-full object-cover"
+              @error="navbarImageError = true"
+            />
+            <span v-else>{{ userInitial }}</span>
           </RouterLink>
           <button
             type="button"

@@ -136,8 +136,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useTransactionsStore } from '@modules/transacciones/presentation/controllers/useTransactionsStore'
-import type { Transaction } from '@modules/transacciones/domain/models'
+import { useTransactionsStore } from '../controllers/useTransactionsStore'
+import type { Transaction } from '../../domain/models'
 
 const transactionsStore = useTransactionsStore()
 const showImportModal = ref(false)

@@ -17,34 +17,29 @@ const routes: RouteRecordRaw[] = [
     children: [
       {
         path: '',
-        redirect: '/app/dashboard'
-      },
-      {
-        path: 'dashboard',
-        name: 'dashboard',
-        component: () => import('@/interface/views/DashboardView.vue'),
-        meta: { breadcrumb: 'Inicio' }
+        redirect: '/app/transacciones'
       },
       {
         path: 'transacciones',
         name: 'transacciones',
-        component: () => import('@/interface/views/TransaccionesView.vue'),
+        component: () => import('@modules/transacciones/presentation/bodies/TransaccionesView.vue'),
         meta: { breadcrumb: 'Operaciones > Transacciones' }
       },
       {
         path: 'calculator',
         name: 'calculator',
-        component: () => import('@modules/calculator/presentation/bodies/CalculatorView.vue')
-      },
-      {
-        path: 'calculator-demo',
-        name: 'calculator-demo',
-        component: () => import('@modules/calculator/presentation/bodies/CalculatorView.vue')
+        component: () => import('@modules/calculator/presentation/bodies/CalculatorView.vue'),
+        meta: { breadcrumb: 'Operaciones > Calculadora' }
       },
       {
         path: 'comisiones',
         name: 'comisiones',
         component: () => import('@modules/comisiones/presentation/bodies/ComisionesView.vue')
+      },
+      {
+        path: 'cuentas',
+        name: 'cuentas',
+        component: () => import('@modules/cuentas-bancarias/presentation/bodies/CuentasBancariasView.vue')
       },
       {
         path: 'tasas',
@@ -58,13 +53,13 @@ const routes: RouteRecordRaw[] = [
       }
     ]
   },
-  { path: '/dashboard', redirect: '/app/dashboard' },
   { path: '/transacciones', redirect: '/app/transacciones' },
   { path: '/perfil', redirect: '/app/perfil' },
   { path: '/comisiones', redirect: '/app/comisiones' },
+  { path: '/cuentas', redirect: '/app/cuentas' },
   { path: '/tasas', redirect: '/app/tasas' },
   { path: '/calculator', redirect: '/app/calculator' },
-  { path: '/calculator-demo', redirect: '/app/calculator-demo' }
+  { path: '/calculator-demo', redirect: { path: '/app/calculator', query: { demo: '1' } } }
 ]
 
 export const router = createRouter({

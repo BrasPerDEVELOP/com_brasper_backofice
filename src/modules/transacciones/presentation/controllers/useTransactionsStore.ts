@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import type { Transaction } from '../../domain/models'
+import { GetTransactionsUseCase, ImportTransactionsFromExcelUseCase } from '../../application/use_cases'
 import { TransactionsApiAdapter } from '../../infrastructure/adapters'
 
 interface TransactionsState {
@@ -7,6 +8,10 @@ interface TransactionsState {
   isLoading: boolean
   isImporting: boolean
   error: string | null
+}
+
+function getRepository() {
+  return new TransactionsApiAdapter()
 }
 
 export const useTransactionsStore = defineStore('transactions', {
@@ -22,8 +27,9 @@ export const useTransactionsStore = defineStore('transactions', {
       this.isLoading = true
       this.error = null
       try {
-        const repo = new TransactionsApiAdapter()
-        this.transactions = await repo.getTransactions()
+        const repo = getRepository()
+        const useCase = new GetTransactionsUseCase(repo)
+        this.transactions = await useCase.execute()
       } catch (e) {
         this.error = e instanceof Error ? e.message : 'Error al cargar transacciones'
       } finally {
@@ -35,8 +41,9 @@ export const useTransactionsStore = defineStore('transactions', {
       this.isImporting = true
       this.error = null
       try {
-        const repo = new TransactionsApiAdapter()
-        await repo.importFromExcel(file)
+        const repo = getRepository()
+        const useCase = new ImportTransactionsFromExcelUseCase(repo)
+        await useCase.execute(file)
         await this.loadTransactions()
       } catch (e) {
         this.error = e instanceof Error ? e.message : 'Error al importar transacciones'

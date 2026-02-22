@@ -201,13 +201,12 @@
 import { ref, watch, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useCalculatorStore } from '../controllers/useCalculatorStore'
-import { CURRENCY_CODES, CURRENCY_LABELS } from '../../domain/models'
-import type { CurrencyCode } from '../../domain/models'
+import { CURRENCY_CODES, CURRENCY_LABELS, type CurrencyCode } from '../../domain/models'
 
 const route = useRoute()
 const calculatorStore = useCalculatorStore()
 
-const isDemo = computed(() => route.path.includes('calculator-demo'))
+const isDemo = computed(() => route.query.demo === '1' || route.path.includes('calculator-demo'))
 
 const amountSendLocal = ref(0)
 const amountReceiveLocal = ref(0)
@@ -219,12 +218,12 @@ function normalizeTwoDecimals(value: number): number {
 
 watch(
   () => calculatorStore.amountSend,
-  (v) => { amountSendLocal.value = normalizeTwoDecimals(v) },
+  (v: number) => { amountSendLocal.value = normalizeTwoDecimals(v) },
   { immediate: true }
 )
 watch(
   () => calculatorStore.amountReceive,
-  (v) => { amountReceiveLocal.value = normalizeTwoDecimals(v) },
+  (v: number) => { amountReceiveLocal.value = normalizeTwoDecimals(v) },
   { immediate: true }
 )
 
@@ -281,11 +280,11 @@ onMounted(() => {
   calculatorStore.loadData()
 })
 
-// Al cambiar de ruta (calculadora ↔ calculadora-demo) recargar con el modo correcto
+// Al cambiar de ruta o query (calculadora ↔ demo) recargar con el modo correcto
 watch(
-  () => route.path,
-  (path) => {
-    const demo = path.includes('calculator-demo')
+  () => [route.path, route.query.demo] as const,
+  ([path, demoQuery]) => {
+    const demo = demoQuery === '1' || path.includes('calculator-demo')
     if (calculatorStore.demoMode !== demo) {
       calculatorStore.setDemoMode(demo)
       calculatorStore.loadData()
