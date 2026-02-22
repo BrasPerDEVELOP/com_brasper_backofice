@@ -1,2 +1,2 @@
-export { CalculatorApiAdapter } from './CalculatorApiAdapter'
-export type { CalculatorRepository } from './CalculatorRepository'
+export { CalculatorApiAdapter } from './calculator_api_adapter'
+export type { CalculatorRepository } from './calculator_repository'

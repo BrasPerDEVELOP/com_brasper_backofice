@@ -1,2 +1,2 @@
-export type { Commission } from './Commission'
-export type { CommissionHistoryEntry } from './CommissionHistoryEntry'
+export type { Commission } from './commission'
+export type { CommissionHistoryEntry } from './commission_history_entry'

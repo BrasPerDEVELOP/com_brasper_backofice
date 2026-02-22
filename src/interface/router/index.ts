@@ -1,18 +1,18 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
-import { useAuthStore } from '@modules/auth/presentation/controllers/useAuthStore'
+import { useAuthStore } from '@modules/auth/presentation/controllers/use_auth_store_controller'
 
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
     name: 'login',
-    component: () => import('@modules/auth/presentation/bodies/LoginView.vue'),
+    component: () => import('@modules/auth/presentation/bodies/login_view.vue'),
     meta: { public: true }
   },
   { path: '/login', redirect: '/' },
   {
     path: '/app',
-    component: () => import('@/interface/layout/AppLayout.vue'),
+    component: () => import('@/interface/layout/app_layout.vue'),
     meta: { requiresAuth: true },
     children: [
       {
@@ -22,34 +22,34 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'transacciones',
         name: 'transacciones',
-        component: () => import('@modules/transacciones/presentation/bodies/TransaccionesView.vue'),
+        component: () => import('@modules/transacciones/presentation/bodies/transacciones_view.vue'),
         meta: { breadcrumb: 'Operaciones > Transacciones' }
       },
       {
         path: 'calculator',
         name: 'calculator',
-        component: () => import('@modules/calculator/presentation/bodies/CalculatorView.vue'),
+        component: () => import('@modules/calculator/presentation/bodies/calculator_view.vue'),
         meta: { breadcrumb: 'Operaciones > Calculadora' }
       },
       {
         path: 'comisiones',
         name: 'comisiones',
-        component: () => import('@modules/comisiones/presentation/bodies/ComisionesView.vue')
+        component: () => import('@modules/comisiones/presentation/bodies/comisiones_view.vue')
       },
       {
         path: 'cuentas',
         name: 'cuentas',
-        component: () => import('@modules/cuentas-bancarias/presentation/bodies/CuentasBancariasView.vue')
+        component: () => import('@modules/cuentas-bancarias/presentation/bodies/cuentas_bancarias_view.vue')
       },
       {
         path: 'tasas',
         name: 'tasas',
-        component: () => import('@modules/tasas/presentation/bodies/TasasView.vue')
+        component: () => import('@modules/tasas/presentation/bodies/tasas_view.vue')
       },
       {
         path: 'perfil',
         name: 'perfil',
-        component: () => import('@modules/auth/presentation/bodies/ProfileView.vue')
+        component: () => import('@modules/auth/presentation/bodies/profile_view.vue')
       }
     ]
   },

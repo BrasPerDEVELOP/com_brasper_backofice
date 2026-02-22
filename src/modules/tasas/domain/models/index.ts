@@ -1,2 +1,2 @@
-export type { TaxRate } from './TaxRate'
-export type { TaxRateHistoryEntry } from './TaxRateHistoryEntry'
+export type { TaxRate } from './tax_rate'
+export type { TaxRateHistoryEntry } from './tax_rate_history_entry'
