@@ -5,6 +5,7 @@ import { useCuentasBancariasStore } from '@modules/cuentas-bancarias/presentatio
 import { useTasasStore } from '@modules/tasas/presentation/controllers/use_tasas_store_controller'
 import { useComisionesStore } from '@modules/comisiones/presentation/controllers/use_comisiones_store_controller'
 import { useCalculatorStore } from '@modules/calculator/presentation/controllers/use_calculator_store_controller'
+import type { BankAccount } from '@modules/cuentas-bancarias/domain/models'
 import type { Transaction } from '../../domain/models'
 import type { GetTransactionsParams } from '../../infrastructure/adapters/transactions_repository'
 import { TRANSACTION_STATUSES, TRANSACTION_STATUS_LABELS } from '../../domain/models'
@@ -116,7 +117,7 @@ const editingId = ref<string | null>(null)
 type CreateTab = 'calculadora' | 'datos' | 'vouchers'
 const createTab = ref<CreateTab>('calculadora')
 
-function bankAccountToOption(a: { id: string; bank_id: string; account_holder_type?: string; business_name?: string; holder_names?: string; holder_surnames?: string; account_number?: string }) {
+function bankAccountToOption(a: BankAccount) {
   const bank = cuentasStore.banks.find((b) => b.id === a.bank_id)
   const bankName = bank ? `${bank.bank}${bank.currency ? ` (${bank.currency})` : ''}` : '-'
   const holder =
