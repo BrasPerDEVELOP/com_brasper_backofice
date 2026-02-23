@@ -1,7 +1,8 @@
 import type { Transaction } from '../../domain/models'
 
 export interface CreateTransactionPayload {
-  bank_account_id: string
+  bank_account_origin: string
+  bank_account_destination: string
   user_id: string
   tax_rate_id: string
   commission_id: string

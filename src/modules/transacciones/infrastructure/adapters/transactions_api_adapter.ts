@@ -14,6 +14,14 @@ function parseTransaction(item: unknown): Transaction {
   return {
     id: o.id != null ? String(o.id) : undefined,
     bank_account_id: o.bank_account_id != null ? String(o.bank_account_id) : undefined,
+    bank_account_origin_id:
+      (o.bank_account_origin_id ?? o.bank_account_origin) != null
+        ? String(o.bank_account_origin_id ?? o.bank_account_origin)
+        : undefined,
+    bank_account_destination_id:
+      (o.bank_account_destination_id ?? o.bank_account_destination) != null
+        ? String(o.bank_account_destination_id ?? o.bank_account_destination)
+        : undefined,
     user_id: o.user_id != null ? String(o.user_id) : undefined,
     tax_rate_id: o.tax_rate_id != null ? String(o.tax_rate_id) : undefined,
     commission_id: o.commission_id != null ? String(o.commission_id) : undefined,
@@ -79,7 +87,7 @@ export class TransactionsApiAdapter implements TransactionsRepository {
       const raw = response.data
       const obj = raw != null && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
       const item = (obj.data ?? obj) as Record<string, unknown>
-      return parseTransaction(item)
+      return { ...item, ...parseTransaction(item) } as Transaction
     } catch {
       return null
     }
@@ -88,7 +96,8 @@ export class TransactionsApiAdapter implements TransactionsRepository {
   async createTransaction(payload: CreateTransactionPayload): Promise<Transaction> {
     const url = this.endpoint('')
     const formData = new FormData()
-    formData.append('bank_account_id', payload.bank_account_id)
+    formData.append('bank_account_origin', payload.bank_account_origin)
+    formData.append('bank_account_destination', payload.bank_account_destination)
     formData.append('user_id', payload.user_id)
     formData.append('tax_rate_id', payload.tax_rate_id)
     formData.append('commission_id', payload.commission_id)

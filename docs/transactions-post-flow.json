@@ -36,7 +36,7 @@
       "paso": "Usuario hace clic en Guardar",
       "accion": "submitForm()",
       "validaciones": [
-        "bank_account_destination_id O bank_account_origin_id obligatorio",
+        "bank_account_origin y bank_account_destination obligatorios",
         "user_id obligatorio",
         "tax_rate_id obligatorio",
         "commission_id obligatorio"
@@ -46,7 +46,7 @@
         "code: si vacío → TRX-{timestamp}-{random}",
         "status: si ambos vouchers subidos → 'completed', sino → form.status (default 'pending')",
         "round2() - redondea montos a 2 decimales",
-        "bank_account_id: usa bank_account_destination_id, o bank_account_origin_id si destino vacío"
+        "bank_account_origin y bank_account_destination se envían por separado (ambos obligatorios)"
       ]
     }
   },
@@ -55,7 +55,8 @@
   "payload_formdata_campos": {
     "descripcion": "Todos los campos se envían como FormData (multipart/form-data). Valores numéricos como string.",
     "campos_enviados": {
-      "bank_account_id": { "tipo": "string (UUID)", "obligatorio": true, "origen": "form.bank_account_destination_id || form.bank_account_origin_id" },
+      "bank_account_origin": { "tipo": "string (UUID)", "obligatorio": true, "origen": "form.bank_account_origin_id" },
+      "bank_account_destination": { "tipo": "string (UUID)", "obligatorio": true, "origen": "form.bank_account_destination_id" },
       "user_id": { "tipo": "string (UUID)", "obligatorio": true, "origen": "form.user_id" },
       "tax_rate_id": { "tipo": "string (UUID)", "obligatorio": true, "origen": "form.tax_rate_id (calculadora)" },
       "commission_id": { "tipo": "string (UUID)", "obligatorio": true, "origen": "form.commission_id (calculadora)" },
@@ -73,7 +74,8 @@
     "campos_no_enviados": ["coupon_id", "cuando_es_null_or_empty"]
   },
   "ejemplo_payload_formdata": {
-    "bank_account_id": "2e867c1f-c31b-49ce-a496-46716339c053",
+    "bank_account_origin": "2e867c1f-c31b-49ce-a496-46716339c053",
+    "bank_account_destination": "3f978d2g-d42c-50df-b5a7-57827440d164",
     "user_id": "b5fe0e0d-f699-4351-a14e-f076599ac0c5",
     "tax_rate_id": "96eb0331-7971-4b01-b002-d54749de32d5",
     "commission_id": "3d2958ab-57f3-41bc-9cf5-8ff36679a1d9",

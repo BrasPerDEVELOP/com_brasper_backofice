@@ -20,8 +20,14 @@ const calculatorStore = useCalculatorStore()
 
 const showCreateModal = ref(false)
 const showImportModal = ref(false)
+const showPreviewModal = ref(false)
+const previewTransaction = ref<Transaction | null>(null)
+const previewLoading = ref(false)
+const previewError = ref<string | null>(null)
 const searchQuery = ref('')
 const openMenuId = ref<string | null>(null)
+const menuTriggerEl = ref<HTMLElement | null>(null)
+const menuPosition = reactive({ top: 0, left: 0 })
 const statusFilter = ref<string>('todos')
 const userFilter = ref<string>('')
 const bankAccountFilter = ref<string>('')
@@ -261,8 +267,8 @@ function openEditModal(t: Transaction) {
   transactionsStore.error = null
   editingId.value = t.id
   createTab.value = 'datos'
-  form.bank_account_destination_id = t.bank_account_id ?? ''
-  form.bank_account_origin_id = ''
+  form.bank_account_origin_id = t.bank_account_origin_id ?? ''
+  form.bank_account_destination_id = t.bank_account_destination_id ?? t.bank_account_id ?? ''
   form.user_id = t.user_id ?? ''
   form.tax_rate_id = t.tax_rate_id ?? ''
   form.commission_id = t.commission_id ?? ''
@@ -282,9 +288,8 @@ function openEditModal(t: Transaction) {
 
 async function submitForm() {
   syncFromCalculator()
-  const bankAccountId = form.bank_account_destination_id || form.bank_account_origin_id
-  if (!bankAccountId || !form.user_id) {
-    transactionsStore.error = 'Cuenta destino y cliente son obligatorios'
+  if (!form.bank_account_origin_id || !form.bank_account_destination_id || !form.user_id) {
+    transactionsStore.error = 'Cuenta origen, cuenta destino y cliente son obligatorios'
     return
   }
   if (!form.tax_rate_id || !form.commission_id) {
@@ -302,7 +307,8 @@ async function submitForm() {
     const code = form.code?.trim() || `TRX-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     const round2 = (n: number) => Math.round(n * 100) / 100
     const payload = {
-      bank_account_id: bankAccountId,
+      bank_account_origin: form.bank_account_origin_id,
+      bank_account_destination: form.bank_account_destination_id,
       user_id: form.user_id,
       tax_rate_id: form.tax_rate_id,
       commission_id: form.commission_id,
@@ -344,17 +350,153 @@ async function handleDelete(t: Transaction) {
   }
 }
 
-function toggleMenu(id: string) {
+const selectedMenuTransaction = computed(() => {
+  const id = openMenuId.value
+  if (!id) return null
+  return (
+    paginatedTransactions.value.find((t) => (t.id ?? '') === id) ??
+    transactionsStore.transactions.find((t) => (t.id ?? '') === id) ??
+    null
+  )
+})
+
+function updateMenuPosition() {
+  if (!menuTriggerEl.value) return
+  const rect = menuTriggerEl.value.getBoundingClientRect()
+  const menuWidth = 168
+  const menuHeight = 96
+  const padding = 8
+  let left = rect.right - menuWidth
+  if (left < padding) left = padding
+  if (left + menuWidth > window.innerWidth - padding) left = window.innerWidth - menuWidth - padding
+  let top = rect.bottom + 4
+  if (top + menuHeight > window.innerHeight - padding) top = rect.top - menuHeight - 4
+  if (top < padding) top = padding
+  menuPosition.top = top
+  menuPosition.left = left
+}
+
+const PREVIEW_FIELD_ORDER = [
+  'code', 'id', 'bank_account_origin_id', 'bank_account_destination_id', 'user_id',
+  'tax_rate_id', 'commission_id', 'status', 'origin_amount', 'destination_amount',
+  'commission_result', 'resultado_comision', 'total_to_send', 'total_a_enviar', 'coupon_id',
+  'send_date', 'payment_date', 'send_voucher', 'payment_voucher', 'created_at', 'created_by', 'updated_at'
+]
+
+const previewDisplayEntries = computed(() => {
+  const t = previewTransaction.value
+  if (!t || typeof t !== 'object') return []
+  const seen = new Set<string>()
+  const entries: { key: string; label: string; displayValue: string }[] = []
+  for (const key of PREVIEW_FIELD_ORDER) {
+    if (key in t) {
+      seen.add(key)
+      entries.push({
+        key,
+        label: PREVIEW_FIELD_LABELS[key] ?? key,
+        displayValue: formatPreviewValue(key, (t as Record<string, unknown>)[key])
+      })
+    }
+  }
+  for (const key of Object.keys(t)) {
+    if (typeof key === 'string' && !seen.has(key) && !key.startsWith('_')) {
+      entries.push({
+        key,
+        label: PREVIEW_FIELD_LABELS[key] ?? key,
+        displayValue: formatPreviewValue(key, (t as Record<string, unknown>)[key])
+      })
+    }
+  }
+  return entries
+})
+
+const PREVIEW_FIELD_LABELS: Record<string, string> = {
+  id: 'ID',
+  code: 'Código',
+  bank_account_origin_id: 'Cuenta origen',
+  bank_account_destination_id: 'Cuenta destino',
+  user_id: 'Cliente',
+  tax_rate_id: 'Tasa',
+  commission_id: 'Comisión',
+  status: 'Estado',
+  origin_amount: 'Monto origen',
+  destination_amount: 'Monto destino',
+  commission_result: 'Resultado comisión',
+  resultado_comision: 'Resultado comisión',
+  total_to_send: 'Total a enviar',
+  total_a_enviar: 'Total a enviar',
+  coupon_id: 'Cupón',
+  send_date: 'Fecha envío',
+  payment_date: 'Fecha pago',
+  send_voucher: 'Comprobante envío',
+  payment_voucher: 'Comprobante pago',
+  created_at: 'Creado',
+  created_by: 'Creado por',
+  updated_at: 'Actualizado'
+}
+
+async function openPreviewModal(t: Transaction) {
+  const id = t.id
+  if (!id) return
+  openMenuId.value = null
+  previewTransaction.value = null
+  previewError.value = null
+  showPreviewModal.value = true
+  previewLoading.value = true
+  try {
+    const tx = await transactionsStore.getTransactionById(id)
+    previewTransaction.value = tx
+    if (!tx) previewError.value = 'No se pudo cargar la transacción'
+  } catch {
+    previewError.value = 'Error al cargar la transacción'
+  } finally {
+    previewLoading.value = false
+  }
+}
+
+function closePreviewModal() {
+  showPreviewModal.value = false
+  previewTransaction.value = null
+  previewError.value = null
+}
+
+function formatPreviewValue(key: string, value: unknown): string {
+  if (value == null || value === '') return '-'
+  if (key === 'bank_account_origin_id' || key === 'bank_account_destination_id') {
+    return getBankAccountLabel(value as string)
+  }
+  if (key === 'user_id') return getClientLabel(value as string)
+  if (key === 'status') return getStatusLabel(value as string)
+  if (['origin_amount', 'destination_amount', 'commission_result', 'resultado_comision', 'total_to_send', 'total_a_enviar'].includes(key)) {
+    return formatValue(value)
+  }
+  if ((key === 'send_date' || key === 'payment_date' || key === 'created_at' || key === 'updated_at') && typeof value === 'string') {
+    return formatDate(value)
+  }
+  if (typeof value === 'object') return JSON.stringify(value)
+  return String(value)
+}
+
+function toggleMenu(id: string, event?: Event) {
   if (openMenuId.value === id) {
     openMenuId.value = null
+    menuTriggerEl.value = null
     return
   }
+  menuTriggerEl.value = (event?.target as HTMLElement)?.closest('td') ?? (event?.target as HTMLElement) ?? null
   openMenuId.value = id
   nextTick(() => {
+    updateMenuPosition()
+    const scrollParent = menuTriggerEl.value?.closest('.overflow-x-auto')
     const close = () => {
       openMenuId.value = null
+      menuTriggerEl.value = null
       document.removeEventListener('click', close)
+      window.removeEventListener('resize', updateMenuPosition)
+      scrollParent?.removeEventListener('scroll', updateMenuPosition)
     }
+    window.addEventListener('resize', updateMenuPosition)
+    scrollParent?.addEventListener('scroll', updateMenuPosition)
     setTimeout(() => document.addEventListener('click', close), 0)
   })
 }
@@ -577,20 +719,12 @@ onMounted(() => {
         <span class="text-sm text-[#6b7280]">Cargando...</span>
       </div>
 
-      <div
-        v-else-if="transactionsStore.transactions.length === 0"
-        class="rounded-xl border border-[#dbe7fb] bg-[#fbfdff] px-6 py-12 text-center"
-      >
-        <p class="text-[#666]">
-          No hay transacciones. Importa un archivo Excel o crea una nueva.
-        </p>
-      </div>
-
-      <table v-else class="w-full min-w-[800px] text-left text-sm">
+      <table v-show="!transactionsStore.isLoading" class="w-full min-w-[800px] text-left text-sm">
         <thead>
           <tr class="bg-[#dbeafe]">
             <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">Código</th>
-            <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">Cuenta</th>
+            <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">Cuenta de origen</th>
+            <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">Cuenta destino</th>
             <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">Cliente</th>
             <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">Monto origen</th>
             <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">Monto destino</th>
@@ -601,13 +735,27 @@ onMounted(() => {
         </thead>
         <tbody>
           <tr
+            v-if="paginatedTransactions.length === 0"
+            class="border-t border-[#e5e7eb]"
+          >
+            <td
+              colspan="9"
+              class="rounded-xl border border-[#dbe7fb] bg-[#fbfdff] px-6 py-12 text-center text-[#666]"
+            >
+              No hay transacciones. Importa un archivo Excel o crea una nueva.
+            </td>
+          </tr>
+          <tr
             v-for="t in paginatedTransactions"
             :key="t.id ?? ''"
             class="border-t border-[#e5e7eb] bg-white transition hover:bg-[#f9fafb]"
           >
             <td class="px-4 py-3 font-medium text-[#374151]">{{ t.code ?? '-' }}</td>
-            <td class="max-w-[180px] truncate px-4 py-3 text-[#374151]" :title="getBankAccountLabel(t.bank_account_id)">
-              {{ getBankAccountLabel(t.bank_account_id) }}
+            <td class="max-w-[180px] truncate px-4 py-3 text-[#374151]" :title="getBankAccountLabel(t.bank_account_origin_id)">
+              {{ getBankAccountLabel(t.bank_account_origin_id) }}
+            </td>
+            <td class="max-w-[180px] truncate px-4 py-3 text-[#374151]" :title="getBankAccountLabel(t.bank_account_destination_id)">
+              {{ getBankAccountLabel(t.bank_account_destination_id) }}
             </td>
             <td class="px-4 py-3 text-[#374151]">{{ getClientLabel(t.user_id) }}</td>
             <td class="px-4 py-3 text-[#374151]">{{ formatValue(t.origin_amount) }}</td>
@@ -631,44 +779,105 @@ onMounted(() => {
               <button
                 type="button"
                 class="rounded p-1.5 text-[#6b7280] hover:bg-[#f3f4f6]"
-                @click.stop="toggleMenu(t.id ?? '')"
+                @click.stop="toggleMenu(t.id ?? '', $event)"
               >
                 <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
                 </svg>
               </button>
-              <div
-                v-if="openMenuId === t.id"
-                class="absolute right-0 top-full z-10 mt-1 min-w-[160px] rounded-lg border border-[#e5e7eb] bg-white py-1 shadow-lg"
-                @click.stop
-              >
-                <button
-                  type="button"
-                  class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-[#374151] hover:bg-[#f9fafb]"
-                  @click="openEditModal(t)"
-                >
-                  <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                  </svg>
-                  Editar
-                </button>
-                <button
-                  type="button"
-                  class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-[#dc3545] hover:bg-[#fef2f2]"
-                  :disabled="deletingId === t.id"
-                  @click="handleDelete(t)"
-                >
-                  <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                  Borrar
-                </button>
-              </div>
             </td>
           </tr>
         </tbody>
       </table>
     </div>
+
+    <!-- Menú acciones (Teleport para evitar overflow y posicionamiento responsive) -->
+    <Teleport to="body">
+      <div
+        v-if="openMenuId && selectedMenuTransaction"
+        class="fixed z-[100] min-w-[160px] rounded-lg border border-[#e5e7eb] bg-white py-1 shadow-lg"
+        :style="{ top: `${menuPosition.top}px`, left: `${menuPosition.left}px` }"
+        @click.stop
+      >
+        <button
+          type="button"
+          class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-[#374151] hover:bg-[#f9fafb]"
+          @click="openMenuId = null; openPreviewModal(selectedMenuTransaction)"
+        >
+          <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+          </svg>
+          Previsualizar
+        </button>
+        <button
+          type="button"
+          class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-[#374151] hover:bg-[#f9fafb]"
+          @click="openMenuId = null; openEditModal(selectedMenuTransaction)"
+        >
+          <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+          </svg>
+          Editar
+        </button>
+        <button
+          type="button"
+          class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-[#dc3545] hover:bg-[#fef2f2]"
+          :disabled="deletingId === selectedMenuTransaction.id"
+          @click="openMenuId = null; handleDelete(selectedMenuTransaction)"
+        >
+          <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+          Borrar
+        </button>
+      </div>
+    </Teleport>
+
+    <!-- Modal Previsualizar -->
+    <Teleport to="body">
+      <div
+        v-if="showPreviewModal"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+        @click.self="closePreviewModal"
+      >
+        <div class="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-[#e5e7eb] bg-white shadow-xl">
+          <div class="flex items-center justify-between border-b border-[#e5e7eb] px-6 py-4">
+            <h2 class="text-lg font-semibold text-[#1f2937]">Previsualizar transacción</h2>
+            <button
+              type="button"
+              class="rounded-lg p-2 text-[#6b7280] hover:bg-[#f3f4f6]"
+              aria-label="Cerrar"
+              @click="closePreviewModal"
+            >
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div class="flex-1 overflow-y-auto p-6">
+            <p v-if="previewLoading" class="text-center text-sm text-[#6b7280]">Cargando...</p>
+            <p v-else-if="previewError" class="rounded-lg bg-[#dc3545]/10 px-4 py-3 text-sm text-[#dc3545]">
+              {{ previewError }}
+            </p>
+            <div v-else-if="previewTransaction" class="space-y-4">
+              <div
+                v-for="entry in previewDisplayEntries"
+                :key="entry.key"
+                class="flex flex-col gap-0.5 sm:flex-row sm:items-start sm:gap-4"
+              >
+                <span class="min-w-[140px] shrink-0 text-sm font-medium text-[#6b7280]">
+                  {{ entry.label }}
+                </span>
+                <span class="min-w-0 break-words text-sm text-[#374151]">
+                  {{ entry.displayValue }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- Paginación -->
     <div

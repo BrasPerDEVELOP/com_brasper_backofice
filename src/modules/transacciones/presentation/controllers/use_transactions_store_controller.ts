@@ -114,6 +114,15 @@ export const useTransactionsStore = defineStore('transactions', {
         this.error = e instanceof Error ? e.message : 'Error al eliminar transacción'
         throw e
       }
+    },
+
+    async getTransactionById(id: string): Promise<Transaction | null> {
+      try {
+        const repo = getRepository()
+        return await repo.getTransactionById(id)
+      } catch {
+        return null
+      }
     }
   }
 })
