@@ -3,16 +3,20 @@ import type { Transaction } from '../../domain/models'
 export interface CreateTransactionPayload {
   bank_account_id: string
   user_id: string
-  tax_rate_id?: string
-  commission_id?: string
+  tax_rate_id: string
+  commission_id: string
   status?: string
   origin_amount: number
   destination_amount: number
-  code?: string
+  resultado_comision?: number | null
+  total_a_enviar?: number | null
+  code: string
   send_date?: string
   payment_date?: string
-  send_voucher?: string
-  payment_voucher?: string
+  send_voucher?: string | File | null
+  payment_voucher?: string | File | null
+  /** UUID o null. No enviar "automatic" - el API espera UUID válido. */
+  coupon_id?: string | null
 }
 
 export interface UpdateTransactionPayload extends Partial<CreateTransactionPayload> {}

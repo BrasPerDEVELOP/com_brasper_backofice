@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import type { CurrencyCode, ExchangeRate, CommissionRange, Coupon, CalculatorResult } from '../../domain/models'
+import type { CurrencyCode, ExchangeRate, CommissionRange, CalculatorResult } from '../../domain/models'
 import type { CurrencyReadDTO } from '../../infrastructure/adapters/calculator_repository'
 import { getCurrencyPairKey, CURRENCY_OPTIONS } from '../../domain/models'
 import { LoadCalculatorDataUseCase } from '../../application/use_cases'
@@ -15,7 +15,6 @@ interface CalculatorState {
   amountReceive: number
   taxRates: ExchangeRate[]
   commissions: CommissionRange[]
-  coupons: Coupon[]
   /** IDs para POST /transactions/ (tasa y comisión usadas en la calculadora). */
   selectedTaxRateId: string | null
   selectedCommissionId: string | null
@@ -36,7 +35,6 @@ export const useCalculatorStore = defineStore('calculator', {
     amountReceive: 0,
     taxRates: [],
     commissions: [],
-    coupons: [],
     selectedTaxRateId: null,
     selectedCommissionId: null,
     isLoading: false,
@@ -140,7 +138,6 @@ export const useCalculatorStore = defineStore('calculator', {
         this.currencies = data.currencies
         this.taxRates = data.taxRates
         this.commissions = data.commissions
-        this.coupons = data.coupons
         this.updateSelectedIds()
       } catch (e) {
         this.error = e instanceof Error ? e.message : 'Error al cargar datos'

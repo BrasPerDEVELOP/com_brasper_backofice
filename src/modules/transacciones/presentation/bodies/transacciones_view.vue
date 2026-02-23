@@ -4,16 +4,19 @@ import { useTransactionsStore } from '../controllers/use_transactions_store_cont
 import { useCuentasBancariasStore } from '@modules/cuentas-bancarias/presentation/controllers/use_cuentas_bancarias_store_controller'
 import { useTasasStore } from '@modules/tasas/presentation/controllers/use_tasas_store_controller'
 import { useComisionesStore } from '@modules/comisiones/presentation/controllers/use_comisiones_store_controller'
+import { useCalculatorStore } from '@modules/calculator/presentation/controllers/use_calculator_store_controller'
 import type { Transaction } from '../../domain/models'
 import type { GetTransactionsParams } from '../../infrastructure/adapters/transactions_repository'
 import { TRANSACTION_STATUSES, TRANSACTION_STATUS_LABELS } from '../../domain/models'
 import AppDropdown from '@/interface/components/AppDropdown.vue'
 import AppDateInput from '@/interface/components/AppDateInput.vue'
+import CalculatorEmbed from '@modules/calculator/presentation/components/CalculatorEmbed.vue'
 
 const transactionsStore = useTransactionsStore()
 const cuentasStore = useCuentasBancariasStore()
 const tasasStore = useTasasStore()
 const comisionesStore = useComisionesStore()
+const calculatorStore = useCalculatorStore()
 
 const showCreateModal = ref(false)
 const showImportModal = ref(false)
@@ -68,35 +71,71 @@ const perPageStr = computed({
   }
 })
 
-const form = reactive({
-  bank_account_id: '',
+const form = reactive<{
+  bank_account_origin_id: string
+  bank_account_destination_id: string
+  user_id: string
+  tax_rate_id: string
+  commission_id: string
+  status: string
+  origin_amount: number
+  destination_amount: number
+  resultado_comision: number | null
+  total_a_enviar: number | null
+  code: string
+  send_date: string
+  payment_date: string
+  send_voucher: string | File | null
+  payment_voucher: string | File | null
+}>({
+  bank_account_origin_id: '',
+  bank_account_destination_id: '',
   user_id: '',
   tax_rate_id: '',
   commission_id: '',
   status: 'pending',
   origin_amount: 0,
   destination_amount: 0,
+  resultado_comision: null,
+  total_a_enviar: null,
   code: '',
   send_date: '',
   payment_date: '',
-  send_voucher: '',
-  payment_voucher: ''
+  send_voucher: null,
+  payment_voucher: null
 })
 
 const editingId = ref<string | null>(null)
 
-const bankAccountOptions = computed(() =>
-  cuentasStore.bankAccounts.map((a) => {
-    const bank = cuentasStore.banks.find((b) => b.id === a.bank_id)
-    const bankName = bank ? `${bank.bank}${bank.currency ? ` (${bank.currency})` : ''}` : '-'
-    const holder =
-      (a.account_holder_type ?? '').toLowerCase().includes('juridica') || (a.account_holder_type ?? '').toLowerCase().includes('legal')
-        ? (a.business_name ?? '-')
-        : [a.holder_names, a.holder_surnames].filter(Boolean).join(' ') || '-'
-    const accNum = a.account_number ?? '-'
-    return { value: a.id, label: `${bankName} - ${accNum} (${holder})` }
-  })
-)
+type CreateTab = 'calculadora' | 'datos' | 'vouchers'
+const createTab = ref<CreateTab>('calculadora')
+
+function bankAccountToOption(a: { id: string; bank_id: string; account_holder_type?: string; business_name?: string; holder_names?: string; holder_surnames?: string; account_number?: string }) {
+  const bank = cuentasStore.banks.find((b) => b.id === a.bank_id)
+  const bankName = bank ? `${bank.bank}${bank.currency ? ` (${bank.currency})` : ''}` : '-'
+  const holder =
+    (a.account_holder_type ?? '').toLowerCase().includes('juridica') || (a.account_holder_type ?? '').toLowerCase().includes('legal')
+      ? (a.business_name ?? '-')
+      : [a.holder_names, a.holder_surnames].filter(Boolean).join(' ') || '-'
+  const accNum = a.account_number ?? '-'
+  return { value: a.id, label: `${bankName} - ${accNum} (${holder})` }
+}
+
+const originAccountOptions = computed(() => {
+  const userId = form.user_id?.trim()
+  return cuentasStore.bankAccounts
+    .filter((a) => (a.account_flow ?? '').toLowerCase() === 'origin')
+    .filter((a) => !userId || a.user_id === userId)
+    .map(bankAccountToOption)
+})
+
+const destinationAccountOptions = computed(() => {
+  const userId = form.user_id?.trim()
+  return cuentasStore.bankAccounts
+    .filter((a) => (a.account_flow ?? '').toLowerCase() === 'destination')
+    .filter((a) => !userId || a.user_id === userId)
+    .map(bankAccountToOption)
+})
 
 const clientOptions = computed(() =>
   cuentasStore.clientUsers.map((u) => ({ value: u.id, label: u.name }))
@@ -165,26 +204,46 @@ const paginatedTransactions = computed(() => {
 })
 
 function resetForm() {
-  form.bank_account_id = ''
+  form.bank_account_origin_id = ''
+  form.bank_account_destination_id = ''
   form.user_id = ''
   form.tax_rate_id = ''
   form.commission_id = ''
   form.status = 'pending'
   form.origin_amount = 0
   form.destination_amount = 0
+  form.resultado_comision = null
+  form.total_a_enviar = null
   form.code = ''
   form.send_date = ''
   form.payment_date = ''
-  form.send_voucher = ''
-  form.payment_voucher = ''
+  form.send_voucher = null
+  form.payment_voucher = null
   editingId.value = null
+}
+
+function syncFromCalculator() {
+  form.origin_amount = calculatorStore.amountSend || 0
+  form.destination_amount = calculatorStore.amountReceive || 0
+  form.tax_rate_id = calculatorStore.selectedTaxRateId ?? ''
+  form.commission_id = calculatorStore.selectedCommissionId ?? ''
+  const res = calculatorStore.result
+  if (res) {
+    form.resultado_comision = res.commission
+    form.total_a_enviar = res.totalToSend
+  } else {
+    form.resultado_comision = null
+    form.total_a_enviar = null
+  }
 }
 
 function openCreateModal() {
   transactionsStore.error = null
   resetForm()
+  createTab.value = 'calculadora'
   showCreateModal.value = true
   loadFormOptions()
+  calculatorStore.loadData()
 }
 
 async function loadFormOptions() {
@@ -201,41 +260,62 @@ function openEditModal(t: Transaction) {
   if (!t.id) return
   transactionsStore.error = null
   editingId.value = t.id
-  form.bank_account_id = t.bank_account_id ?? ''
+  createTab.value = 'datos'
+  form.bank_account_destination_id = t.bank_account_id ?? ''
+  form.bank_account_origin_id = ''
   form.user_id = t.user_id ?? ''
   form.tax_rate_id = t.tax_rate_id ?? ''
   form.commission_id = t.commission_id ?? ''
   form.status = (t.status ?? 'pending').toLowerCase()
   form.origin_amount = Number(t.origin_amount) || 0
   form.destination_amount = Number(t.destination_amount) || 0
+  form.resultado_comision = null
+  form.total_a_enviar = null
   form.code = t.code ?? ''
   form.send_date = t.send_date ? t.send_date.slice(0, 10) : ''
   form.payment_date = t.payment_date ? t.payment_date.slice(0, 10) : ''
-  form.send_voucher = t.send_voucher ?? ''
-  form.payment_voucher = t.payment_voucher ?? ''
+  form.send_voucher = t.send_voucher ?? null
+  form.payment_voucher = t.payment_voucher ?? null
   showCreateModal.value = true
   loadFormOptions()
 }
 
 async function submitForm() {
-  if (!form.bank_account_id || !form.user_id) {
-    transactionsStore.error = 'Cuenta bancaria y cliente son obligatorios'
+  syncFromCalculator()
+  const bankAccountId = form.bank_account_destination_id || form.bank_account_origin_id
+  if (!bankAccountId || !form.user_id) {
+    transactionsStore.error = 'Cuenta destino y cliente son obligatorios'
+    return
+  }
+  if (!form.tax_rate_id || !form.commission_id) {
+    transactionsStore.error = 'Tasa y comisión son obligatorios (usa la calculadora primero)'
     return
   }
   try {
+    const sendVoucher = form.send_voucher
+    const paymentVoucher = form.payment_voucher
+    const bothVouchersUploaded =
+      (sendVoucher instanceof File || (typeof sendVoucher === 'string' && sendVoucher)) &&
+      (paymentVoucher instanceof File || (typeof paymentVoucher === 'string' && paymentVoucher))
+    const status = bothVouchersUploaded ? 'completed' : form.status
+
+    const code = form.code?.trim() || `TRX-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const round2 = (n: number) => Math.round(n * 100) / 100
     const payload = {
-      bank_account_id: form.bank_account_id,
+      bank_account_id: bankAccountId,
       user_id: form.user_id,
-      tax_rate_id: form.tax_rate_id || undefined,
-      commission_id: form.commission_id || undefined,
-      status: form.status,
-      origin_amount: form.origin_amount,
-      destination_amount: form.destination_amount,
-      code: form.code || undefined,
+      tax_rate_id: form.tax_rate_id,
+      commission_id: form.commission_id,
+      status,
+      origin_amount: round2(form.origin_amount),
+      destination_amount: round2(form.destination_amount),
+      resultado_comision: form.resultado_comision != null ? round2(form.resultado_comision) : undefined,
+      total_a_enviar: form.total_a_enviar != null ? round2(form.total_a_enviar) : undefined,
+      code,
       send_date: form.send_date || undefined,
       payment_date: form.payment_date || undefined,
-      send_voucher: form.send_voucher || undefined,
-      payment_voucher: form.payment_voucher || undefined
+      send_voucher: sendVoucher ?? undefined,
+      payment_voucher: paymentVoucher ?? undefined
     }
     if (editingId.value) {
       await transactionsStore.updateTransaction(editingId.value, payload)
@@ -307,14 +387,21 @@ function getStatusLabel(status: string | undefined): string {
 
 function getBankAccountLabel(id: string | undefined): string {
   if (!id) return '-'
-  const opt = bankAccountOptions.value.find((o) => o.value === id)
-  return opt?.label ?? id
+  const acc = cuentasStore.bankAccounts.find((a) => a.id === id)
+  if (!acc) return id
+  return bankAccountToOption(acc).label
 }
 
 function getClientLabel(id: string | undefined): string {
   if (!id) return '-'
   const u = cuentasStore.clientUsers.find((u) => u.id === id)
   return u?.name ?? id
+}
+
+function getVoucherLabel(v: unknown): string {
+  return v != null && typeof v === 'object' && 'name' in v && typeof (v as File).name === 'string'
+    ? (v as File).name
+    : 'Archivo seleccionado'
 }
 
 async function submitImport() {
@@ -332,6 +419,18 @@ async function submitImport() {
 function loadTransactions() {
   transactionsStore.loadTransactions(apiFilterParams.value)
 }
+
+watch(createTab, (tab) => {
+  if (tab === 'datos' && !editingId.value) syncFromCalculator()
+})
+
+watch(
+  () => form.user_id,
+  () => {
+    form.bank_account_origin_id = ''
+    form.bank_account_destination_id = ''
+  }
+)
 
 watch([searchQuery, perPage], () => {
   currentPage.value = 1
@@ -633,132 +732,224 @@ onMounted(() => {
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
         @click.self="showCreateModal = false"
       >
-        <div class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-xl">
-          <h2 class="mb-6 text-lg font-semibold text-[#1f2937]">
-            {{ editingId ? 'Editar transacción' : 'Nueva transacción' }}
-          </h2>
+        <div class="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-[#e5e7eb] bg-white shadow-xl">
+          <div class="flex items-center justify-between border-b border-[#e5e7eb] px-6 py-4">
+            <h2 class="text-lg font-semibold text-[#1f2937]">
+              {{ editingId ? 'Editar transacción' : 'Nueva transacción' }}
+            </h2>
+            <button
+              type="button"
+              class="rounded-lg p-2 text-[#6b7280] hover:bg-[#f3f4f6]"
+              aria-label="Cerrar"
+              @click="showCreateModal = false"
+            >
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
 
-          <form class="space-y-6" @submit.prevent="submitForm">
-            <div class="grid gap-6 sm:grid-cols-2">
-              <div class="space-y-1.5 sm:col-span-2">
-                <label class="block text-sm font-medium text-[#374151]">Cuenta bancaria *</label>
-                <AppDropdown
-                  v-model="form.bank_account_id"
-                  :options="bankAccountOptions"
-                  placeholder="Seleccionar cuenta"
-                  :searchable="true"
-                />
-              </div>
-              <div class="space-y-1.5">
-                <label class="block text-sm font-medium text-[#374151]">Cliente *</label>
-                <AppDropdown
-                  v-model="form.user_id"
-                  :options="clientOptions"
-                  placeholder="Seleccionar cliente"
-                  :searchable="clientOptions.length > 10"
-                />
-              </div>
-              <div class="space-y-1.5">
-                <label class="block text-sm font-medium text-[#374151]">Estado</label>
-                <AppDropdown
-                  v-model="form.status"
-                  :options="statusFormOptions"
-                  placeholder="Pendiente"
-                  :searchable="false"
-                />
-              </div>
-              <div class="space-y-1.5">
-                <label class="block text-sm font-medium text-[#374151]">Tasa</label>
-                <AppDropdown
-                  v-model="form.tax_rate_id"
-                  :options="taxRateOptions"
-                  placeholder="Seleccionar"
-                  :searchable="taxRateOptions.length > 10"
-                />
-              </div>
-              <div class="space-y-1.5">
-                <label class="block text-sm font-medium text-[#374151]">Comisión</label>
-                <AppDropdown
-                  v-model="form.commission_id"
-                  :options="commissionOptions"
-                  placeholder="Seleccionar"
-                  :searchable="commissionOptions.length > 10"
-                />
-              </div>
-              <div class="space-y-1.5">
-                <label class="block text-sm font-medium text-[#374151]">Código</label>
-                <input
-                  v-model="form.code"
-                  type="text"
-                  class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm"
-                  placeholder="Código único"
-                />
-              </div>
-              <div class="space-y-1.5">
-                <label class="block text-sm font-medium text-[#374151]">Monto origen</label>
-                <input
-                  v-model.number="form.origin_amount"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm"
-                />
-              </div>
-              <div class="space-y-1.5">
-                <label class="block text-sm font-medium text-[#374151]">Monto destino</label>
-                <input
-                  v-model.number="form.destination_amount"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm"
-                />
-              </div>
-              <div class="space-y-1.5">
-                <label class="block text-sm font-medium text-[#374151]">Fecha envío</label>
-                <AppDateInput v-model="form.send_date" />
-              </div>
-              <div class="space-y-1.5">
-                <label class="block text-sm font-medium text-[#374151]">Fecha pago</label>
-                <AppDateInput v-model="form.payment_date" />
-              </div>
-              <div class="space-y-1.5">
-                <label class="block text-sm font-medium text-[#374151]">Voucher envío (URL)</label>
-                <input
-                  v-model="form.send_voucher"
-                  type="text"
-                  class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm"
-                  placeholder="https://..."
-                />
-              </div>
-              <div class="space-y-1.5">
-                <label class="block text-sm font-medium text-[#374151]">Voucher pago (URL)</label>
-                <input
-                  v-model="form.payment_voucher"
-                  type="text"
-                  class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm"
-                  placeholder="https://..."
-                />
-              </div>
+          <!-- Chips -->
+          <div class="flex gap-2 border-b border-[#e5e7eb] px-6 py-3">
+            <button
+              type="button"
+              :class="[
+                'rounded-full px-4 py-2 text-sm font-medium transition',
+                createTab === 'calculadora'
+                  ? 'bg-[#2563eb] text-white'
+                  : 'bg-[#f3f4f6] text-[#6b7280] hover:bg-[#e5e7eb]'
+              ]"
+              @click="createTab = 'calculadora'"
+            >
+              Calculadora
+            </button>
+            <button
+              type="button"
+              :class="[
+                'rounded-full px-4 py-2 text-sm font-medium transition',
+                createTab === 'datos'
+                  ? 'bg-[#2563eb] text-white'
+                  : 'bg-[#f3f4f6] text-[#6b7280] hover:bg-[#e5e7eb]'
+              ]"
+              @click="createTab = 'datos'"
+            >
+              Datos
+            </button>
+            <button
+              type="button"
+              :class="[
+                'rounded-full px-4 py-2 text-sm font-medium transition',
+                createTab === 'vouchers'
+                  ? 'bg-[#2563eb] text-white'
+                  : 'bg-[#f3f4f6] text-[#6b7280] hover:bg-[#e5e7eb]'
+              ]"
+              @click="createTab = 'vouchers'"
+            >
+              Vouchers
+            </button>
+          </div>
+
+          <!-- Contenido -->
+          <div class="flex-1 overflow-y-auto p-6">
+            <div v-if="createTab === 'calculadora'">
+              <CalculatorEmbed />
             </div>
 
-            <div class="flex flex-wrap justify-end gap-3 border-t border-[#e5e7eb] pt-6">
-              <button
-                type="button"
-                class="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2.5 text-sm font-medium text-[#6b7280] hover:bg-[#f9fafb]"
-                @click="showCreateModal = false"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                class="rounded-lg bg-[#2563eb] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#1d4ed8] disabled:opacity-60"
-                :disabled="transactionsStore.isCreating || transactionsStore.isUpdating"
-              >
-                {{ transactionsStore.isCreating || transactionsStore.isUpdating ? 'Guardando...' : 'Guardar' }}
-              </button>
-            </div>
-          </form>
+            <form v-else-if="createTab === 'datos'" class="space-y-6" @submit.prevent="submitForm">
+              <div class="grid gap-6 sm:grid-cols-2">
+                <div class="space-y-1.5">
+                  <label class="block text-sm font-medium text-[#374151]">Cliente *</label>
+                  <AppDropdown
+                    v-model="form.user_id"
+                    :options="clientOptions"
+                    placeholder="Seleccionar cliente (rol cliente)"
+                    :searchable="clientOptions.length > 10"
+                  />
+                </div>
+                <div class="space-y-1.5">
+                  <label class="block text-sm font-medium text-[#374151]">Cuenta origen</label>
+                  <AppDropdown
+                    v-model="form.bank_account_origin_id"
+                    :options="originAccountOptions"
+                    placeholder="Cuentas de origen"
+                    :searchable="originAccountOptions.length > 5"
+                  />
+                </div>
+                <div class="space-y-1.5">
+                  <label class="block text-sm font-medium text-[#374151]">Cuenta destino *</label>
+                  <AppDropdown
+                    v-model="form.bank_account_destination_id"
+                    :options="destinationAccountOptions"
+                    placeholder="Cuentas de destino"
+                    :searchable="destinationAccountOptions.length > 5"
+                  />
+                </div>
+                <div class="space-y-1.5" v-if="editingId">
+                  <label class="block text-sm font-medium text-[#374151]">Estado</label>
+                  <AppDropdown
+                    v-model="form.status"
+                    :options="statusFormOptions"
+                    placeholder="Pendiente"
+                    :searchable="false"
+                  />
+                </div>
+                <div class="space-y-1.5">
+                  <label class="block text-sm font-medium text-[#374151]">Tasa</label>
+                  <AppDropdown
+                    v-model="form.tax_rate_id"
+                    :options="taxRateOptions"
+                    placeholder="Seleccionar"
+                    :searchable="taxRateOptions.length > 10"
+                  />
+                </div>
+                <div class="space-y-1.5">
+                  <label class="block text-sm font-medium text-[#374151]">Comisión</label>
+                  <AppDropdown
+                    v-model="form.commission_id"
+                    :options="commissionOptions"
+                    placeholder="Seleccionar"
+                    :searchable="commissionOptions.length > 10"
+                  />
+                </div>
+                <div class="space-y-1.5">
+                  <label class="block text-sm font-medium text-[#374151]">Código</label>
+                  <input
+                    v-model="form.code"
+                    type="text"
+                    class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm"
+                    placeholder="Código único"
+                  />
+                </div>
+                <div class="space-y-1.5">
+                  <label class="block text-sm font-medium text-[#374151]">Monto origen</label>
+                  <input
+                    v-model.number="form.origin_amount"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm"
+                  />
+                </div>
+                <div class="space-y-1.5">
+                  <label class="block text-sm font-medium text-[#374151]">Monto destino</label>
+                  <input
+                    v-model.number="form.destination_amount"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm"
+                  />
+                </div>
+                <div class="space-y-1.5">
+                  <label class="block text-sm font-medium text-[#374151]">Fecha envío</label>
+                  <AppDateInput v-model="form.send_date" />
+                </div>
+                <div class="space-y-1.5">
+                  <label class="block text-sm font-medium text-[#374151]">Fecha pago</label>
+                  <AppDateInput v-model="form.payment_date" />
+                </div>
+              </div>
+            </form>
+
+            <form v-else-if="createTab === 'vouchers'" class="space-y-6" @submit.prevent="submitForm">
+              <div class="grid gap-6 sm:grid-cols-2">
+                <div class="space-y-1.5 sm:col-span-2">
+                  <label class="block text-sm font-medium text-[#374151]">Voucher envío (send_voucher)</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm"
+                    @change="form.send_voucher = ($event.target as HTMLInputElement).files?.[0] ?? null"
+                  />
+                  <p v-if="form.send_voucher" class="mt-1 text-xs text-[#6b7280]">
+                    {{ getVoucherLabel(form.send_voucher) }}
+                  </p>
+                </div>
+                <div class="space-y-1.5 sm:col-span-2">
+                  <label class="block text-sm font-medium text-[#374151]">Voucher pago (payment_voucher)</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm"
+                    @change="form.payment_voucher = ($event.target as HTMLInputElement).files?.[0] ?? null"
+                  />
+                  <p v-if="form.payment_voucher" class="mt-1 text-xs text-[#6b7280]">
+                    {{ getVoucherLabel(form.payment_voucher) }}
+                  </p>
+                </div>
+                <p v-if="form.send_voucher && form.payment_voucher" class="sm:col-span-2 text-xs text-green-600">
+                  Ambos vouchers subidos. El estado se establecerá como finalizado al guardar.
+                </p>
+              </div>
+            </form>
+          </div>
+
+          <!-- Error dentro del modal -->
+          <p
+            v-if="showCreateModal && transactionsStore.error"
+            class="mx-6 mb-2 rounded-lg bg-[#dc3545]/10 px-4 py-3 text-sm text-[#dc3545]"
+          >
+            {{ transactionsStore.error }}
+          </p>
+
+          <!-- Footer con botones -->
+          <div class="flex flex-wrap justify-end gap-3 border-t border-[#e5e7eb] px-6 py-4">
+            <button
+              type="button"
+              class="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2.5 text-sm font-medium text-[#6b7280] hover:bg-[#f9fafb]"
+              @click="showCreateModal = false"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              class="rounded-lg bg-[#2563eb] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#1d4ed8] disabled:opacity-60"
+              :disabled="transactionsStore.isCreating || transactionsStore.isUpdating"
+              @click="submitForm"
+            >
+              {{ transactionsStore.isCreating || transactionsStore.isUpdating ? 'Guardando...' : 'Guardar' }}
+            </button>
+          </div>
         </div>
       </div>
     </Teleport>

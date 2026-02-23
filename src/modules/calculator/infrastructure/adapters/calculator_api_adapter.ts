@@ -1,7 +1,7 @@
 import { apiClient } from '@/interface/api/client'
 import { Domain } from '@/interface/infrastructure/services'
 import type { CalculatorRepository, CurrencyReadDTO } from './calculator_repository'
-import type { ExchangeRate, CommissionRange, Coupon } from '../../domain/models'
+import type { ExchangeRate, CommissionRange } from '../../domain/models'
 import { getCurrencyPairKey } from '../../domain/models'
 
 function parseCurrencies(data: unknown): CurrencyReadDTO[] {
@@ -52,29 +52,11 @@ function parseCommissions(data: unknown): CommissionRange[] {
     .filter((c) => c.id)
 }
 
-function parseCoupons(data: unknown): Coupon[] {
-  if (!Array.isArray(data)) return []
-  return data
-    .filter((item): item is Record<string, unknown> => item != null && typeof item === 'object')
-    .map((item) => ({
-      id: String(item.id ?? ''),
-      code: String(item.code ?? ''),
-      discount: Number(item.discount ?? 0),
-      type: (item.type === 'fixed' ? 'fixed' : 'percent') as Coupon['type'],
-      isAutomatic: Boolean(item.isAutomatic ?? item.is_automatic)
-    }))
-    .filter((c) => c.id)
-}
-
 export class CalculatorApiAdapter implements CalculatorRepository {
   constructor(private readonly useDemo = false) {}
 
   private coinBase(): string {
     return this.useDemo ? Domain.http('coin') : Domain.http('coin')
-  }
-
-  private transactionsBase(): string {
-    return Domain.http('transactions')
   }
 
   private endpoint(suffix: string, useTrial = true): string {
@@ -99,13 +81,5 @@ export class CalculatorApiAdapter implements CalculatorRepository {
     const url = this.endpoint('commission')
     const response = await apiClient.get<unknown>(url).catch(() => ({ data: [] }))
     return parseCommissions(Array.isArray(response.data) ? response.data : [])
-  }
-
-  async getAutomaticCoupons(): Promise<Coupon[]> {
-    const base = this.transactionsBase()
-    const path = this.useDemo ? 'coupons/automatic-trial/' : 'coupons/automatic/'
-    const url = base.endsWith('/') ? `${base}${path}` : `${base}/${path}`
-    const response = await apiClient.get<unknown>(url).catch(() => ({ data: [] }))
-    return parseCoupons(response.data ?? [])
   }
 }

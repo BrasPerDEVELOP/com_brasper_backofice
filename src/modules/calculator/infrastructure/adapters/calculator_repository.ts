@@ -1,4 +1,4 @@
-import type { ExchangeRate, CommissionRange, Coupon } from '../../domain/models'
+import type { ExchangeRate, CommissionRange } from '../../domain/models'
 
 /** CurrencyReadDTO desde GET /coin/currencies */
 export interface CurrencyReadDTO {
@@ -11,5 +11,4 @@ export interface CalculatorRepository {
   getCurrencies(): Promise<CurrencyReadDTO[]>
   getTaxRates(): Promise<ExchangeRate[]>
   getCommissions(): Promise<CommissionRange[]>
-  getAutomaticCoupons(): Promise<Coupon[]>
 }

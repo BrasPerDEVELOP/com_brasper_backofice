@@ -1,0 +1,93 @@
+{
+  "title": "Flujo POST /transactions/ - Frontend",
+  "description": "Documentación de cómo el frontend construye y envía el POST para crear transacciones",
+  "endpoint": {
+    "method": "POST",
+    "url": "{{baseUrl}}/transactions/",
+    "baseUrl_example": "http://127.0.0.1:8000"
+  },
+  "flujo": {
+    "1_modal": {
+      "paso": "Usuario abre modal 'Nueva transacción'",
+      "accion": "openCreateModal()",
+      "detalle": "Se resetea el form, se carga calculadora (tasas, comisiones), cuentas bancarias, usuarios cliente, bancos"
+    },
+    "2_chips": {
+      "paso": "Usuario completa 3 chips en orden",
+      "chips": [
+        {
+          "nombre": "Calculadora",
+          "origen_datos": "calculatorStore (amountSend, amountReceive, selectedTaxRateId, selectedCommissionId, result)",
+          "campos_que_rellena": "origin_amount, destination_amount, tax_rate_id, commission_id, resultado_comision, total_a_enviar"
+        },
+        {
+          "nombre": "Datos",
+          "origen_datos": "Formulario manual + syncFromCalculator al entrar",
+          "campos": "user_id (dropdown clientes), bank_account_origin_id, bank_account_destination_id, code, send_date, payment_date, status"
+        },
+        {
+          "nombre": "Vouchers",
+          "origen_datos": "Input type=file",
+          "campos": "send_voucher (File), payment_voucher (File)"
+        }
+      ]
+    },
+    "3_guardar": {
+      "paso": "Usuario hace clic en Guardar",
+      "accion": "submitForm()",
+      "validaciones": [
+        "bank_account_destination_id O bank_account_origin_id obligatorio",
+        "user_id obligatorio",
+        "tax_rate_id obligatorio",
+        "commission_id obligatorio"
+      ],
+      "pre_procesamiento": [
+        "syncFromCalculator() - actualiza form con valores de la calculadora",
+        "code: si vacío → TRX-{timestamp}-{random}",
+        "status: si ambos vouchers subidos → 'completed', sino → form.status (default 'pending')",
+        "round2() - redondea montos a 2 decimales",
+        "bank_account_id: usa bank_account_destination_id, o bank_account_origin_id si destino vacío"
+      ]
+    }
+  },
+  "content_type": "multipart/form-data (FormData)",
+  "nota": "Siempre se envía FormData, nunca JSON",
+  "payload_formdata_campos": {
+    "descripcion": "Todos los campos se envían como FormData (multipart/form-data). Valores numéricos como string.",
+    "campos_enviados": {
+      "bank_account_id": { "tipo": "string (UUID)", "obligatorio": true, "origen": "form.bank_account_destination_id || form.bank_account_origin_id" },
+      "user_id": { "tipo": "string (UUID)", "obligatorio": true, "origen": "form.user_id" },
+      "tax_rate_id": { "tipo": "string (UUID)", "obligatorio": true, "origen": "form.tax_rate_id (calculadora)" },
+      "commission_id": { "tipo": "string (UUID)", "obligatorio": true, "origen": "form.commission_id (calculadora)" },
+      "origin_amount": { "tipo": "number", "obligatorio": true, "origen": "form.origin_amount (calculadora)", "redondeo": "2 decimales" },
+      "destination_amount": { "tipo": "number", "obligatorio": true, "origen": "form.destination_amount (calculadora)", "redondeo": "2 decimales" },
+      "code": { "tipo": "string", "obligatorio": true, "origen": "form.code o auto TRX-{timestamp}-{random}" },
+      "status": { "tipo": "string", "obligatorio": false, "origen": "'completed' si ambos vouchers, sino form.status" },
+      "resultado_comision": { "tipo": "number | undefined", "obligatorio": false, "origen": "calculadora result.commission" },
+      "total_a_enviar": { "tipo": "number | undefined", "obligatorio": false, "origen": "calculadora result.totalToSend" },
+      "send_date": { "tipo": "string | undefined", "obligatorio": false, "formato": "YYYY-MM-DD" },
+      "payment_date": { "tipo": "string | undefined", "obligatorio": false, "formato": "YYYY-MM-DD" },
+      "send_voucher": { "tipo": "string | undefined", "obligatorio": false, "nota": "Solo si es URL (no File)" },
+      "payment_voucher": { "tipo": "string | undefined", "obligatorio": false, "nota": "Solo si es URL (no File)" }
+    },
+    "campos_no_enviados": ["coupon_id", "cuando_es_null_or_empty"]
+  },
+  "ejemplo_payload_formdata": {
+    "bank_account_id": "2e867c1f-c31b-49ce-a496-46716339c053",
+    "user_id": "b5fe0e0d-f699-4351-a14e-f076599ac0c5",
+    "tax_rate_id": "96eb0331-7971-4b01-b002-d54749de32d5",
+    "commission_id": "3d2958ab-57f3-41bc-9cf5-8ff36679a1d9",
+    "origin_amount": 33,
+    "destination_amount": 48.12,
+    "resultado_comision": 1.65,
+    "total_a_enviar": 31.35,
+    "code": "TRX-1771867108859-pj77u4",
+    "status": "completed"
+  },
+  "archivos": {
+    "vista": "src/modules/transacciones/presentation/bodies/transacciones_view.vue",
+    "store": "src/modules/transacciones/presentation/controllers/use_transactions_store_controller.ts",
+    "adapter": "src/modules/transacciones/infrastructure/adapters/transactions_api_adapter.ts",
+    "repository": "src/modules/transacciones/infrastructure/adapters/transactions_repository.ts"
+  }
+}

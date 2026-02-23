@@ -87,7 +87,31 @@ export class TransactionsApiAdapter implements TransactionsRepository {
 
   async createTransaction(payload: CreateTransactionPayload): Promise<Transaction> {
     const url = this.endpoint('')
-    const response = await apiClient.post<unknown>(url, payload)
+    const formData = new FormData()
+    formData.append('bank_account_id', payload.bank_account_id)
+    formData.append('user_id', payload.user_id)
+    formData.append('tax_rate_id', payload.tax_rate_id)
+    formData.append('commission_id', payload.commission_id)
+    formData.append('origin_amount', String(payload.origin_amount))
+    formData.append('destination_amount', String(payload.destination_amount))
+    formData.append('code', payload.code)
+    if (payload.status) formData.append('status', payload.status)
+    if (payload.resultado_comision != null)
+      formData.append('resultado_comision', String(payload.resultado_comision))
+    if (payload.total_a_enviar != null)
+      formData.append('total_a_enviar', String(payload.total_a_enviar))
+    if (payload.send_date) formData.append('send_date', payload.send_date)
+    if (payload.payment_date) formData.append('payment_date', payload.payment_date)
+    if (payload.send_voucher instanceof File)
+      formData.append('send_voucher', payload.send_voucher)
+    else if (typeof payload.send_voucher === 'string' && payload.send_voucher)
+      formData.append('send_voucher', payload.send_voucher)
+    if (payload.payment_voucher instanceof File)
+      formData.append('payment_voucher', payload.payment_voucher)
+    else if (typeof payload.payment_voucher === 'string' && payload.payment_voucher)
+      formData.append('payment_voucher', payload.payment_voucher)
+
+    const response = await apiClient.post<unknown>(url, formData)
     const raw = response.data
     const obj = raw != null && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
     const item = (obj.data ?? obj) as Record<string, unknown>
@@ -113,11 +137,7 @@ export class TransactionsApiAdapter implements TransactionsRepository {
     const formData = new FormData()
     formData.append('file', file)
 
-    const response = await apiClient.post(url, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      }
-    })
+    const response = await apiClient.post(url, formData)
     return response.data
   }
 }
