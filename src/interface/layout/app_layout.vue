@@ -18,6 +18,7 @@ const showSidebar = computed(() => route.path.startsWith('/app'))
 
 const navItems = [
   { to: '/app/perfil', label: 'Perfil', icon: 'user' },
+  { to: '/app/usuarios', label: 'Usuarios', icon: 'users' },
   { to: '/app/transacciones', label: 'Transacciones', icon: 'transactions' },
   { to: '/app/calculator', label: 'Calculadora', icon: 'calc' },
   { to: '/app/calculator?demo=1', label: 'Calculadora Demo', icon: 'demo' },
@@ -39,7 +40,8 @@ const breadcrumbs = computed(() => {
     comisiones: 'Comercial > Comisiones',
     cuentas: 'Configuración > Cuentas',
     tasas: 'Configuración > Tasas de cambio',
-    perfil: 'Cuenta > Perfil'
+    perfil: 'Cuenta > Perfil',
+    usuarios: 'Cuenta > Usuarios'
   }
   return map[name] ?? 'Panel Brasper'
 })

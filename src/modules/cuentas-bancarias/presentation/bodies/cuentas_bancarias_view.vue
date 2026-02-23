@@ -2,9 +2,12 @@
 import { ref, computed, onMounted, reactive, watch, nextTick } from 'vue'
 import { useCuentasBancariasStore } from '../controllers/use_cuentas_bancarias_store_controller'
 import type { BankAccount } from '../../domain/models'
+import AppDropdown from '@/interface/components/AppDropdown.vue'
+import UsuarioCreateFormModal from '@/interface/components/UsuarioCreateFormModal.vue'
 
 const cuentasStore = useCuentasBancariasStore()
 const showCreateModal = ref(false)
+const showUsersModal = ref(false)
 const searchQuery = ref('')
 const openMenuId = ref<string | null>(null)
 
@@ -19,6 +22,40 @@ const selectedUserId = ref<string>(ALL_USERS)
 
 const perPage = ref(10)
 const currentPage = ref(1)
+
+const countryOptions = [
+  { value: 'pe', label: 'PE' },
+  { value: 'br', label: 'BR' }
+]
+const accountFlowOptions = [
+  { value: 'destination', label: 'Cuenta Destino' },
+  { value: 'origin', label: 'Cuenta Origen' }
+]
+const clientFilterOptions = computed(() => [
+  { value: ALL_USERS, label: 'Todos' },
+  ...cuentasStore.clientUsers.map((u) => ({ value: u.id, label: u.name }))
+])
+const perPageOptions = [
+  { value: '5', label: '5' },
+  { value: '10', label: '10' },
+  { value: '25', label: '25' },
+  { value: '50', label: '50' }
+]
+const perPageStr = computed({
+  get: () => String(perPage.value),
+  set: (v) => {
+    perPage.value = Number(v) || 10
+  }
+})
+const bankOptions = computed(() =>
+  cuentasStore.banks.map((b) => ({
+    value: b.id,
+    label: `${b.bank}${b.currency ? ` (${b.currency})` : ''}`
+  }))
+)
+const clientFormOptions = computed(() =>
+  cuentasStore.clientUsers.map((u) => ({ value: u.id, label: u.name }))
+)
 
 const form = reactive({
   user_id: '' as string,
@@ -323,40 +360,37 @@ onMounted(() => {
       <div class="flex flex-wrap items-center gap-4 text-sm">
         <div class="flex flex-col gap-0.5">
           <label class="text-[11px] text-[#6b7280]">Cuentas</label>
-          <select
+          <AppDropdown
             v-model="countryFilter"
-            class="select-dropdown min-w-[72px] cursor-pointer appearance-none rounded-lg border border-[#e5e7eb] bg-white bg-[length:0.75rem] bg-[right_0.5rem_center] bg-no-repeat py-1.5 pl-2.5 pr-7 text-xs text-[#374151] focus:border-[#9ca3af] focus:outline-none"
-          >
-            <option value="pe">PE</option>
-            <option value="br">BR</option>
-          </select>
+            :options="countryOptions"
+            placeholder="PE"
+            :searchable="false"
+            size="sm"
+            min-width="72px"
+          />
         </div>
         <div class="flex flex-col gap-0.5">
           <label class="text-[11px] text-[#6b7280]">Tipo de cuenta</label>
-          <select
+          <AppDropdown
             v-model="accountFlowFilter"
-            class="select-dropdown min-w-[110px] cursor-pointer appearance-none rounded-lg border border-[#e5e7eb] bg-white bg-[length:0.75rem] bg-[right_0.5rem_center] bg-no-repeat py-1.5 pl-2.5 pr-7 text-xs text-[#374151] focus:border-[#9ca3af] focus:outline-none"
-          >
-            <option value="destination">Cuenta Destino</option>
-            <option value="origin">Cuenta Origen</option>
-          </select>
+            :options="accountFlowOptions"
+            placeholder="Cuenta Destino"
+            :searchable="false"
+            size="sm"
+            min-width="110px"
+          />
         </div>
         <div class="flex flex-col gap-0.5">
           <label class="text-[11px] text-[#6b7280]">Cliente</label>
-          <select
+          <AppDropdown
             v-model="selectedUserId"
-            class="select-dropdown min-w-[200px] cursor-pointer appearance-none rounded-lg border border-[#e5e7eb] bg-white bg-[length:0.75rem] bg-[right_0.5rem_center] bg-no-repeat py-1.5 pl-2.5 pr-7 text-xs text-[#374151] focus:border-[#9ca3af] focus:outline-none"
-            @change="loadAccounts"
-          >
-            <option :value="ALL_USERS">Todos</option>
-            <option
-              v-for="u in cuentasStore.clientUsers"
-              :key="u.id"
-              :value="u.id"
-            >
-              {{ u.name }}
-            </option>
-          </select>
+            :options="clientFilterOptions"
+            placeholder="Todos"
+            :searchable="clientFilterOptions.length > 10"
+            size="sm"
+            min-width="200px"
+            @update:model-value="loadAccounts"
+          />
         </div>
         <div class="flex flex-col gap-0.5">
           <label class="text-[11px] text-[#6b7280]">Total</label>
@@ -520,15 +554,14 @@ onMounted(() => {
     >
         <div class="flex items-center gap-4 text-sm text-[#6b7280]">
           <span>Página {{ currentPage }} de {{ totalPages }}</span>
-          <select
-            v-model="perPage"
-            class="select-dropdown min-w-[3rem] cursor-pointer appearance-none rounded-lg border border-[#e5e7eb] bg-white bg-[length:0.65rem] bg-[right_0.35rem_center] bg-no-repeat py-1.5 px-2 pr-6 text-xs text-[#374151] focus:border-[#9ca3af] focus:outline-none"
-          >
-            <option :value="5">5</option>
-            <option :value="10">10</option>
-            <option :value="25">25</option>
-            <option :value="50">50</option>
-          </select>
+          <AppDropdown
+            v-model="perPageStr"
+            :options="perPageOptions"
+            placeholder="10"
+            :searchable="false"
+            size="sm"
+            min-width="3rem"
+          />
         </div>
         <div class="flex items-center gap-2 text-sm text-[#6b7280]">
           <span>{{ searchedAccounts.length }} resultados</span>
@@ -575,60 +608,67 @@ onMounted(() => {
       v-if="showCreateModal"
       class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
     >
-      <div class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-xl">
-        <h2 class="mb-6 text-lg font-semibold text-[#1f2937]">Nueva cuenta bancaria</h2>
-
-        <form class="space-y-6" @submit.prevent="submitCreate">
-          <div class="rounded-lg bg-[#f0f9ff] px-4 py-3 text-sm text-[#0369a1]">
+      <div class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-[#e5e7eb] bg-white shadow-xl">
+        <div class="sticky top-0 z-10 border-b border-[#e5e7eb] bg-white px-6 py-5">
+          <h2 class="text-lg font-semibold text-[#1f2937]">Nueva cuenta bancaria</h2>
+          <div class="mt-3 inline-flex rounded-lg bg-[#f0f9ff] px-3 py-1.5 text-sm font-medium text-[#0369a1]">
             {{ holderFilter === 'natural' ? 'Persona natural' : 'Persona jurídica' }} · {{ countryFilter.toUpperCase() }} · {{ accountFlowFilter === 'destination' ? 'Destino' : 'Origen' }}
           </div>
+        </div>
+
+        <form class="space-y-6 p-6" @submit.prevent="submitCreate">
 
           <!-- Sección: Banco y Cliente -->
           <div class="space-y-4">
             <h3 class="text-xs font-semibold uppercase tracking-wider text-[#6b7280]">Banco y asignación</h3>
-            <div class="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label class="mb-1.5 block text-sm font-medium text-[#374151]">Banco</label>
-                <select
+            <div class="grid gap-6 sm:grid-cols-2">
+              <div class="space-y-1.5">
+                <label class="block text-sm font-medium text-[#374151]">Banco</label>
+                <AppDropdown
                   v-model="form.bank_id"
-                  class="form-input select-dropdown w-full cursor-pointer appearance-none rounded-lg border border-[#e5e7eb] bg-white px-3 py-2.5 pr-8 text-sm text-[#374151] transition focus:border-[#2563eb] focus:outline-none focus:ring-1 focus:ring-[#2563eb]"
-                  required
-                >
-                  <option value="">
-                    {{ cuentasStore.banks.length === 0 ? 'Cargando...' : 'Seleccionar banco' }}
-                  </option>
-                  <option v-for="b in cuentasStore.banks" :key="b.id" :value="b.id">
-                    {{ b.bank }}{{ b.currency ? ` (${b.currency})` : '' }}
-                  </option>
-                </select>
+                  :options="bankOptions"
+                  :placeholder="cuentasStore.banks.length === 0 ? 'Cargando...' : 'Seleccionar banco'"
+                  :searchable="bankOptions.length > 10"
+                />
               </div>
-              <div v-if="selectedUserId === ALL_USERS">
-                <label class="mb-1.5 block text-sm font-medium text-[#374151]">Cliente</label>
-                <select
-                  v-model="form.user_id"
-                  class="form-input select-dropdown w-full cursor-pointer appearance-none rounded-lg border border-[#e5e7eb] bg-white px-3 py-2.5 pr-8 text-sm text-[#374151] transition focus:border-[#2563eb] focus:outline-none focus:ring-1 focus:ring-[#2563eb]"
-                  required
-                >
-                  <option value="">
-                    {{ cuentasStore.clientUsers.length === 0 ? 'Cargando...' : 'Seleccionar cliente' }}
-                  </option>
-                  <option v-for="u in cuentasStore.clientUsers" :key="u.id" :value="u.id">
-                    {{ u.name }}
-                  </option>
-                </select>
+              <div v-if="selectedUserId === ALL_USERS" class="space-y-1.5">
+                <label class="block text-sm font-medium text-[#374151]">Cliente</label>
+                <div class="flex gap-2">
+                  <AppDropdown
+                    v-model="form.user_id"
+                    :options="clientFormOptions"
+                    :placeholder="cuentasStore.clientUsers.length === 0 ? 'Cargando...' : 'Seleccionar cliente'"
+                    :searchable="clientFormOptions.length > 10"
+                    class="min-w-0 flex-1"
+                  />
+                  <button
+                    type="button"
+                    class="flex shrink-0 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white p-2.5 text-[#6b7280] transition hover:border-[#d1d5db] hover:bg-[#f9fafb] hover:text-[#374151]"
+                    title="Nuevo cliente"
+                    @click="showUsersModal = true"
+                  >
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </button>
+                </div>
               </div>
-              <p v-else-if="selectedUserId" class="flex items-center text-sm text-[#6b7280]">
-                Cliente: <span class="ml-1 font-medium text-[#374151]">{{ cuentasStore.clientUsers.find(u => u.id === selectedUserId)?.name ?? selectedUserId }}</span>
-              </p>
+              <div v-else-if="selectedUserId" class="flex items-end">
+                <div class="rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-4 py-3 text-sm">
+                  <p class="text-xs font-medium text-[#6b7280]">Cliente asignado</p>
+                  <p class="mt-0.5 font-medium text-[#374151]">{{ cuentasStore.clientUsers.find(u => u.id === selectedUserId)?.name ?? selectedUserId }}</p>
+                </div>
+              </div>
             </div>
           </div>
 
           <!-- Sección: Datos del titular -->
           <div class="space-y-4">
             <h3 class="text-xs font-semibold uppercase tracking-wider text-[#6b7280]">Datos del titular</h3>
-            <div v-if="holderFilter === 'natural'" class="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label class="mb-1.5 block text-sm font-medium text-[#374151]">Nombres</label>
+            <div v-if="holderFilter === 'natural'" class="grid gap-6 sm:grid-cols-2">
+              <div class="space-y-1.5">
+                <label class="block text-sm font-medium text-[#374151]">Nombres</label>
                 <input
                   :value="form.holder_names"
                   type="text"
@@ -638,8 +678,8 @@ onMounted(() => {
                   @input="onStringInput($event, 'holder_names')"
                 />
               </div>
-              <div>
-                <label class="mb-1.5 block text-sm font-medium text-[#374151]">Apellidos</label>
+              <div class="space-y-1.5">
+                <label class="block text-sm font-medium text-[#374151]">Apellidos</label>
                 <input
                   :value="form.holder_surnames"
                   type="text"
@@ -649,8 +689,8 @@ onMounted(() => {
                   @input="onStringInput($event, 'holder_surnames')"
                 />
               </div>
-              <div class="sm:col-span-2">
-                <label class="mb-1.5 block text-sm font-medium text-[#374151]">Número de documento (DNI)</label>
+              <div class="space-y-1.5 sm:col-span-2">
+                <label class="block text-sm font-medium text-[#374151]">Número de documento (DNI)</label>
                 <input
                   :value="form.document_number"
                   type="text"
@@ -663,9 +703,9 @@ onMounted(() => {
                 />
               </div>
             </div>
-            <div v-if="holderFilter === 'juridica'" class="grid gap-4 sm:grid-cols-2">
-              <div class="sm:col-span-2">
-                <label class="mb-1.5 block text-sm font-medium text-[#374151]">Razón social</label>
+            <div v-if="holderFilter === 'juridica'" class="grid gap-6 sm:grid-cols-2">
+              <div class="space-y-1.5 sm:col-span-2">
+                <label class="block text-sm font-medium text-[#374151]">Razón social</label>
                 <input
                   :value="form.business_name"
                   type="text"
@@ -675,8 +715,8 @@ onMounted(() => {
                   @input="onStringInput($event, 'business_name')"
                 />
               </div>
-              <div>
-                <label class="mb-1.5 block text-sm font-medium text-[#374151]">Número RUC</label>
+              <div class="space-y-1.5">
+                <label class="block text-sm font-medium text-[#374151]">Número RUC</label>
                 <input
                   :value="form.ruc_number"
                   type="text"
@@ -688,8 +728,8 @@ onMounted(() => {
                   @input="onNumericInput($event, 'ruc_number')"
                 />
               </div>
-              <div>
-                <label class="mb-1.5 block text-sm font-medium text-[#374151]">Nombre rep. legal</label>
+              <div class="space-y-1.5">
+                <label class="block text-sm font-medium text-[#374151]">Nombre rep. legal</label>
                 <input
                   :value="form.legal_representative_name"
                   type="text"
@@ -698,8 +738,8 @@ onMounted(() => {
                   @input="onStringInput($event, 'legal_representative_name')"
                 />
               </div>
-              <div>
-                <label class="mb-1.5 block text-sm font-medium text-[#374151]">Doc. rep. legal</label>
+              <div class="space-y-1.5">
+                <label class="block text-sm font-medium text-[#374151]">Doc. rep. legal</label>
                 <input
                   :value="form.legal_representative_document"
                   type="text"
@@ -716,9 +756,9 @@ onMounted(() => {
           <!-- Sección: Datos de la cuenta -->
           <div class="space-y-4">
             <h3 class="text-xs font-semibold uppercase tracking-wider text-[#6b7280]">Datos de la cuenta</h3>
-            <div class="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label class="mb-1.5 block text-sm font-medium text-[#374151]">Número de cuenta</label>
+            <div class="grid gap-6 sm:grid-cols-2">
+              <div class="space-y-1.5">
+                <label class="block text-sm font-medium text-[#374151]">Número de cuenta</label>
                 <input
                   :value="form.account_number"
                   type="text"
@@ -728,8 +768,8 @@ onMounted(() => {
                   @input="onNumericInput($event, 'account_number')"
                 />
               </div>
-              <div>
-                <label class="mb-1.5 block text-sm font-medium text-[#374151]">Confirmar número de cuenta</label>
+              <div class="space-y-1.5">
+                <label class="block text-sm font-medium text-[#374151]">Confirmar número de cuenta</label>
                 <input
                   :value="form.account_number_confirmation"
                   type="text"
@@ -745,9 +785,9 @@ onMounted(() => {
           <!-- Sección: Códigos interbancarios -->
           <div class="space-y-4">
             <h3 class="text-xs font-semibold uppercase tracking-wider text-[#6b7280]">Códigos interbancarios</h3>
-            <div class="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label class="mb-1.5 block text-sm font-medium text-[#374151]">Número CCI</label>
+            <div class="grid gap-6 sm:grid-cols-2">
+              <div class="space-y-1.5">
+                <label class="block text-sm font-medium text-[#374151]">Número CCI</label>
                 <input
                   :value="form.cci_number"
                   type="text"
@@ -758,8 +798,8 @@ onMounted(() => {
                   @input="onNumericInput($event, 'cci_number')"
                 />
               </div>
-              <div>
-                <label class="mb-1.5 block text-sm font-medium text-[#374151]">Clave PIX</label>
+              <div class="space-y-1.5">
+                <label class="block text-sm font-medium text-[#374151]">Clave PIX</label>
                 <input
                   :value="form.pix_key"
                   type="text"
@@ -799,6 +839,13 @@ onMounted(() => {
       </div>
     </div>
   </Teleport>
+
+  <UsuarioCreateFormModal
+    v-model="showUsersModal"
+    :show-role-field="false"
+    default-role="client"
+    @created="(user) => { form.user_id = user.id; cuentasStore.loadClientUsers(true) }"
+  />
 </template>
 
 <style scoped>

@@ -98,15 +98,12 @@
                 </div>
                 <div class="space-y-1.5">
                   <label class="block text-xs font-medium text-[#666]">Tipo de documento</label>
-                  <select
+                  <AppDropdown
                     v-model="form.document_type"
-                    class="w-full rounded-xl border border-[#cfdbef] bg-white px-4 py-3 text-sm text-[#333] outline-none focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/20"
-                  >
-                    <option value="">Seleccionar</option>
-                    <option value="dni">DNI</option>
-                    <option value="ce">CE</option>
-                    <option value="passport">Pasaporte</option>
-                  </select>
+                    :options="documentTypeOptions"
+                    placeholder="Seleccionar"
+                    :searchable="false"
+                  />
                 </div>
               </div>
               <div v-if="!isRoleClient" class="mt-5 space-y-1.5">
@@ -211,6 +208,13 @@ import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { Domain } from '@/interface/infrastructure/services'
 import type { User } from '../../domain/models'
 import { useAuthStore } from '../controllers/use_auth_store_controller'
+import AppDropdown from '@/interface/components/AppDropdown.vue'
+
+const documentTypeOptions = [
+  { value: 'dni', label: 'DNI' },
+  { value: 'ce', label: 'CE' },
+  { value: 'passport', label: 'Pasaporte' }
+]
 
 const authStore = useAuthStore()
 

@@ -51,25 +51,13 @@
                 class="w-full flex-1 appearance-none rounded-2xl border border-[#d0def6] bg-white px-5 py-3.5 text-[26px] font-semibold text-[#232b4d] shadow-sm outline-none transition focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/30"
                 @input="onAmountSendInput"
               />
-              <div class="relative w-full sm:w-auto">
-                <select
-                  :value="calculatorStore.currencyFrom"
-                  class="w-full appearance-none rounded-full border border-[#d0def6] bg-white px-5 py-2.5 pr-12 text-xs font-semibold uppercase tracking-[0.2em] text-[#232b4d] shadow-sm outline-none transition focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/30"
-                  @change="onFromChange($event)"
-                >
-                  <option
-                    v-for="code in CURRENCY_CODES"
-                    :key="code"
-                    :value="code"
-                  >
-                    {{ code.toUpperCase() }}
-                  </option>
-                </select>
-                <span
-                  class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs text-[#666]"
-                >
-                  ▼
-                </span>
+              <div class="w-full sm:w-auto">
+                <AppDropdown
+                  v-model="currencyFrom"
+                  :options="currencyFromOptions"
+                  placeholder="PEN"
+                  :searchable="false"
+                />
               </div>
             </div>
           </div>
@@ -109,25 +97,13 @@
                 class="w-full flex-1 appearance-none rounded-2xl border border-[#d0def6] bg-white px-5 py-3.5 text-[26px] font-semibold text-[#232b4d] shadow-sm outline-none transition focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/30"
                 @input="onAmountReceiveInput"
               />
-              <div class="relative w-full sm:w-auto">
-                <select
-                  :value="calculatorStore.currencyTo"
-                  class="w-full appearance-none rounded-full border border-[#d0def6] bg-white px-5 py-2.5 pr-12 text-xs font-semibold uppercase tracking-[0.2em] text-[#232b4d] shadow-sm outline-none transition focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/30"
-                  @change="onToChange($event)"
-                >
-                  <option
-                    v-for="code in calculatorStore.destinationOptions"
-                    :key="code"
-                    :value="code"
-                  >
-                    {{ code.toUpperCase() }}
-                  </option>
-                </select>
-                <span
-                  class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs text-[#666]"
-                >
-                  ▼
-                </span>
+              <div class="w-full sm:w-auto">
+                <AppDropdown
+                  v-model="currencyTo"
+                  :options="currencyToOptions"
+                  placeholder="USD"
+                  :searchable="false"
+                />
               </div>
             </div>
           </div>
@@ -202,11 +178,27 @@ import { ref, watch, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useCalculatorStore } from '../controllers/use_calculator_store_controller'
 import { CURRENCY_CODES, CURRENCY_LABELS, type CurrencyCode } from '../../domain/models'
+import AppDropdown from '@/interface/components/AppDropdown.vue'
 
 const route = useRoute()
 const calculatorStore = useCalculatorStore()
 
 const isDemo = computed(() => route.query.demo === '1' || route.path.includes('calculator-demo'))
+
+const currencyFromOptions = computed(() =>
+  CURRENCY_CODES.map((code) => ({ value: code, label: code.toUpperCase() }))
+)
+const currencyToOptions = computed(() =>
+  calculatorStore.destinationOptions.map((code) => ({ value: code, label: code.toUpperCase() }))
+)
+const currencyFrom = computed({
+  get: () => calculatorStore.currencyFrom,
+  set: (v: CurrencyCode) => calculatorStore.setCurrencyFrom(v)
+})
+const currencyTo = computed({
+  get: () => calculatorStore.currencyTo,
+  set: (v: CurrencyCode) => calculatorStore.setCurrencyTo(v)
+})
 
 const amountSendLocal = ref(0)
 const amountReceiveLocal = ref(0)
@@ -241,16 +233,6 @@ function onAmountReceiveInput() {
   calculatorStore.setAmountReceive(normalized)
   calculatorStore.recalcFromReceive()
   amountSendLocal.value = normalizeTwoDecimals(calculatorStore.amountSend)
-}
-
-function onFromChange(e: Event) {
-  const value = (e.target as HTMLSelectElement).value as CurrencyCode
-  calculatorStore.setCurrencyFrom(value)
-}
-
-function onToChange(e: Event) {
-  const value = (e.target as HTMLSelectElement).value as CurrencyCode
-  calculatorStore.setCurrencyTo(value)
 }
 
 const currencyLocales: Record<CurrencyCode, string> = {

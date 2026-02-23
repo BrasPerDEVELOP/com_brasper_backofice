@@ -1,29 +1,481 @@
+<script setup lang="ts">
+import { ref, computed, onMounted, reactive, watch, nextTick } from 'vue'
+import { useTransactionsStore } from '../controllers/use_transactions_store_controller'
+import { useCuentasBancariasStore } from '@modules/cuentas-bancarias/presentation/controllers/use_cuentas_bancarias_store_controller'
+import { useTasasStore } from '@modules/tasas/presentation/controllers/use_tasas_store_controller'
+import { useComisionesStore } from '@modules/comisiones/presentation/controllers/use_comisiones_store_controller'
+import type { Transaction } from '../../domain/models'
+import type { GetTransactionsParams } from '../../infrastructure/adapters/transactions_repository'
+import { TRANSACTION_STATUSES, TRANSACTION_STATUS_LABELS } from '../../domain/models'
+import AppDropdown from '@/interface/components/AppDropdown.vue'
+import AppDateInput from '@/interface/components/AppDateInput.vue'
+
+const transactionsStore = useTransactionsStore()
+const cuentasStore = useCuentasBancariasStore()
+const tasasStore = useTasasStore()
+const comisionesStore = useComisionesStore()
+
+const showCreateModal = ref(false)
+const showImportModal = ref(false)
+const searchQuery = ref('')
+const openMenuId = ref<string | null>(null)
+const statusFilter = ref<string>('todos')
+const userFilter = ref<string>('')
+const bankAccountFilter = ref<string>('')
+const createdAtFrom = ref<string>('')
+const createdAtTo = ref<string>('')
+const perPage = ref(10)
+const currentPage = ref(1)
+const fileInput = ref<HTMLInputElement | null>(null)
+const importFile = ref<File | null>(null)
+const deletingId = ref<string | null>(null)
+
+const statusOptions = computed(() => [
+  { value: 'todos', label: 'Todos' },
+  ...TRANSACTION_STATUSES.map((s) => ({ value: s, label: TRANSACTION_STATUS_LABELS[s] }))
+])
+
+const ALL_VALUE = ''
+const userFilterOptions = computed(() => [
+  { value: ALL_VALUE, label: 'Todos' },
+  ...cuentasStore.clientUsers.map((u) => ({ value: u.id, label: u.name }))
+])
+
+const bankAccountFilterOptions = computed(() =>
+  cuentasStore.bankAccounts.map((a) => {
+    const bank = cuentasStore.banks.find((b) => b.id === a.bank_id)
+    const bankName = bank ? `${bank.bank}${bank.currency ? ` (${bank.currency})` : ''}` : '-'
+    const holder =
+      (a.account_holder_type ?? '').toLowerCase().includes('juridica') || (a.account_holder_type ?? '').toLowerCase().includes('legal')
+        ? (a.business_name ?? '-')
+        : [a.holder_names, a.holder_surnames].filter(Boolean).join(' ') || '-'
+    const accNum = a.account_number ?? '-'
+    return { value: a.id, label: `${bankName} - ${accNum} (${holder})` }
+  })
+)
+
+const perPageOptions = [
+  { value: '5', label: '5' },
+  { value: '10', label: '10' },
+  { value: '25', label: '25' },
+  { value: '50', label: '50' }
+]
+
+const perPageStr = computed({
+  get: () => String(perPage.value),
+  set: (v) => {
+    perPage.value = Number(v) || 10
+  }
+})
+
+const form = reactive({
+  bank_account_id: '',
+  user_id: '',
+  tax_rate_id: '',
+  commission_id: '',
+  status: 'pending',
+  origin_amount: 0,
+  destination_amount: 0,
+  code: '',
+  send_date: '',
+  payment_date: '',
+  send_voucher: '',
+  payment_voucher: ''
+})
+
+const editingId = ref<string | null>(null)
+
+const bankAccountOptions = computed(() =>
+  cuentasStore.bankAccounts.map((a) => {
+    const bank = cuentasStore.banks.find((b) => b.id === a.bank_id)
+    const bankName = bank ? `${bank.bank}${bank.currency ? ` (${bank.currency})` : ''}` : '-'
+    const holder =
+      (a.account_holder_type ?? '').toLowerCase().includes('juridica') || (a.account_holder_type ?? '').toLowerCase().includes('legal')
+        ? (a.business_name ?? '-')
+        : [a.holder_names, a.holder_surnames].filter(Boolean).join(' ') || '-'
+    const accNum = a.account_number ?? '-'
+    return { value: a.id, label: `${bankName} - ${accNum} (${holder})` }
+  })
+)
+
+const clientOptions = computed(() =>
+  cuentasStore.clientUsers.map((u) => ({ value: u.id, label: u.name }))
+)
+
+const taxRateOptions = computed(() =>
+  tasasStore.taxRates.map((r) => ({
+    value: r.id,
+    label: `${r.coin_a}-${r.coin_b} (${r.tax})`
+  }))
+)
+
+const commissionOptions = computed(() =>
+  comisionesStore.commissions.map((c) => ({
+    value: c.id,
+    label: `${c.coin_a}-${c.coin_b} (${c.percentage}%)`
+  }))
+)
+
+const statusFormOptions = TRANSACTION_STATUSES.map((s) => ({
+  value: s,
+  label: TRANSACTION_STATUS_LABELS[s]
+}))
+
+const debouncedSearch = ref('')
+let searchDebounceId: ReturnType<typeof setTimeout>
+watch(searchQuery, (q) => {
+  clearTimeout(searchDebounceId)
+  searchDebounceId = setTimeout(() => {
+    debouncedSearch.value = q
+  }, 150)
+}, { immediate: true })
+
+const apiFilterParams = computed((): GetTransactionsParams | undefined => {
+  const p: GetTransactionsParams = {}
+  if (statusFilter.value && statusFilter.value !== 'todos') p.status = statusFilter.value
+  if (userFilter.value?.trim()) p.user_id = userFilter.value.trim()
+  if (bankAccountFilter.value?.trim()) p.bank_account_id = bankAccountFilter.value.trim()
+  if (createdAtFrom.value?.trim()) p.created_at_from = new Date(createdAtFrom.value).toISOString()
+  if (createdAtTo.value?.trim()) {
+    const d = new Date(createdAtTo.value)
+    d.setHours(23, 59, 59, 999)
+    p.created_at_to = d.toISOString()
+  }
+  return Object.keys(p).length ? p : undefined
+})
+
+const searchedTransactions = computed(() => {
+  const list = transactionsStore.transactions
+  const q = debouncedSearch.value.trim().toLowerCase()
+  if (!q) return list
+  return list.filter((t) => {
+    const code = (t.code ?? '').toLowerCase()
+    const id = (t.id ?? '').toLowerCase()
+    return code.includes(q) || id.includes(q)
+  })
+})
+
+const totalPages = computed(() =>
+  Math.max(1, Math.ceil(searchedTransactions.value.length / perPage.value))
+)
+
+const paginatedTransactions = computed(() => {
+  const start = (currentPage.value - 1) * perPage.value
+  return searchedTransactions.value.slice(start, start + perPage.value)
+})
+
+function resetForm() {
+  form.bank_account_id = ''
+  form.user_id = ''
+  form.tax_rate_id = ''
+  form.commission_id = ''
+  form.status = 'pending'
+  form.origin_amount = 0
+  form.destination_amount = 0
+  form.code = ''
+  form.send_date = ''
+  form.payment_date = ''
+  form.send_voucher = ''
+  form.payment_voucher = ''
+  editingId.value = null
+}
+
+function openCreateModal() {
+  transactionsStore.error = null
+  resetForm()
+  showCreateModal.value = true
+  loadFormOptions()
+}
+
+async function loadFormOptions() {
+  await Promise.all([
+    cuentasStore.loadBankAccounts(),
+    cuentasStore.loadClientUsers(),
+    cuentasStore.loadBanks(),
+    tasasStore.loadTaxRates(),
+    comisionesStore.loadCommissions()
+  ])
+}
+
+function openEditModal(t: Transaction) {
+  if (!t.id) return
+  transactionsStore.error = null
+  editingId.value = t.id
+  form.bank_account_id = t.bank_account_id ?? ''
+  form.user_id = t.user_id ?? ''
+  form.tax_rate_id = t.tax_rate_id ?? ''
+  form.commission_id = t.commission_id ?? ''
+  form.status = (t.status ?? 'pending').toLowerCase()
+  form.origin_amount = Number(t.origin_amount) || 0
+  form.destination_amount = Number(t.destination_amount) || 0
+  form.code = t.code ?? ''
+  form.send_date = t.send_date ? t.send_date.slice(0, 10) : ''
+  form.payment_date = t.payment_date ? t.payment_date.slice(0, 10) : ''
+  form.send_voucher = t.send_voucher ?? ''
+  form.payment_voucher = t.payment_voucher ?? ''
+  showCreateModal.value = true
+  loadFormOptions()
+}
+
+async function submitForm() {
+  if (!form.bank_account_id || !form.user_id) {
+    transactionsStore.error = 'Cuenta bancaria y cliente son obligatorios'
+    return
+  }
+  try {
+    const payload = {
+      bank_account_id: form.bank_account_id,
+      user_id: form.user_id,
+      tax_rate_id: form.tax_rate_id || undefined,
+      commission_id: form.commission_id || undefined,
+      status: form.status,
+      origin_amount: form.origin_amount,
+      destination_amount: form.destination_amount,
+      code: form.code || undefined,
+      send_date: form.send_date || undefined,
+      payment_date: form.payment_date || undefined,
+      send_voucher: form.send_voucher || undefined,
+      payment_voucher: form.payment_voucher || undefined
+    }
+    if (editingId.value) {
+      await transactionsStore.updateTransaction(editingId.value, payload)
+    } else {
+      await transactionsStore.createTransaction(payload)
+    }
+    showCreateModal.value = false
+    resetForm()
+  } catch {
+    // Error en store
+  }
+}
+
+async function handleDelete(t: Transaction) {
+  if (!t.id) return
+  if (!confirm(`¿Eliminar transacción ${t.code ?? t.id}?`)) return
+  openMenuId.value = null
+  deletingId.value = t.id
+  transactionsStore.error = null
+  try {
+    await transactionsStore.deleteTransaction(t.id)
+  } catch {
+    // Error en store
+  } finally {
+    deletingId.value = null
+  }
+}
+
+function toggleMenu(id: string) {
+  if (openMenuId.value === id) {
+    openMenuId.value = null
+    return
+  }
+  openMenuId.value = id
+  nextTick(() => {
+    const close = () => {
+      openMenuId.value = null
+      document.removeEventListener('click', close)
+    }
+    setTimeout(() => document.addEventListener('click', close), 0)
+  })
+}
+
+function goToPage(page: number) {
+  currentPage.value = Math.max(1, Math.min(page, totalPages.value))
+}
+
+function formatValue(value: unknown): string {
+  if (value == null) return '-'
+  if (typeof value === 'number') return value.toLocaleString('es', { minimumFractionDigits: 2 })
+  return String(value)
+}
+
+function formatDate(value: string | undefined): string {
+  if (!value) return '-'
+  try {
+    const d = new Date(value)
+    return d.toLocaleDateString('es')
+  } catch {
+    return value
+  }
+}
+
+function getStatusLabel(status: string | undefined): string {
+  if (!status) return '-'
+  const s = status.toLowerCase()
+  return TRANSACTION_STATUS_LABELS[s as keyof typeof TRANSACTION_STATUS_LABELS] ?? status
+}
+
+function getBankAccountLabel(id: string | undefined): string {
+  if (!id) return '-'
+  const opt = bankAccountOptions.value.find((o) => o.value === id)
+  return opt?.label ?? id
+}
+
+function getClientLabel(id: string | undefined): string {
+  if (!id) return '-'
+  const u = cuentasStore.clientUsers.find((u) => u.id === id)
+  return u?.name ?? id
+}
+
+async function submitImport() {
+  if (!importFile.value) return
+  try {
+    await transactionsStore.importExcel(importFile.value, apiFilterParams.value)
+    showImportModal.value = false
+    importFile.value = null
+    if (fileInput.value) fileInput.value.value = ''
+  } catch {
+    // Error en store
+  }
+}
+
+function loadTransactions() {
+  transactionsStore.loadTransactions(apiFilterParams.value)
+}
+
+watch([searchQuery, perPage], () => {
+  currentPage.value = 1
+})
+
+watch([statusFilter, userFilter, bankAccountFilter, createdAtFrom, createdAtTo], () => {
+  currentPage.value = 1
+  loadTransactions()
+})
+
+onMounted(() => {
+  Promise.all([
+    cuentasStore.loadBankAccounts(),
+    cuentasStore.loadClientUsers(),
+    cuentasStore.loadBanks()
+  ]).then(() => loadTransactions())
+})
+</script>
+
 <template>
   <div class="space-y-6">
-    <section class="overflow-hidden rounded-3xl border border-[#d8e5fb] bg-white p-8 shadow-lg shadow-[#007bff]/5">
-      <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+    <!-- Header -->
+    <div class="mb-6">
+      <div class="mb-4 flex flex-wrap items-center justify-between gap-4">
         <div>
           <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[#066ac9]">Operaciones</p>
           <h1 class="text-2xl font-semibold text-[#232b4d]">Transacciones</h1>
         </div>
-        <button
-          type="button"
-          class="inline-flex items-center gap-2 rounded-xl border border-[#5ED6B3]/60 bg-white px-4 py-2.5 text-sm font-medium text-[#066ac9] transition hover:bg-[#5ED6B3]/10"
-          @click="showImportModal = true"
-        >
-          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-          </svg>
-          Importar
-        </button>
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 rounded-xl border border-[#5ED6B3]/60 bg-white px-4 py-2.5 text-sm font-medium text-[#066ac9] transition hover:bg-[#5ED6B3]/10"
+            @click="showImportModal = true"
+          >
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            Importar
+          </button>
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 rounded-lg bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1d4ed8]"
+            @click="openCreateModal"
+          >
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            Crear
+          </button>
+        </div>
       </div>
 
-      <p v-if="transactionsStore.error" class="mb-4 rounded-lg bg-[#dc3545]/10 px-4 py-3 text-sm text-[#dc3545]">
-        {{ transactionsStore.error }}
-      </p>
+      <!-- Filtros -->
+      <div class="flex flex-wrap items-center gap-4 text-sm">
+        <div class="flex flex-col gap-0.5">
+          <label class="text-[11px] text-[#6b7280]">Estado</label>
+          <AppDropdown
+            v-model="statusFilter"
+            :options="statusOptions"
+            placeholder="Todos"
+            :searchable="false"
+            size="sm"
+            min-width="120px"
+          />
+        </div>
+        <div class="flex flex-col gap-0.5">
+          <label class="text-[11px] text-[#6b7280]">Cliente</label>
+          <AppDropdown
+            v-model="userFilter"
+            :options="userFilterOptions"
+            placeholder="Todos"
+            :searchable="userFilterOptions.length > 10"
+            size="sm"
+            min-width="160px"
+          />
+        </div>
+        <div class="flex flex-col gap-0.5">
+          <label class="text-[11px] text-[#6b7280]">Cuenta bancaria</label>
+          <AppDropdown
+            v-model="bankAccountFilter"
+            :options="bankAccountFilterOptions"
+            placeholder="Todas"
+            :searchable="true"
+            size="sm"
+            min-width="180px"
+          />
+        </div>
+        <div class="flex flex-col gap-0.5">
+          <label class="text-[11px] text-[#6b7280]">Desde</label>
+          <AppDateInput
+            v-model="createdAtFrom"
+            size="sm"
+            class="min-w-[150px]"
+          />
+        </div>
+        <div class="flex flex-col gap-0.5">
+          <label class="text-[11px] text-[#6b7280]">Hasta</label>
+          <AppDateInput
+            v-model="createdAtTo"
+            size="sm"
+            class="min-w-[150px]"
+          />
+        </div>
+        <div class="flex flex-col gap-0.5">
+          <label class="text-[11px] text-[#6b7280]">Total</label>
+          <div class="flex h-9 min-w-[3rem] items-center justify-center rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 text-sm font-medium text-[#374151]">
+            {{ searchedTransactions.length }}
+          </div>
+        </div>
+      </div>
+    </div>
 
-      <div v-if="transactionsStore.isLoading" class="py-12 text-center text-[#666]">
-        Cargando transacciones...
+    <!-- Search -->
+    <div class="mb-6">
+      <div class="relative min-w-[220px] max-w-sm">
+        <svg
+          class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="Buscar por código"
+          class="h-10 w-full rounded-lg border border-[#e5e7eb] bg-white py-2.5 pl-10 pr-4 text-sm text-[#374151] placeholder-[#9ca3af] focus:border-[#2563eb] focus:outline-none focus:ring-1 focus:ring-[#2563eb]"
+        />
+      </div>
+    </div>
+
+    <!-- Error -->
+    <p v-if="transactionsStore.error" class="rounded-lg bg-[#dc3545]/10 px-4 py-3 text-sm text-[#dc3545]">
+      {{ transactionsStore.error }}
+    </p>
+
+    <!-- Tabla -->
+    <div class="relative overflow-x-auto rounded-xl border border-[#e5e7eb] bg-white">
+      <div
+        v-if="transactionsStore.isLoading"
+        class="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/80"
+      >
+        <span class="text-sm text-[#6b7280]">Cargando...</span>
       </div>
 
       <div
@@ -31,51 +483,285 @@
         class="rounded-xl border border-[#dbe7fb] bg-[#fbfdff] px-6 py-12 text-center"
       >
         <p class="text-[#666]">
-          No hay transacciones. Importa un archivo Excel (.xlsx) con el esquema indicado.
+          No hay transacciones. Importa un archivo Excel o crea una nueva.
         </p>
       </div>
 
-      <div v-else class="overflow-x-auto rounded-2xl border border-[#dbe7fb]">
-        <table class="w-full min-w-[800px] text-left text-sm">
-          <thead>
-            <tr class="bg-gradient-to-r from-[#066ac9]/90 to-[#4A52D8]/90 text-white">
-              <th
-                v-for="col in tableColumns"
-                :key="col.key"
-                class="whitespace-nowrap px-3 py-3 font-semibold first:rounded-tl-2xl last:rounded-tr-2xl"
+      <table v-else class="w-full min-w-[800px] text-left text-sm">
+        <thead>
+          <tr class="bg-[#dbeafe]">
+            <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">Código</th>
+            <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">Cuenta</th>
+            <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">Cliente</th>
+            <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">Monto origen</th>
+            <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">Monto destino</th>
+            <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">Estado</th>
+            <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">Fecha envío</th>
+            <th class="w-12 px-2 py-3"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            v-for="t in paginatedTransactions"
+            :key="t.id ?? ''"
+            class="border-t border-[#e5e7eb] bg-white transition hover:bg-[#f9fafb]"
+          >
+            <td class="px-4 py-3 font-medium text-[#374151]">{{ t.code ?? '-' }}</td>
+            <td class="max-w-[180px] truncate px-4 py-3 text-[#374151]" :title="getBankAccountLabel(t.bank_account_id)">
+              {{ getBankAccountLabel(t.bank_account_id) }}
+            </td>
+            <td class="px-4 py-3 text-[#374151]">{{ getClientLabel(t.user_id) }}</td>
+            <td class="px-4 py-3 text-[#374151]">{{ formatValue(t.origin_amount) }}</td>
+            <td class="px-4 py-3 text-[#374151]">{{ formatValue(t.destination_amount) }}</td>
+            <td class="px-4 py-3">
+              <span
+                class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium"
+                :class="{
+                  'bg-amber-100 text-amber-800': (t.status ?? '').toLowerCase() === 'pending',
+                  'bg-green-100 text-green-800': (t.status ?? '').toLowerCase() === 'completed',
+                  'bg-red-100 text-red-800': (t.status ?? '').toLowerCase() === 'failed',
+                  'bg-gray-100 text-gray-800': (t.status ?? '').toLowerCase() === 'cancelled',
+                  'bg-[#dbeafe] text-[#1d4ed8]': !['pending', 'completed', 'failed', 'cancelled'].includes((t.status ?? '').toLowerCase())
+                }"
               >
-                {{ col.label }}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="(row, i) in transactionsStore.transactions"
-              :key="row.id ?? i"
-              class="border-t border-[#dbe7fb] bg-white transition hover:bg-[#fbfdff]"
-            >
-              <td
-                v-for="col in tableColumns"
-                :key="col.key"
-                class="max-w-[200px] truncate px-3 py-2.5 text-[#333]"
-                :title="String(getCellValue(row, col.key) ?? '')"
+                {{ getStatusLabel(t.status) }}
+              </span>
+            </td>
+            <td class="px-4 py-3 text-[#374151]">{{ formatDate(t.send_date) }}</td>
+            <td class="relative px-2 py-3">
+              <button
+                type="button"
+                class="rounded p-1.5 text-[#6b7280] hover:bg-[#f3f4f6]"
+                @click.stop="toggleMenu(t.id ?? '')"
               >
-                <a
-                  v-if="isVoucherColumn(col.key) && getCellValue(row, col.key)"
-                  :href="String(getCellValue(row, col.key))"
-                  target="_blank"
-                  rel="noopener"
-                  class="text-[#066ac9] hover:underline"
+                <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+                </svg>
+              </button>
+              <div
+                v-if="openMenuId === t.id"
+                class="absolute right-0 top-full z-10 mt-1 min-w-[160px] rounded-lg border border-[#e5e7eb] bg-white py-1 shadow-lg"
+                @click.stop
+              >
+                <button
+                  type="button"
+                  class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-[#374151] hover:bg-[#f9fafb]"
+                  @click="openEditModal(t)"
                 >
-                  Ver
-                </a>
-                <span v-else>{{ formatCell(getCellValue(row, col.key)) }}</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+                  <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                  Editar
+                </button>
+                <button
+                  type="button"
+                  class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-[#dc3545] hover:bg-[#fef2f2]"
+                  :disabled="deletingId === t.id"
+                  @click="handleDelete(t)"
+                >
+                  <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  Borrar
+                </button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Paginación -->
+    <div
+      v-if="transactionsStore.transactions.length > 0"
+      class="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-[#e5e7eb] pt-4"
+    >
+      <div class="flex items-center gap-4 text-sm text-[#6b7280]">
+        <span>Página {{ currentPage }} de {{ totalPages }}</span>
+        <AppDropdown
+          v-model="perPageStr"
+          :options="perPageOptions"
+          placeholder="10"
+          :searchable="false"
+          size="sm"
+          min-width="3rem"
+        />
       </div>
-    </section>
+      <div class="flex items-center gap-2 text-sm text-[#6b7280]">
+        <span>{{ searchedTransactions.length }} resultados</span>
+        <div class="flex gap-1">
+          <button
+            type="button"
+            class="rounded p-2 text-[#6b7280] hover:bg-[#f3f4f6] disabled:opacity-40"
+            :disabled="currentPage <= 1"
+            @click="goToPage(1)"
+          >
+            &laquo;
+          </button>
+          <button
+            type="button"
+            class="rounded p-2 text-[#6b7280] hover:bg-[#f3f4f6] disabled:opacity-40"
+            :disabled="currentPage <= 1"
+            @click="goToPage(currentPage - 1)"
+          >
+            &lsaquo;
+          </button>
+          <button
+            type="button"
+            class="rounded p-2 text-[#6b7280] hover:bg-[#f3f4f6] disabled:opacity-40"
+            :disabled="currentPage >= totalPages"
+            @click="goToPage(currentPage + 1)"
+          >
+            &rsaquo;
+          </button>
+          <button
+            type="button"
+            class="rounded p-2 text-[#6b7280] hover:bg-[#f3f4f6] disabled:opacity-40"
+            :disabled="currentPage >= totalPages"
+            @click="goToPage(totalPages)"
+          >
+            &raquo;
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Crear/Editar -->
+    <Teleport to="body">
+      <div
+        v-if="showCreateModal"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+        @click.self="showCreateModal = false"
+      >
+        <div class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-xl">
+          <h2 class="mb-6 text-lg font-semibold text-[#1f2937]">
+            {{ editingId ? 'Editar transacción' : 'Nueva transacción' }}
+          </h2>
+
+          <form class="space-y-6" @submit.prevent="submitForm">
+            <div class="grid gap-6 sm:grid-cols-2">
+              <div class="space-y-1.5 sm:col-span-2">
+                <label class="block text-sm font-medium text-[#374151]">Cuenta bancaria *</label>
+                <AppDropdown
+                  v-model="form.bank_account_id"
+                  :options="bankAccountOptions"
+                  placeholder="Seleccionar cuenta"
+                  :searchable="true"
+                />
+              </div>
+              <div class="space-y-1.5">
+                <label class="block text-sm font-medium text-[#374151]">Cliente *</label>
+                <AppDropdown
+                  v-model="form.user_id"
+                  :options="clientOptions"
+                  placeholder="Seleccionar cliente"
+                  :searchable="clientOptions.length > 10"
+                />
+              </div>
+              <div class="space-y-1.5">
+                <label class="block text-sm font-medium text-[#374151]">Estado</label>
+                <AppDropdown
+                  v-model="form.status"
+                  :options="statusFormOptions"
+                  placeholder="Pendiente"
+                  :searchable="false"
+                />
+              </div>
+              <div class="space-y-1.5">
+                <label class="block text-sm font-medium text-[#374151]">Tasa</label>
+                <AppDropdown
+                  v-model="form.tax_rate_id"
+                  :options="taxRateOptions"
+                  placeholder="Seleccionar"
+                  :searchable="taxRateOptions.length > 10"
+                />
+              </div>
+              <div class="space-y-1.5">
+                <label class="block text-sm font-medium text-[#374151]">Comisión</label>
+                <AppDropdown
+                  v-model="form.commission_id"
+                  :options="commissionOptions"
+                  placeholder="Seleccionar"
+                  :searchable="commissionOptions.length > 10"
+                />
+              </div>
+              <div class="space-y-1.5">
+                <label class="block text-sm font-medium text-[#374151]">Código</label>
+                <input
+                  v-model="form.code"
+                  type="text"
+                  class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm"
+                  placeholder="Código único"
+                />
+              </div>
+              <div class="space-y-1.5">
+                <label class="block text-sm font-medium text-[#374151]">Monto origen</label>
+                <input
+                  v-model.number="form.origin_amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm"
+                />
+              </div>
+              <div class="space-y-1.5">
+                <label class="block text-sm font-medium text-[#374151]">Monto destino</label>
+                <input
+                  v-model.number="form.destination_amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm"
+                />
+              </div>
+              <div class="space-y-1.5">
+                <label class="block text-sm font-medium text-[#374151]">Fecha envío</label>
+                <AppDateInput v-model="form.send_date" />
+              </div>
+              <div class="space-y-1.5">
+                <label class="block text-sm font-medium text-[#374151]">Fecha pago</label>
+                <AppDateInput v-model="form.payment_date" />
+              </div>
+              <div class="space-y-1.5">
+                <label class="block text-sm font-medium text-[#374151]">Voucher envío (URL)</label>
+                <input
+                  v-model="form.send_voucher"
+                  type="text"
+                  class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm"
+                  placeholder="https://..."
+                />
+              </div>
+              <div class="space-y-1.5">
+                <label class="block text-sm font-medium text-[#374151]">Voucher pago (URL)</label>
+                <input
+                  v-model="form.payment_voucher"
+                  type="text"
+                  class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm"
+                  placeholder="https://..."
+                />
+              </div>
+            </div>
+
+            <div class="flex flex-wrap justify-end gap-3 border-t border-[#e5e7eb] pt-6">
+              <button
+                type="button"
+                class="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2.5 text-sm font-medium text-[#6b7280] hover:bg-[#f9fafb]"
+                @click="showCreateModal = false"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                class="rounded-lg bg-[#2563eb] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#1d4ed8] disabled:opacity-60"
+                :disabled="transactionsStore.isCreating || transactionsStore.isUpdating"
+              >
+                {{ transactionsStore.isCreating || transactionsStore.isUpdating ? 'Guardando...' : 'Guardar' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- Modal Importar -->
     <Teleport to="body">
@@ -133,74 +819,3 @@
     </Teleport>
   </div>
 </template>
-
-<script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useTransactionsStore } from '../controllers/use_transactions_store_controller'
-import type { Transaction } from '../../domain/models'
-
-const transactionsStore = useTransactionsStore()
-const showImportModal = ref(false)
-const fileInput = ref<HTMLInputElement | null>(null)
-const importFile = ref<File | null>(null)
-
-const tableColumns = [
-  { key: 'code', label: 'Código' },
-  { key: 'origin_amount', label: 'Monto origen' },
-  { key: 'destination_amount', label: 'Monto destino' },
-  { key: 'send_date', label: 'Fecha envío' },
-  { key: 'payment_date', label: 'Fecha pago' },
-  { key: 'status', label: 'Estado' },
-  { key: 'send_voucher', label: 'Voucher envío' },
-  { key: 'payment_voucher', label: 'Voucher pago' }
-]
-
-/** Obtiene el valor de una celda soportando aliases (origin_amount | monto_origen, etc.) */
-function getCellValue(row: Transaction, key: string): unknown {
-  const aliases: Record<string, string[]> = {
-    code: ['code', 'codigo', 'código'],
-    origin_amount: ['origin_amount', 'monto_origen'],
-    destination_amount: ['destination_amount', 'monto_destino'],
-    send_date: ['send_date', 'fecha_envio'],
-    payment_date: ['payment_date', 'fecha_pago'],
-    status: ['status', 'estado'],
-    send_voucher: ['send_voucher', 'voucher_envio'],
-    payment_voucher: ['payment_voucher', 'voucher_pago']
-  }
-  const keys = aliases[key] ?? [key]
-  for (const k of keys) {
-    const v = row[k]
-    if (v !== undefined && v !== null && v !== '') return v
-  }
-  return row[key]
-}
-
-function isVoucherColumn(key: string): boolean {
-  return key === 'send_voucher' || key === 'payment_voucher'
-}
-
-function formatCell(value: unknown): string {
-  if (value == null) return ''
-  if (typeof value === 'number') {
-    if (Number.isInteger(value)) return String(value)
-    return value.toFixed(4).replace(/\.?0+$/, '')
-  }
-  return String(value)
-}
-
-async function submitImport() {
-  if (!importFile.value) return
-  try {
-    await transactionsStore.importExcel(importFile.value)
-    showImportModal.value = false
-    importFile.value = null
-    if (fileInput.value) fileInput.value.value = ''
-  } catch {
-    // Error ya mostrado en store
-  }
-}
-
-onMounted(() => {
-  transactionsStore.loadTransactions()
-})
-</script>

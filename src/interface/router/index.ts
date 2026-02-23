@@ -49,12 +49,20 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'perfil',
         name: 'perfil',
-        component: () => import('@modules/auth/presentation/bodies/profile_view.vue')
+        component: () => import('@modules/auth/presentation/bodies/profile_view.vue'),
+        meta: { breadcrumb: 'Cuenta > Perfil' }
+      },
+      {
+        path: 'usuarios',
+        name: 'usuarios',
+        component: () => import('@modules/auth/presentation/bodies/usuarios_view.vue'),
+        meta: { breadcrumb: 'Cuenta > Usuarios' }
       }
     ]
   },
   { path: '/transacciones', redirect: '/app/transacciones' },
   { path: '/perfil', redirect: '/app/perfil' },
+  { path: '/usuarios', redirect: '/app/usuarios' },
   { path: '/comisiones', redirect: '/app/comisiones' },
   { path: '/cuentas', redirect: '/app/cuentas' },
   { path: '/tasas', redirect: '/app/tasas' },
