@@ -1,0 +1,52 @@
+import { apiClient } from '@/interface/api/client'
+import { Domain } from '@/interface/infrastructure/services'
+
+export interface UserOption {
+  id: string
+  name: string
+  email: string
+  role?: string
+}
+
+function parseUser(item: unknown): UserOption | null {
+  if (item == null || typeof item !== 'object') return null
+  const o = item as Record<string, unknown>
+  const id = o.id ?? o.user_id
+  if (id == null) return null
+  const names = (o.names ?? '').toString().trim()
+  const lastnames = (o.lastnames ?? '').toString().trim()
+  const email = (o.email ?? o.username ?? '').toString().trim()
+  const fullName = [names, lastnames].filter(Boolean).join(' ') || email || String(id)
+  const role = o.role != null ? String(o.role) : undefined
+  return {
+    id: String(id),
+    name: fullName,
+    email: email || '-',
+    role
+  }
+}
+
+/** Usuarios con rol cliente, ordenados por nombre completo. */
+export async function fetchClientUsers(): Promise<UserOption[]> {
+  const url = Domain.http('user/name-list/')
+  const response = await apiClient.get<unknown>(url, {
+    params: { role: 'cliente' },
+    headers: { Accept: 'application/json' }
+  })
+  const raw = response.data
+  const arr = Array.isArray(raw) ? raw : extractArray(raw)
+  const users = arr.map(parseUser).filter((u): u is UserOption => u != null)
+  const clients = users.filter((u) => !u.role || u.role.toLowerCase() === 'cliente')
+  return clients.sort((a, b) => a.name.localeCompare(b.name, 'es'))
+}
+
+function extractArray(raw: unknown): unknown[] {
+  if (Array.isArray(raw)) return raw
+  if (raw != null && typeof raw === 'object') {
+    const obj = raw as Record<string, unknown>
+    const arr = obj.data ?? obj.results ?? obj.items ?? obj.users
+    if (Array.isArray(arr)) return arr
+  }
+  return []
+}
+
