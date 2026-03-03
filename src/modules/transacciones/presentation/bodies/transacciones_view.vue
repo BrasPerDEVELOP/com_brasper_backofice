@@ -5,12 +5,14 @@ import { useCuentasBancariasStore } from '@modules/cuentas-bancarias/presentatio
 import { useTasasStore } from '@modules/tasas/presentation/controllers/use_tasas_store_controller'
 import { useComisionesStore } from '@modules/comisiones/presentation/controllers/use_comisiones_store_controller'
 import { useCalculatorStore } from '@modules/calculator/presentation/controllers/use_calculator_store_controller'
+import type { BankAccount } from '@modules/cuentas-bancarias/domain/models'
 import type { Transaction } from '../../domain/models'
 import type { GetTransactionsParams } from '../../infrastructure/adapters/transactions_repository'
 import { TRANSACTION_STATUSES, TRANSACTION_STATUS_LABELS } from '../../domain/models'
 import AppDropdown from '@/interface/components/AppDropdown.vue'
 import AppDateInput from '@/interface/components/AppDateInput.vue'
 import CalculatorEmbed from '@modules/calculator/presentation/components/CalculatorEmbed.vue'
+import { Domain } from '@/interface/infrastructure/services'
 
 const transactionsStore = useTransactionsStore()
 const cuentasStore = useCuentasBancariasStore()
@@ -50,8 +52,9 @@ const userFilterOptions = computed(() => [
   ...cuentasStore.clientUsers.map((u) => ({ value: u.id, label: u.name }))
 ])
 
-const bankAccountFilterOptions = computed(() =>
-  cuentasStore.bankAccounts.map((a) => {
+const bankAccountFilterOptions = computed(() => [
+  { value: ALL_VALUE, label: 'Todas' },
+  ...cuentasStore.bankAccounts.map((a) => {
     const bank = cuentasStore.banks.find((b) => b.id === a.bank_id)
     const bankName = bank ? `${bank.bank}${bank.currency ? ` (${bank.currency})` : ''}` : '-'
     const holder =
@@ -61,7 +64,7 @@ const bankAccountFilterOptions = computed(() =>
     const accNum = a.account_number ?? '-'
     return { value: a.id, label: `${bankName} - ${accNum} (${holder})` }
   })
-)
+])
 
 const perPageOptions = [
   { value: '5', label: '5' },
@@ -116,7 +119,7 @@ const editingId = ref<string | null>(null)
 type CreateTab = 'calculadora' | 'datos' | 'vouchers'
 const createTab = ref<CreateTab>('calculadora')
 
-function bankAccountToOption(a: { id: string; bank_id: string; account_holder_type?: string; business_name?: string; holder_names?: string; holder_surnames?: string; account_number?: string }) {
+function bankAccountToOption(a: BankAccount) {
   const bank = cuentasStore.banks.find((b) => b.id === a.bank_id)
   const bankName = bank ? `${bank.bank}${bank.currency ? ` (${bank.currency})` : ''}` : '-'
   const holder =
@@ -190,14 +193,57 @@ const apiFilterParams = computed((): GetTransactionsParams | undefined => {
 })
 
 const searchedTransactions = computed(() => {
-  const list = transactionsStore.transactions
+  let list = transactionsStore.transactions
+
+  // Filtro por estado
+  if (statusFilter.value && statusFilter.value !== 'todos') {
+    list = list.filter((t) => (t.status ?? '').toLowerCase() === statusFilter.value.toLowerCase())
+  }
+
+  // Filtro por cliente
+  if (userFilter.value?.trim()) {
+    list = list.filter((t) => (t.user_id ?? '') === userFilter.value.trim())
+  }
+
+  // Filtro por cuenta bancaria (origen o destino)
+  if (bankAccountFilter.value?.trim()) {
+    const accountId = bankAccountFilter.value.trim()
+    list = list.filter(
+      (t) =>
+        (t.bank_account_origin_id ?? t.bank_account_id ?? '') === accountId ||
+        (t.bank_account_destination_id ?? '') === accountId
+    )
+  }
+
+  // Filtro por rango de fechas (created_at o send_date)
+  if (createdAtFrom.value?.trim()) {
+    const from = new Date(createdAtFrom.value).getTime()
+    list = list.filter((t) => {
+      const d = t.created_at ?? t.send_date ?? ''
+      return d ? new Date(d).getTime() >= from : false
+    })
+  }
+  if (createdAtTo.value?.trim()) {
+    const to = new Date(createdAtTo.value)
+    to.setHours(23, 59, 59, 999)
+    const toMs = to.getTime()
+    list = list.filter((t) => {
+      const d = t.created_at ?? t.send_date ?? ''
+      return d ? new Date(d).getTime() <= toMs : false
+    })
+  }
+
+  // Búsqueda por código
   const q = debouncedSearch.value.trim().toLowerCase()
-  if (!q) return list
-  return list.filter((t) => {
-    const code = (t.code ?? '').toLowerCase()
-    const id = (t.id ?? '').toLowerCase()
-    return code.includes(q) || id.includes(q)
-  })
+  if (q) {
+    list = list.filter((t) => {
+      const code = (t.code ?? '').toLowerCase()
+      const id = (t.id ?? '').toLowerCase()
+      return code.includes(q) || id.includes(q)
+    })
+  }
+
+  return list
 })
 
 const totalPages = computed(() =>
@@ -380,7 +426,7 @@ const PREVIEW_FIELD_ORDER = [
   'code', 'id', 'bank_account_origin_id', 'bank_account_destination_id', 'user_id',
   'tax_rate_id', 'commission_id', 'status', 'origin_amount', 'destination_amount',
   'commission_result', 'resultado_comision', 'total_to_send', 'total_a_enviar', 'coupon_id',
-  'send_date', 'payment_date', 'send_voucher', 'payment_voucher', 'created_at', 'created_by', 'updated_at'
+  'send_date', 'payment_date', 'created_at', 'created_by', 'updated_at'
 ]
 
 const previewDisplayEntries = computed(() => {
@@ -435,8 +481,8 @@ const PREVIEW_FIELD_LABELS: Record<string, string> = {
   updated_at: 'Actualizado'
 }
 
-async function openPreviewModal(t: Transaction) {
-  const id = t.id
+async function openPreviewModal(t: Transaction | null) {
+  const id = t?.id
   if (!id) return
   openMenuId.value = null
   previewTransaction.value = null
@@ -802,7 +848,7 @@ onMounted(() => {
         <button
           type="button"
           class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-[#374151] hover:bg-[#f9fafb]"
-          @click="openMenuId = null; openPreviewModal(selectedMenuTransaction)"
+          @click="openPreviewModal(selectedMenuTransaction)"
         >
           <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -860,18 +906,60 @@ onMounted(() => {
             <p v-else-if="previewError" class="rounded-lg bg-[#dc3545]/10 px-4 py-3 text-sm text-[#dc3545]">
               {{ previewError }}
             </p>
-            <div v-else-if="previewTransaction" class="space-y-4">
+            <div v-else-if="previewTransaction" class="space-y-6">
+              <div class="space-y-4">
+                <div
+                  v-for="entry in previewDisplayEntries"
+                  :key="entry.key"
+                  class="flex flex-col gap-0.5 sm:flex-row sm:items-start sm:gap-4"
+                >
+                  <span class="min-w-[140px] shrink-0 text-sm font-medium text-[#6b7280]">
+                    {{ entry.label }}
+                  </span>
+                  <span class="min-w-0 break-words text-sm text-[#374151]">
+                    {{ entry.displayValue }}
+                  </span>
+                </div>
+              </div>
               <div
-                v-for="entry in previewDisplayEntries"
-                :key="entry.key"
-                class="flex flex-col gap-0.5 sm:flex-row sm:items-start sm:gap-4"
+                v-if="previewTransaction.send_voucher || previewTransaction.payment_voucher"
+                class="border-t border-[#e5e7eb] pt-6"
               >
-                <span class="min-w-[140px] shrink-0 text-sm font-medium text-[#6b7280]">
-                  {{ entry.label }}
-                </span>
-                <span class="min-w-0 break-words text-sm text-[#374151]">
-                  {{ entry.displayValue }}
-                </span>
+                <h3 class="mb-4 text-sm font-semibold text-[#374151]">Comprobantes</h3>
+                <div class="grid gap-6 sm:grid-cols-2">
+                  <div v-if="previewTransaction.send_voucher" class="space-y-2">
+                    <p class="text-sm font-medium text-[#6b7280]">Comprobante envío</p>
+                    <a
+                      :href="Domain.mediaUrl(previewTransaction.send_voucher)"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="block overflow-hidden rounded-lg border border-[#e5e7eb] bg-[#f9fafb]"
+                    >
+                      <img
+                        :src="Domain.mediaUrl(previewTransaction.send_voucher)"
+                        alt="Comprobante envío"
+                        class="h-auto max-h-64 w-full object-contain"
+                        @error="($event.target as HTMLImageElement).style.display = 'none'"
+                      />
+                    </a>
+                  </div>
+                  <div v-if="previewTransaction.payment_voucher" class="space-y-2">
+                    <p class="text-sm font-medium text-[#6b7280]">Comprobante pago</p>
+                    <a
+                      :href="Domain.mediaUrl(previewTransaction.payment_voucher)"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="block overflow-hidden rounded-lg border border-[#e5e7eb] bg-[#f9fafb]"
+                    >
+                      <img
+                        :src="Domain.mediaUrl(previewTransaction.payment_voucher)"
+                        alt="Comprobante pago"
+                        class="h-auto max-h-64 w-full object-contain"
+                        @error="($event.target as HTMLImageElement).style.display = 'none'"
+                      />
+                    </a>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1171,27 +1259,28 @@ onMounted(() => {
         @click.self="showImportModal = false"
       >
         <div class="w-full max-w-md rounded-2xl border border-[#dbe7fb] bg-white p-6 shadow-xl">
-          <h2 class="mb-4 text-lg font-semibold text-[#232b4d]">Importar desde Excel</h2>
+          <h2 class="mb-4 text-lg font-semibold text-[#232b4d]">Importar transacciones</h2>
           <div class="mb-4 rounded-lg bg-[#fbfdff] p-4 text-sm text-[#666]">
-            <p class="mb-2 font-medium text-[#333]">Columnas del Excel (primera fila = encabezados):</p>
+            <p class="mb-2 font-medium text-[#333]">Formatos aceptados: JSON o Excel (.xlsx, .xls)</p>
+            <p class="mb-2">El endpoint espera JSON con estructura <code class="rounded bg-[#e8eef7] px-1">{"items": [...]}</code></p>
+            <p class="mb-2">Columnas del Excel (primera fila = encabezados):</p>
             <ul class="list-inside list-disc space-y-1">
-              <li><strong>code</strong> (requerido) — Código único</li>
-              <li><strong>origin_amount</strong> / monto_origen (requerido)</li>
-              <li><strong>destination_amount</strong> / monto_destino (requerido)</li>
-              <li><strong>send_date</strong> / fecha_envio (opcional)</li>
-              <li><strong>payment_date</strong> / fecha_pago (opcional)</li>
-              <li><strong>status</strong> / estado (opcional: pending, completed, failed)</li>
-              <li><strong>send_voucher</strong> / voucher_envio (opcional: URL o imagen)</li>
-              <li><strong>payment_voucher</strong> / voucher_pago (opcional: URL o imagen)</li>
+              <li><strong>origin_amount</strong> / monto_origen — Monto origen</li>
+              <li><strong>destination_amount</strong> / monto_destino — Monto destino</li>
+              <li><strong>tax_rate_id</strong>, <strong>commission_id</strong> — IDs de tasa y comisión</li>
+              <li><strong>origin_names</strong>, <strong>origin_lastnames</strong>, <strong>origin_email</strong> — Usuario origen</li>
+              <li><strong>dest_names</strong>, <strong>dest_lastnames</strong>, <strong>dest_email</strong> — Usuario destino</li>
+              <li><strong>origin_bank_id</strong>, <strong>dest_bank_id</strong> — IDs de bancos</li>
+              <li><strong>send_date</strong> / fecha_envio, <strong>payment_date</strong> / fecha_pago</li>
             </ul>
           </div>
           <form class="space-y-4" @submit.prevent="submitImport">
             <div>
-              <label class="mb-1 block text-sm font-medium text-[#333]">Archivo Excel (.xlsx)</label>
+              <label class="mb-1 block text-sm font-medium text-[#333]">Archivo (.json, .xlsx, .xls)</label>
               <input
                 ref="fileInput"
                 type="file"
-                accept=".xlsx,.xls"
+                accept=".json,.xlsx,.xls"
                 required
                 class="w-full rounded-xl border border-[#cfdbef] px-4 py-2.5 text-sm"
                 @change="importFile = ($event.target as HTMLInputElement).files?.[0] ?? null"

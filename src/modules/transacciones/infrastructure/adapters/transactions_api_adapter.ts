@@ -142,11 +142,21 @@ export class TransactionsApiAdapter implements TransactionsRepository {
   }
 
   async importFromExcel(file: File): Promise<unknown> {
-    const url = this.endpoint('import-excel')
-    const formData = new FormData()
-    formData.append('file', file)
+    const url = this.endpoint('import')
+    const ext = file.name.toLowerCase().split('.').pop() ?? ''
+    let payload: { items: unknown[] }
 
-    const response = await apiClient.post(url, formData)
+    if (ext === 'json') {
+      const { jsonFileToImportPayload } = await import('../utils/excel_to_import_json')
+      payload = await jsonFileToImportPayload(file)
+    } else if (ext === 'xlsx' || ext === 'xls') {
+      const { excelToImportJson } = await import('../utils/excel_to_import_json')
+      payload = await excelToImportJson(file)
+    } else {
+      throw new Error('Formato no soportado. Use .json, .xlsx o .xls')
+    }
+
+    const response = await apiClient.post(url, payload)
     return response.data
   }
 }
