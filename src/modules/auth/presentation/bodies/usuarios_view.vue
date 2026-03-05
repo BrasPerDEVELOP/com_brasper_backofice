@@ -3,9 +3,11 @@ import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import {
   fetchUsers,
   deleteUser,
+  createUser,
   USER_ROLES,
   type UserListItem
 } from '../../infrastructure/adapters/users_management_api_adapter'
+import { parseUsersFromExcel } from '../../infrastructure/utils/excel_users_parser'
 import { USER_ROLE_LABELS } from '../../domain/models/user_roles'
 import AppDropdown from '@/interface/components/AppDropdown.vue'
 import UsuarioCreateFormModal from '@/interface/components/UsuarioCreateFormModal.vue'
@@ -15,6 +17,11 @@ const loading = ref(false)
 const error = ref('')
 const successMessage = ref('')
 const showCreateModal = ref(false)
+const showImportModal = ref(false)
+const importFile = ref<File | null>(null)
+const fileInput = ref<HTMLInputElement | null>(null)
+const importing = ref(false)
+const importError = ref('')
 const searchQuery = ref('')
 const openMenuId = ref<string | null>(null)
 
@@ -108,6 +115,49 @@ async function onUserCreated() {
   await loadUsers()
 }
 
+async function submitImport() {
+  if (!importFile.value) return
+  importing.value = true
+  importError.value = ''
+  error.value = ''
+  try {
+    const defaultRole =
+      roleSelectFilter.value.toLowerCase() === 'todos' ? 'client' : roleSelectFilter.value
+    const payloads = await parseUsersFromExcel(importFile.value, defaultRole)
+    if (payloads.length === 0) {
+      importError.value = 'No se encontraron filas válidas con email en el archivo'
+      return
+    }
+    let created = 0
+    const errors: string[] = []
+    for (const p of payloads) {
+      try {
+        await createUser(p)
+        created++
+      } catch (e) {
+        errors.push(`${p.email}: ${e instanceof Error ? e.message : 'Error'}`)
+      }
+    }
+    showImportModal.value = false
+    importFile.value = null
+    if (fileInput.value) fileInput.value.value = ''
+    if (created > 0) {
+      successMessage.value =
+        errors.length > 0
+          ? `Se importaron ${created} usuario(s). Errores: ${errors.length}`
+          : `Se importaron ${created} usuario(s) correctamente`
+      await loadUsers()
+    }
+    if (errors.length > 0) {
+      error.value = errors.slice(0, 5).join('; ') + (errors.length > 5 ? ` ... y ${errors.length - 5} más` : '')
+    }
+  } catch (e) {
+    importError.value = e instanceof Error ? e.message : 'Error al procesar el archivo Excel'
+  } finally {
+    importing.value = false
+  }
+}
+
 const deletingId = ref<string | null>(null)
 
 function toggleMenu(id: string) {
@@ -187,6 +237,16 @@ onMounted(() => {
           <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
           </svg>
+        </button>
+        <button
+          type="button"
+          class="inline-flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-white px-4 py-2.5 text-sm font-medium text-[#374151] transition hover:bg-[#f9fafb]"
+          @click="showImportModal = true"
+        >
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+          </svg>
+          Importar Excel
         </button>
         <button
           type="button"
@@ -405,6 +465,63 @@ onMounted(() => {
     :default-role="createModalDefaultRole"
     @created="onUserCreated"
   />
+
+  <!-- Modal Importar Excel -->
+  <Teleport to="body">
+    <div
+      v-if="showImportModal"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      @click.self="showImportModal = false"
+    >
+      <div class="w-full max-w-md rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-xl">
+        <h2 class="mb-4 text-lg font-semibold text-[#1f2937]">Importar usuarios desde Excel</h2>
+        <div class="mb-4 rounded-lg bg-[#f9fafb] p-4 text-sm text-[#6b7280]">
+          <p class="mb-2 font-medium text-[#374151]">Formatos aceptados: .xlsx, .xls</p>
+          <p class="mb-2">La primera fila debe ser encabezados. Columnas soportadas:</p>
+          <ul class="list-inside list-disc space-y-1">
+            <li><strong>email</strong> / correo — Obligatorio</li>
+            <li><strong>nombres</strong> / names — Nombres</li>
+            <li><strong>apellidos</strong> / lastnames — Apellidos</li>
+            <li><strong>tipo_documento</strong> — DNI, CE, Pasaporte</li>
+            <li><strong>n_documento</strong> / documento — Número de documento</li>
+            <li><strong>rol</strong> / role — Admin, Cliente, etc.</li>
+          </ul>
+        </div>
+        <form class="space-y-4" @submit.prevent="submitImport">
+          <div>
+            <label class="mb-1 block text-sm font-medium text-[#374151]">Archivo (.xlsx, .xls)</label>
+            <input
+              ref="fileInput"
+              type="file"
+              accept=".xlsx,.xls"
+              required
+              class="w-full rounded-lg border border-[#e5e7eb] px-4 py-2.5 text-sm"
+              @change="importFile = ($event.target as HTMLInputElement).files?.[0] ?? null"
+            />
+          </div>
+          <p v-if="importError" class="rounded-lg bg-[#dc3545]/10 px-4 py-3 text-sm text-[#dc3545]">
+            {{ importError }}
+          </p>
+          <div class="flex gap-3 pt-2">
+            <button
+              type="submit"
+              class="rounded-lg bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1d4ed8] disabled:opacity-60"
+              :disabled="importing || !importFile"
+            >
+              {{ importing ? 'Importando...' : 'Importar' }}
+            </button>
+            <button
+              type="button"
+              class="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2.5 text-sm font-medium text-[#6b7280] transition hover:bg-[#f9fafb]"
+              @click="showImportModal = false"
+            >
+              Cancelar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>
