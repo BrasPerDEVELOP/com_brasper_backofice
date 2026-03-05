@@ -54,6 +54,7 @@ const documentTypeOptions = [
   { value: 'passport', label: 'Pasaporte' },
   { value: 'ruc', label: 'RUC' },
   { value: 'cpf', label: 'CPF' },
+  { value: 'cnpj', label: 'CNPJ' },
   { value: 'other', label: 'Otro' }
 ]
 

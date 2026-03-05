@@ -136,15 +136,6 @@ watch(
           <span class="text-sm text-[#666]">{{ breadcrumbs }}</span>
         </div>
         <div class="flex items-center gap-3">
-          <button
-            type="button"
-            class="flex items-center gap-2 rounded-xl border border-[#5ED6B3]/60 bg-white px-4 py-2.5 text-sm font-medium text-[#066ac9] transition hover:bg-[#5ED6B3]/10"
-          >
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            Exportar
-          </button>
           <RouterLink
             to="/app/perfil"
             class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#4A52D8]/30 to-[#007aff]/30 text-sm font-bold text-[#232b4d] transition hover:from-[#4A52D8]/50 hover:to-[#007aff]/50"

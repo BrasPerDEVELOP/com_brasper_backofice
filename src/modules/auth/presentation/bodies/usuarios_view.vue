@@ -9,6 +9,7 @@ import {
 } from '../../infrastructure/adapters/users_management_api_adapter'
 import { parseUsersFromExcel } from '../../infrastructure/utils/excel_users_parser'
 import { USER_ROLE_LABELS } from '../../domain/models/user_roles'
+import * as XLSX from 'xlsx'
 import AppDropdown from '@/interface/components/AppDropdown.vue'
 import UsuarioCreateFormModal from '@/interface/components/UsuarioCreateFormModal.vue'
 
@@ -209,6 +210,23 @@ function getDocumentNumber(u: UserListItem): string {
   return u.document_number ?? '-'
 }
 
+function exportUsersToExcel() {
+  const headers = ['uuid', 'nombres', 'email', 'tipo_documento', 'n_documento', 'rol']
+  const rows = searchedUsers.value.map((u) => [
+    u.id,
+    u.name ?? '',
+    u.email ?? '',
+    (u.document_type ?? '').toUpperCase(),
+    u.document_number ?? '',
+    USER_ROLE_LABELS[u.role as keyof typeof USER_ROLE_LABELS] ?? (u.role ?? '')
+  ])
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Usuarios')
+  const filename = `usuarios_${new Date().toISOString().slice(0, 10)}.xlsx`
+  XLSX.writeFile(wb, filename)
+}
+
 onMounted(() => {
   loadUsers()
 })
@@ -247,6 +265,16 @@ onMounted(() => {
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
           </svg>
           Importar Excel
+        </button>
+        <button
+          type="button"
+          class="inline-flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-white px-4 py-2.5 text-sm font-medium text-[#374151] transition hover:bg-[#f9fafb]"
+          @click="exportUsersToExcel"
+        >
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          Exportar Excel
         </button>
         <button
           type="button"
