@@ -51,7 +51,10 @@ const phoneCodeOptions = computed(() =>
 const documentTypeOptions = [
   { value: 'dni', label: 'DNI' },
   { value: 'ce', label: 'CE' },
-  { value: 'passport', label: 'Pasaporte' }
+  { value: 'passport', label: 'Pasaporte' },
+  { value: 'ruc', label: 'RUC' },
+  { value: 'cpf', label: 'CPF' },
+  { value: 'other', label: 'Otro' }
 ]
 
 const formRoleOptions = computed(() =>
