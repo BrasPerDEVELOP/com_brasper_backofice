@@ -32,7 +32,11 @@ function mediaUrl(relativePath: string): string {
   const trimmed = relativePath.trim()
   if (!trimmed) return ''
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed
+<<<<<<< Updated upstream
   const base = buildBaseUrl()
+=======
+  const base = env.mediaBaseUrl || buildBaseUrl()
+>>>>>>> Stashed changes
   let path = trimmed.startsWith('/') ? trimmed.slice(1) : trimmed
   if (path.startsWith('media/')) return `${base}/${path}`
   if (!path.includes('/')) path = `profile_images/${path}`

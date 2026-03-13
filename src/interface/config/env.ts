@@ -37,6 +37,27 @@ export const env = {
     return getEnv('VITE_COMPANY', '')
   },
 
+  /** Ruta para perfil de usuario (ej: me, profile, users/me). Por defecto: me */
+  get authProfilePath(): string {
+    return getEnv('VITE_AUTH_PROFILE_PATH', 'me')
+  },
+
+  /** Método HTTP para actualizar perfil: patch o put. Por defecto: put */
+  get authProfileMethod(): 'patch' | 'put' {
+    const v = getEnv('VITE_AUTH_PROFILE_METHOD', 'put').toLowerCase()
+    return v === 'patch' ? 'patch' : 'put'
+  },
+
+  /** Si true, usa users/{id}/ en lugar de me/ para actualizar perfil */
+  get authProfileUseId(): boolean {
+    return getBoolEnv('VITE_AUTH_PROFILE_USE_ID', false)
+  },
+
+  /** URL base para media (imágenes). Si vacío, usa buildBaseUrl() + /media */
+  get mediaBaseUrl(): string {
+    return getEnv('VITE_MEDIA_BASE_URL', '').trim()
+  },
+
   /** País por defecto */
   get country(): string {
     return getEnv('VITE_COUNTRY', 'US')
