@@ -61,7 +61,13 @@ export const useTransactionsStore = defineStore('transactions', {
         await useCase.execute(file)
         await this.loadTransactions(filters)
       } catch (e) {
-        this.error = e instanceof Error ? e.message : 'Error al importar transacciones'
+        const msg = e instanceof Error ? e.message : ''
+        if (msg.includes('405') || msg.includes('Method Not Allowed')) {
+          this.error =
+            'El backend no tiene endpoint de importación (405). Prueba VITE_TRANSACTIONS_IMPORT_PATH en .env (ej. transactions/import/) o contacta al equipo backend.'
+        } else {
+          this.error = msg || 'Error al importar transacciones'
+        }
         throw e
       } finally {
         this.isImporting = false

@@ -1,5 +1,6 @@
 import { apiClient } from '@/interface/api/client'
 import { Domain } from '@/interface/infrastructure/services'
+import { env } from '@/interface/config/env'
 import type {
   TransactionsRepository,
   CreateTransactionPayload,
@@ -142,7 +143,8 @@ export class TransactionsApiAdapter implements TransactionsRepository {
   }
 
   async importFromExcel(file: File): Promise<unknown> {
-    const url = this.endpoint('import')
+    const path = env.transactionsImportPath
+    const url = path ? Domain.http(path) : this.endpoint('import/')
     const ext = file.name.toLowerCase().split('.').pop() ?? ''
     let payload: { items: unknown[] }
 
@@ -150,8 +152,18 @@ export class TransactionsApiAdapter implements TransactionsRepository {
       const { jsonFileToImportPayload } = await import('../utils/excel_to_import_json')
       payload = await jsonFileToImportPayload(file)
     } else if (ext === 'xlsx' || ext === 'xls') {
-      const { excelToImportJson } = await import('../utils/excel_to_import_json')
-      payload = await excelToImportJson(file)
+      try {
+        const { excelBrasperToImportPayload } = await import('../utils/excel_brasper_format')
+        payload = await excelBrasperToImportPayload(file)
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : ''
+        if (msg.includes('formato Brasper')) {
+          const { excelToImportJson } = await import('../utils/excel_to_import_json')
+          payload = await excelToImportJson(file)
+        } else {
+          throw e
+        }
+      }
     } else {
       throw new Error('Formato no soportado. Use .json, .xlsx o .xls')
     }

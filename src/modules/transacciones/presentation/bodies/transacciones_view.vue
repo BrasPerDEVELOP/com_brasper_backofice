@@ -8,6 +8,7 @@ import { useCalculatorStore } from '@modules/calculator/presentation/controllers
 import type { BankAccount } from '@modules/cuentas-bancarias/domain/models'
 import type { Transaction } from '../../domain/models'
 import type { GetTransactionsParams } from '../../infrastructure/adapters/transactions_repository'
+import { parseSimpleImportExcel } from '../../infrastructure/utils/excel_simple_import'
 import { TRANSACTION_STATUSES, TRANSACTION_STATUS_LABELS } from '../../domain/models'
 import AppDropdown from '@/interface/components/AppDropdown.vue'
 import AppDateInput from '@/interface/components/AppDateInput.vue'
@@ -22,6 +23,11 @@ const calculatorStore = useCalculatorStore()
 
 const showCreateModal = ref(false)
 const showImportModal = ref(false)
+const showImportSimpleModal = ref(false)
+const importSimpleFile = ref<File | null>(null)
+const fileInputSimple = ref<HTMLInputElement | null>(null)
+const importingSimple = ref(false)
+const importSimpleError = ref('')
 const showPreviewModal = ref(false)
 const previewTransaction = ref<Transaction | null>(null)
 const previewLoading = ref(false)
@@ -481,23 +487,14 @@ const PREVIEW_FIELD_LABELS: Record<string, string> = {
   updated_at: 'Actualizado'
 }
 
-async function openPreviewModal(t: Transaction | null) {
-  const id = t?.id
-  if (!id) return
+function openPreviewModal(t: Transaction | null) {
+  if (!t) return
   openMenuId.value = null
   previewTransaction.value = null
   previewError.value = null
   showPreviewModal.value = true
-  previewLoading.value = true
-  try {
-    const tx = await transactionsStore.getTransactionById(id)
-    previewTransaction.value = tx
-    if (!tx) previewError.value = 'No se pudo cargar la transacción'
-  } catch {
-    previewError.value = 'Error al cargar la transacción'
-  } finally {
-    previewLoading.value = false
-  }
+  previewLoading.value = false
+  previewTransaction.value = { ...t }
 }
 
 function closePreviewModal() {
@@ -604,6 +601,42 @@ async function submitImport() {
   }
 }
 
+async function submitImportSimple() {
+  if (!importSimpleFile.value) return
+  importingSimple.value = true
+  importSimpleError.value = ''
+  transactionsStore.error = null
+  try {
+    const payloads = await parseSimpleImportExcel(importSimpleFile.value)
+    if (payloads.length === 0) {
+      importSimpleError.value = 'No se encontraron filas válidas en el archivo'
+      importingSimple.value = false
+      return
+    }
+    let created = 0
+    const errors: string[] = []
+    for (const p of payloads) {
+      try {
+        await transactionsStore.createTransaction(p)
+        created++
+      } catch (e) {
+        errors.push(`${p.code}: ${e instanceof Error ? e.message : 'Error'}`)
+      }
+    }
+    showImportSimpleModal.value = false
+    importSimpleFile.value = null
+    if (fileInputSimple.value) fileInputSimple.value.value = ''
+    loadTransactions()
+    if (errors.length > 0) {
+      transactionsStore.error = `Importados ${created}. Errores: ${errors.slice(0, 3).join('; ')}${errors.length > 3 ? ` ... +${errors.length - 3} más` : ''}`
+    }
+  } catch (e) {
+    importSimpleError.value = e instanceof Error ? e.message : 'Error al procesar el archivo'
+  } finally {
+    importingSimple.value = false
+  }
+}
+
 function loadTransactions() {
   transactionsStore.loadTransactions(apiFilterParams.value)
 }
@@ -657,6 +690,16 @@ onMounted(() => {
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
             </svg>
             Importar
+          </button>
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-white px-4 py-2.5 text-sm font-medium text-[#374151] transition hover:bg-[#f9fafb]"
+            @click="showImportSimpleModal = true"
+          >
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+            Importar simple
           </button>
           <button
             type="button"
@@ -1262,7 +1305,9 @@ onMounted(() => {
           <h2 class="mb-4 text-lg font-semibold text-[#232b4d]">Importar transacciones</h2>
           <div class="mb-4 rounded-lg bg-[#fbfdff] p-4 text-sm text-[#666]">
             <p class="mb-2 font-medium text-[#333]">Formatos aceptados: JSON o Excel (.xlsx, .xls)</p>
-            <p class="mb-2">El endpoint espera JSON con estructura <code class="rounded bg-[#e8eef7] px-1">{"items": [...]}</code></p>
+            <p class="mb-2 text-[#10b981] font-medium">Formato Brasper:</p>
+            <p class="mb-2">Si el Excel tiene columnas <strong>Nombre</strong>, <strong>Correo</strong>, <strong>ENVÍA (PEN)</strong>, <strong>RECIBE (BRL)</strong>, etc., se detecta automáticamente.</p>
+            <p class="mb-2">Formato alternativo (JSON o Excel con columnas):</p>
             <p class="mb-2">Columnas del Excel (primera fila = encabezados):</p>
             <ul class="list-inside list-disc space-y-1">
               <li><strong>origin_amount</strong> / monto_origen — Monto origen</li>
@@ -1298,6 +1343,67 @@ onMounted(() => {
                 type="button"
                 class="rounded-xl border border-[#4A52D8]/30 px-4 py-2.5 text-sm text-[#3C4DA7] hover:bg-[#4A52D8]/10"
                 @click="showImportModal = false"
+              >
+                Cancelar
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Modal Importar simple (usa mismo POST que Crear) -->
+    <Teleport to="body">
+      <div
+        v-if="showImportSimpleModal"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+        @click.self="showImportSimpleModal = false"
+      >
+        <div class="w-full max-w-md rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-xl">
+          <h2 class="mb-4 text-lg font-semibold text-[#1f2937]">Importar simple</h2>
+          <p class="mb-4 text-sm text-[#6b7280]">
+            Usa el mismo endpoint que Crear. Cada fila del Excel se envía como una transacción individual.
+          </p>
+          <div class="mb-4 rounded-lg bg-[#f9fafb] p-4 text-sm text-[#6b7280]">
+            <p class="mb-2 font-medium text-[#374151]">Columnas (IDs obligatorios):</p>
+            <ul class="list-inside list-disc space-y-1">
+              <li><strong>bank_account_origin</strong> / cuenta_origen</li>
+              <li><strong>bank_account_destination</strong> / cuenta_destino</li>
+              <li><strong>user_id</strong> / cliente</li>
+              <li><strong>tax_rate_id</strong> / tasa</li>
+              <li><strong>commission_id</strong> / comision</li>
+              <li><strong>origin_amount</strong> / monto_origen</li>
+              <li><strong>destination_amount</strong> / monto_destino</li>
+              <li><strong>code</strong> / codigo (opcional)</li>
+            </ul>
+          </div>
+          <form class="space-y-4" @submit.prevent="submitImportSimple">
+            <div>
+              <label class="mb-1 block text-sm font-medium text-[#374151]">Archivo (.xlsx, .xls)</label>
+              <input
+                ref="fileInputSimple"
+                type="file"
+                accept=".xlsx,.xls"
+                required
+                class="w-full rounded-lg border border-[#e5e7eb] px-4 py-2.5 text-sm"
+                @change="importSimpleFile = ($event.target as HTMLInputElement).files?.[0] ?? null"
+              />
+            </div>
+            <p v-if="importSimpleError" class="rounded-lg bg-[#dc3545]/10 px-4 py-3 text-sm text-[#dc3545]">
+              {{ importSimpleError }}
+            </p>
+            <div class="flex gap-3 pt-2">
+              <button
+                type="submit"
+                class="rounded-lg bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1d4ed8] disabled:opacity-60"
+                :disabled="importingSimple || !importSimpleFile"
+              >
+                {{ importingSimple ? 'Importando...' : 'Importar' }}
+              </button>
+              <button
+                type="button"
+                class="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2.5 text-sm font-medium text-[#6b7280] transition hover:bg-[#f9fafb]"
+                @click="showImportSimpleModal = false"
               >
                 Cancelar
               </button>

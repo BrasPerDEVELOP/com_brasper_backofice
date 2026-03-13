@@ -67,5 +67,10 @@ export const env = {
     const raw = getEnv('VITE_ADMIN_SSO_MAX_AGE_SECONDS', '60')
     const parsed = Number(raw)
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 60
+  },
+
+  /** Ruta del endpoint de importación de transacciones. Si vacío, no hay import masivo. */
+  get transactionsImportPath(): string {
+    return getEnv('VITE_TRANSACTIONS_IMPORT_PATH', 'transactions/import/')
   }
 }
