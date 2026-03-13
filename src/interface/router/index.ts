@@ -17,7 +17,11 @@ const routes: RouteRecordRaw[] = [
     children: [
       {
         path: '',
+<<<<<<< Updated upstream
         redirect: '/app/transacciones'
+=======
+        redirect: '/app/calculator'
+>>>>>>> Stashed changes
       },
       {
         path: 'transacciones',
