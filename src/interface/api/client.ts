@@ -47,17 +47,12 @@ export const apiClient: AxiosInstance = axios.create({
   }
 })
 
-// Request: inyectar token (Bearer o Token según backend)
-const AUTH_PREFIX = (import.meta.env.VITE_AUTH_HEADER_PREFIX as string)?.trim() || 'Bearer'
-
+// Request: inyectar Bearer token
 apiClient.interceptors.request.use(
   (config) => {
     const token = getToken()
     if (token) {
-      config.headers.Authorization = `${AUTH_PREFIX} ${token}`
-    }
-    if (config.data instanceof FormData) {
-      delete config.headers['Content-Type']
+      config.headers.Authorization = `Bearer ${token}`
     }
     if (config.data instanceof FormData) {
       delete config.headers['Content-Type']
@@ -75,17 +70,13 @@ apiClient.interceptors.request.use(
   }
 )
 
-// Response: 401 → cerrar sesión (salvo si skipAuthRedirect)
+// Response: 401 → cerrar sesión; resto de errores → logging
 apiClient.interceptors.response.use(
   (response) => response,
   (err) => {
     const status = err.response?.status
     const url = err.config?.url ?? err.request?.url
-<<<<<<< Updated upstream
     const skipAuthRedirect = (err.config as { skipAuthRedirect?: boolean })?.skipAuthRedirect === true
-=======
-    const skipAuthRedirect = (err.config as Record<string, unknown>)?.skipAuthRedirect === true
->>>>>>> Stashed changes
 
     if (status === 401 && !skipAuthRedirect) {
       log.warn('401 Unauthorized', url, '→ cerrando sesión')

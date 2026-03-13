@@ -5,11 +5,7 @@ export interface LoginResponse {
   token: string
 }
 
-<<<<<<< Updated upstream:src/modules/auth/infrastructure/adapters/auth_repository.ts
 /** Payload para PUT /user/ (FormData). profile_image puede ser File para subir nueva imagen. */
-=======
-/** Payload para PUT /user/ (FormData). id requerido; resto opcionales. profile_image puede ser File para subir nueva imagen. */
->>>>>>> Stashed changes:src/modules/auth/infrastructure/adapters/AuthRepository.ts
 export interface UpdateProfilePayload {
   id: string
   names?: string

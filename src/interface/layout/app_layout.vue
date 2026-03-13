@@ -18,10 +18,7 @@ const showSidebar = computed(() => route.path.startsWith('/app'))
 
 const navItems = [
   { to: '/app/perfil', label: 'Perfil', icon: 'user' },
-<<<<<<< Updated upstream:src/interface/layout/app_layout.vue
   { to: '/app/usuarios', label: 'Usuarios', icon: 'users' },
-=======
->>>>>>> Stashed changes:src/interface/layout/AppLayout.vue
   { to: '/app/transacciones', label: 'Transacciones', icon: 'transactions' },
   { to: '/app/calculator', label: 'Calculadora', icon: 'calc' },
   { to: '/app/cupones', label: 'Cupones', icon: 'ticket' },
