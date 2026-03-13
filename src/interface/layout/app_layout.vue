@@ -21,6 +21,7 @@ const navItems = [
   { to: '/app/usuarios', label: 'Usuarios', icon: 'users' },
   { to: '/app/transacciones', label: 'Transacciones', icon: 'transactions' },
   { to: '/app/calculator', label: 'Calculadora', icon: 'calc' },
+  { to: '/app/cupones', label: 'Cupones', icon: 'ticket' },
   { to: '/app/calculator?demo=1', label: 'Calculadora Demo', icon: 'demo' },
   { to: '/app/cuentas', label: 'Cuentas', icon: 'bank' },
   { to: '/app/comisiones', label: 'Comisiones', icon: 'folder' },
@@ -37,6 +38,7 @@ const breadcrumbs = computed(() => {
   const map: Record<string, string> = {
     transacciones: 'Operaciones > Transacciones',
     calculator: 'Operaciones > Calculadora',
+    cupones: 'Operaciones > Cupones',
     comisiones: 'Comercial > Comisiones',
     cuentas: 'Configuración > Cuentas',
     tasas: 'Configuración > Tasas de cambio',

@@ -32,6 +32,12 @@ const routes: RouteRecordRaw[] = [
         meta: { breadcrumb: 'Operaciones > Calculadora' }
       },
       {
+        path: 'cupones',
+        name: 'cupones',
+        component: () => import('@modules/cupones/presentation/bodies/cupones_view.vue'),
+        meta: { breadcrumb: 'Operaciones > Cupones' }
+      },
+      {
         path: 'comisiones',
         name: 'comisiones',
         component: () => import('@modules/comisiones/presentation/bodies/comisiones_view.vue')
@@ -67,6 +73,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/cuentas', redirect: '/app/cuentas' },
   { path: '/tasas', redirect: '/app/tasas' },
   { path: '/calculator', redirect: '/app/calculator' },
+  { path: '/cupones', redirect: '/app/cupones' },
   { path: '/calculator-demo', redirect: { path: '/app/calculator', query: { demo: '1' } } }
 ]
 

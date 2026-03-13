@@ -17,6 +17,13 @@ export const navIcons: Record<string, FunctionalComponent> = {
         d: 'M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z'
       })
     ]),
+  ticket: () =>
+    h('svg', { class: 'h-5 w-5', fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
+      h('path', {
+        ...pathAttrs,
+        d: 'M16 5V4a1 1 0 00-1-1H9a1 1 0 00-1 1v1m8 0h2a2 2 0 012 2v3a2 2 0 00-2 2 2 2 0 002 2v3a2 2 0 01-2 2h-2m-8-14H6a2 2 0 00-2 2v3a2 2 0 012 2 2 2 0 01-2 2v3a2 2 0 002 2h2m8-14v14M8 5v14'
+      })
+    ]),
   demo: () =>
     h('svg', { class: 'h-5 w-5', fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
       h('path', { ...pathAttrs, d: 'M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4' })

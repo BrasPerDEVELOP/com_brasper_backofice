@@ -81,7 +81,7 @@ export class TransactionsApiAdapter implements TransactionsRepository {
   }
 
   async getTransactionById(id: string): Promise<Transaction | null> {
-    const url = this.endpoint(`${id}/`)
+    const url = this.endpoint(`${id}`)
     try {
       const response = await apiClient.get<unknown>(url)
       const raw = response.data
