@@ -13,6 +13,7 @@ interface CouponFormModel {
 }
 
 const props = defineProps<{
+  currencyOptions: Array<{ value: string; label: string }>
   isSaving: boolean
 }>()
 
@@ -99,22 +100,34 @@ defineExpose({ resetForm })
 
       <label class="block text-sm text-[#4d5a77]">
         Moneda origen
-        <input
+        <select
           v-model="form.origin_currency"
-          type="text"
-          maxlength="3"
           class="mt-1 w-full rounded-xl border border-[#cfdbef] bg-white px-3 py-2 text-sm uppercase text-[#232b4d] outline-none focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/20"
-        />
+        >
+          <option
+            v-for="option in props.currencyOptions"
+            :key="`origin-${option.value}`"
+            :value="option.value"
+          >
+            {{ option.label }}
+          </option>
+        </select>
       </label>
 
       <label class="block text-sm text-[#4d5a77]">
         Moneda destino
-        <input
+        <select
           v-model="form.destination_currency"
-          type="text"
-          maxlength="3"
           class="mt-1 w-full rounded-xl border border-[#cfdbef] bg-white px-3 py-2 text-sm uppercase text-[#232b4d] outline-none focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/20"
-        />
+        >
+          <option
+            v-for="option in props.currencyOptions"
+            :key="`destination-${option.value}`"
+            :value="option.value"
+          >
+            {{ option.label }}
+          </option>
+        </select>
       </label>
 
       <label class="block text-sm text-[#4d5a77]">

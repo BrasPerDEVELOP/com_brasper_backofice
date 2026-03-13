@@ -60,11 +60,13 @@ onMounted(() => {
     <template v-else>
       <CouponCreateForm
         ref="createFormRef"
+        :currency-options="cuponesStore.currencyOptions"
         :is-saving="cuponesStore.savingId === 'new'"
         @submit="handleCreate"
       />
       <CouponList
         :coupons="cuponesStore.coupons"
+        :currency-options="cuponesStore.currencyOptions"
         :saving-id="cuponesStore.savingId"
         @save="handleUpdate"
       />

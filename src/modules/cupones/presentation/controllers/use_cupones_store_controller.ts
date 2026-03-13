@@ -2,6 +2,10 @@ import { defineStore } from 'pinia'
 import type { Coupon } from '../../domain/models'
 import type { CouponPayload, CouponUpdatePayload, CuponesRepository } from '../../infrastructure/adapters'
 import { CuponesApiAdapter } from '../../infrastructure/adapters'
+import {
+  getCouponCurrencyOptions,
+  type CouponCurrencyOption
+} from '../../infrastructure/adapters/coupon_currencies_api_adapter'
 import { CreateCouponUseCase, GetCouponsUseCase, UpdateCouponUseCase } from '../../application/use_cases'
 
 interface CouponFormInput {
@@ -17,6 +21,7 @@ interface CouponFormInput {
 
 interface CuponesState {
   coupons: Coupon[]
+  currencyOptions: CouponCurrencyOption[]
   isLoading: boolean
   error: string | null
   savingId: string | null
@@ -68,6 +73,7 @@ function normalizePayload(form: CouponFormInput): CouponPayload | null {
 export const useCuponesStore = defineStore('cupones', {
   state: (): CuponesState => ({
     coupons: [],
+    currencyOptions: [],
     isLoading: false,
     error: null,
     savingId: null
@@ -79,7 +85,12 @@ export const useCuponesStore = defineStore('cupones', {
       this.error = null
       try {
         const useCase = new GetCouponsUseCase(getRepository())
-        this.coupons = await useCase.execute()
+        const [coupons, currencyOptions] = await Promise.all([
+          useCase.execute(),
+          getCouponCurrencyOptions()
+        ])
+        this.coupons = coupons
+        this.currencyOptions = currencyOptions
       } catch (e) {
         this.error = e instanceof Error ? e.message : 'Error al cargar cupones'
       } finally {
