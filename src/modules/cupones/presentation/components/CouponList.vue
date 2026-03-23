@@ -17,10 +17,12 @@ const props = defineProps<{
   coupons: Coupon[]
   currencyOptions: Array<{ value: string; label: string }>
   savingId: string | null
+  deletingId?: string | null
 }>()
 
 const emit = defineEmits<{
   save: [id: string, payload: CouponFormModel]
+  delete: [coupon: Coupon]
 }>()
 
 const editingId = shallowRef<string | null>(null)
@@ -84,6 +86,10 @@ function cancelEditing(): void {
 function submitEdit(id: string): void {
   emit('save', id, { ...editingForm })
 }
+
+function emitDelete(coupon: Coupon): void {
+  emit('delete', coupon)
+}
 </script>
 
 <template>
@@ -133,14 +139,23 @@ function submitEdit(id: string): void {
             </p>
           </div>
 
-          <button
-            v-if="editingId !== coupon.id"
-            type="button"
-            class="rounded-xl border border-[#4A52D8]/30 bg-[#4A52D8]/10 px-4 py-2 text-sm font-medium text-[#3C4DA7] hover:bg-[#4A52D8]/20"
-            @click="startEditing(coupon)"
-          >
-            Editar
-          </button>
+          <div v-if="editingId !== coupon.id" class="flex items-center gap-2">
+            <button
+              type="button"
+              class="rounded-xl border border-[#4A52D8]/30 bg-[#4A52D8]/10 px-4 py-2 text-sm font-medium text-[#3C4DA7] hover:bg-[#4A52D8]/20"
+              @click="startEditing(coupon)"
+            >
+              Editar
+            </button>
+            <button
+              type="button"
+              class="rounded-xl border border-[#dc3545]/30 bg-[#dc3545]/10 px-4 py-2 text-sm font-medium text-[#dc3545] hover:bg-[#dc3545]/20 disabled:opacity-60"
+              :disabled="props.deletingId === coupon.id"
+              @click="emitDelete(coupon)"
+            >
+              {{ props.deletingId === coupon.id ? 'Eliminando...' : 'Eliminar' }}
+            </button>
+          </div>
         </div>
 
         <form

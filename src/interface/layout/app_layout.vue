@@ -25,8 +25,7 @@ const navItems = [
   { to: '/app/calculator?demo=1', label: 'Calculadora Demo', icon: 'demo' },
   { to: '/app/cuentas', label: 'Cuentas', icon: 'bank' },
   { to: '/app/comisiones', label: 'Comisiones', icon: 'folder' },
-  { to: '/app/tasas', label: 'Tasas', icon: 'exchange' },
-  { to: '/app/banner', label: 'Banner', icon: 'image' }
+  { to: '/app/tasas', label: 'Tasas', icon: 'exchange' }
 ]
 
 const settingsItem = { to: '/app/tasas', label: 'Configuración', icon: 'settings' }

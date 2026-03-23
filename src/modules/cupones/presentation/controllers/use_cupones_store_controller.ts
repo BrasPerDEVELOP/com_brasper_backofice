@@ -6,7 +6,12 @@ import {
   getCouponCurrencyOptions,
   type CouponCurrencyOption
 } from '../../infrastructure/adapters/coupon_currencies_api_adapter'
-import { CreateCouponUseCase, GetCouponsUseCase, UpdateCouponUseCase } from '../../application/use_cases'
+import {
+  CreateCouponUseCase,
+  DeleteCouponUseCase,
+  GetCouponsUseCase,
+  UpdateCouponUseCase
+} from '../../application/use_cases'
 
 interface CouponFormInput {
   code: string
@@ -25,6 +30,7 @@ interface CuponesState {
   isLoading: boolean
   error: string | null
   savingId: string | null
+  deletingId: string | null
 }
 
 function getRepository(): CuponesRepository {
@@ -76,7 +82,8 @@ export const useCuponesStore = defineStore('cupones', {
     currencyOptions: [],
     isLoading: false,
     error: null,
-    savingId: null
+    savingId: null,
+    deletingId: null
   }),
 
   actions: {
@@ -152,6 +159,20 @@ export const useCuponesStore = defineStore('cupones', {
 
       await this.updateCoupon({ id: current.id, ...payload })
       return !this.error
+    },
+
+    async deleteCoupon(id: string) {
+      this.deletingId = id
+      this.error = null
+      try {
+        const useCase = new DeleteCouponUseCase(getRepository())
+        await useCase.execute(id)
+        this.coupons = this.coupons.filter((coupon) => coupon.id !== id)
+      } catch (e) {
+        this.error = e instanceof Error ? e.message : 'Error al eliminar cupón'
+      } finally {
+        this.deletingId = null
+      }
     }
   }
 })

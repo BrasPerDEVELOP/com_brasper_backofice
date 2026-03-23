@@ -47,12 +47,14 @@ export const apiClient: AxiosInstance = axios.create({
   }
 })
 
-// Request: inyectar Bearer token
+// Request: inyectar token (Bearer o Token según backend)
+const AUTH_PREFIX = (import.meta.env.VITE_AUTH_HEADER_PREFIX as string)?.trim() || 'Bearer'
+
 apiClient.interceptors.request.use(
   (config) => {
     const token = getToken()
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`
+      config.headers.Authorization = `${AUTH_PREFIX} ${token}`
     }
     if (config.data instanceof FormData) {
       delete config.headers['Content-Type']
@@ -70,7 +72,7 @@ apiClient.interceptors.request.use(
   }
 )
 
-// Response: 401 → cerrar sesión; resto de errores → logging
+// Response: 401 → cerrar sesión (salvo si skipAuthRedirect)
 apiClient.interceptors.response.use(
   (response) => response,
   (err) => {

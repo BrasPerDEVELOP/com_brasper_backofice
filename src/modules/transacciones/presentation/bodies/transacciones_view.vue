@@ -46,6 +46,7 @@ const currentPage = ref(1)
 const fileInput = ref<HTMLInputElement | null>(null)
 const importFile = ref<File | null>(null)
 const deletingId = ref<string | null>(null)
+const updatingCheckedId = ref<string | null>(null)
 
 const statusOptions = computed(() => [
   { value: 'todos', label: 'Todos' },
@@ -93,6 +94,7 @@ const form = reactive<{
   tax_rate_id: string
   commission_id: string
   status: string
+  checked: boolean
   origin_amount: number
   destination_amount: number
   resultado_comision: number | null
@@ -109,6 +111,7 @@ const form = reactive<{
   tax_rate_id: '',
   commission_id: '',
   status: 'pending',
+  checked: false,
   origin_amount: 0,
   destination_amount: 0,
   resultado_comision: null,
@@ -268,6 +271,7 @@ function resetForm() {
   form.tax_rate_id = ''
   form.commission_id = ''
   form.status = 'pending'
+  form.checked = false
   form.origin_amount = 0
   form.destination_amount = 0
   form.resultado_comision = null
@@ -325,6 +329,7 @@ function openEditModal(t: Transaction) {
   form.tax_rate_id = t.tax_rate_id ?? ''
   form.commission_id = t.commission_id ?? ''
   form.status = (t.status ?? 'pending').toLowerCase()
+  form.checked = t.checked === true || (t.status ?? '').toLowerCase() === 'checked'
   form.origin_amount = Number(t.origin_amount) || 0
   form.destination_amount = Number(t.destination_amount) || 0
   form.resultado_comision = null
@@ -358,7 +363,7 @@ async function submitForm() {
 
     const code = form.code?.trim() || `TRX-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     const round2 = (n: number) => Math.round(n * 100) / 100
-    const payload = {
+    const basePayload = {
       bank_account_origin: form.bank_account_origin_id,
       bank_account_destination: form.bank_account_destination_id,
       user_id: form.user_id,
@@ -376,9 +381,9 @@ async function submitForm() {
       payment_voucher: paymentVoucher ?? undefined
     }
     if (editingId.value) {
-      await transactionsStore.updateTransaction(editingId.value, payload)
+      await transactionsStore.updateTransaction(editingId.value, { ...basePayload, checked: form.checked })
     } else {
-      await transactionsStore.createTransaction(payload)
+      await transactionsStore.createTransaction(basePayload)
     }
     showCreateModal.value = false
     resetForm()
@@ -400,6 +405,24 @@ async function handleDelete(t: Transaction) {
   } finally {
     deletingId.value = null
   }
+}
+
+async function toggleChecked(t: Transaction) {
+  if (!t.id || updatingCheckedId.value) return
+  const newChecked = !isChecked(t)
+  updatingCheckedId.value = t.id
+  transactionsStore.error = null
+  try {
+    await transactionsStore.updateTransaction(t.id, { checked: newChecked })
+  } catch {
+    // Error en store
+  } finally {
+    updatingCheckedId.value = null
+  }
+}
+
+function isChecked(t: Transaction): boolean {
+  return t.checked === true || (t.status ?? '').toLowerCase() === 'checked'
 }
 
 const selectedMenuTransaction = computed(() => {
@@ -429,7 +452,7 @@ function updateMenuPosition() {
 }
 
 const PREVIEW_FIELD_ORDER = [
-  'code', 'id', 'bank_account_origin_id', 'bank_account_destination_id', 'user_id',
+  'code', 'id', 'checked', 'bank_account_origin_id', 'bank_account_destination_id', 'user_id',
   'tax_rate_id', 'commission_id', 'status', 'origin_amount', 'destination_amount',
   'commission_result', 'resultado_comision', 'total_to_send', 'total_a_enviar', 'coupon_id',
   'send_date', 'payment_date', 'created_at', 'created_by', 'updated_at'
@@ -465,6 +488,7 @@ const previewDisplayEntries = computed(() => {
 const PREVIEW_FIELD_LABELS: Record<string, string> = {
   id: 'ID',
   code: 'Código',
+  checked: 'Verificada',
   bank_account_origin_id: 'Cuenta origen',
   bank_account_destination_id: 'Cuenta destino',
   user_id: 'Cliente',
@@ -505,6 +529,7 @@ function closePreviewModal() {
 
 function formatPreviewValue(key: string, value: unknown): string {
   if (value == null || value === '') return '-'
+  if (key === 'checked') return value === true || value === 'true' ? 'Sí' : 'No'
   if (key === 'bank_account_origin_id' || key === 'bank_account_destination_id') {
     return getBankAccountLabel(value as string)
   }
@@ -811,6 +836,9 @@ onMounted(() => {
       <table v-show="!transactionsStore.isLoading" class="w-full min-w-[800px] text-left text-sm">
         <thead>
           <tr class="bg-[#dbeafe]">
+            <th class="w-10 px-2 py-3" title="Verificada">
+              <span class="sr-only">Verificada</span>
+            </th>
             <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">Código</th>
             <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">Cuenta de origen</th>
             <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">Cuenta destino</th>
@@ -828,7 +856,7 @@ onMounted(() => {
             class="border-t border-[#e5e7eb]"
           >
             <td
-              colspan="9"
+              colspan="10"
               class="rounded-xl border border-[#dbe7fb] bg-[#fbfdff] px-6 py-12 text-center text-[#666]"
             >
               No hay transacciones. Importa un archivo Excel o crea una nueva.
@@ -839,6 +867,24 @@ onMounted(() => {
             :key="t.id ?? ''"
             class="border-t border-[#e5e7eb] bg-white transition hover:bg-[#f9fafb]"
           >
+            <td class="px-2 py-3">
+              <button
+                type="button"
+                class="flex h-6 w-6 items-center justify-center rounded border transition"
+                :class="
+                  isChecked(t)
+                    ? 'border-[#10b981] bg-[#10b981] text-white'
+                    : 'border-[#d1d5db] bg-white text-transparent hover:border-[#9ca3af]'
+                "
+                :disabled="updatingCheckedId === t.id"
+                :title="isChecked(t) ? 'Verificada (clic para desmarcar)' : 'Marcar como verificada'"
+                @click.stop="toggleChecked(t)"
+              >
+                <svg v-if="isChecked(t)" class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                </svg>
+              </button>
+            </td>
             <td class="px-4 py-3 font-medium text-[#374151]">{{ t.code ?? '-' }}</td>
             <td class="max-w-[180px] truncate px-4 py-3 text-[#374151]" :title="getBankAccountLabel(t.bank_account_origin_id)">
               {{ getBankAccountLabel(t.bank_account_origin_id) }}
@@ -856,8 +902,9 @@ onMounted(() => {
                   'bg-amber-100 text-amber-800': (t.status ?? '').toLowerCase() === 'pending',
                   'bg-green-100 text-green-800': (t.status ?? '').toLowerCase() === 'completed',
                   'bg-red-100 text-red-800': (t.status ?? '').toLowerCase() === 'failed',
+                  'bg-teal-100 text-teal-800': (t.status ?? '').toLowerCase() === 'checked',
                   'bg-gray-100 text-gray-800': (t.status ?? '').toLowerCase() === 'cancelled',
-                  'bg-[#dbeafe] text-[#1d4ed8]': !['pending', 'completed', 'failed', 'cancelled'].includes((t.status ?? '').toLowerCase())
+                  'bg-[#dbeafe] text-[#1d4ed8]': !['pending', 'completed', 'failed', 'checked', 'cancelled'].includes((t.status ?? '').toLowerCase())
                 }"
               >
                 {{ getStatusLabel(t.status) }}
@@ -1172,6 +1219,17 @@ onMounted(() => {
                     placeholder="Pendiente"
                     :searchable="false"
                   />
+                </div>
+                <div class="space-y-1.5" v-if="editingId">
+                  <label class="flex cursor-pointer items-center gap-2">
+                    <input
+                      v-model="form.checked"
+                      type="checkbox"
+                      class="h-4 w-4 rounded border-[#d1d5db] text-[#10b981] focus:ring-[#10b981]"
+                    />
+                    <span class="text-sm font-medium text-[#374151]">Verificada</span>
+                  </label>
+                  <p class="text-xs text-[#6b7280]">Si marcado, el backend asigna estado "Verificada"</p>
                 </div>
                 <div class="space-y-1.5">
                   <label class="block text-sm font-medium text-[#374151]">Tasa</label>

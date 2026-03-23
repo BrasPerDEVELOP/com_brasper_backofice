@@ -5,7 +5,7 @@ export interface LoginResponse {
   token: string
 }
 
-/** Payload para PUT /user/ (FormData). profile_image puede ser File para subir nueva imagen. */
+/** Payload para PUT /user/ (FormData). id requerido; resto opcionales. profile_image puede ser File para subir nueva imagen. */
 export interface UpdateProfilePayload {
   id: string
   names?: string

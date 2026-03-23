@@ -18,9 +18,14 @@ export interface CreateTransactionPayload {
   payment_voucher?: string | File | null
   /** UUID o null. No enviar "automatic" - el API espera UUID válido. */
   coupon_id?: string | null
+  /** Si true, el backend asigna status: "checked" automáticamente. */
+  checked?: boolean
 }
 
-export interface UpdateTransactionPayload extends Partial<CreateTransactionPayload> {}
+export interface UpdateTransactionPayload extends Partial<CreateTransactionPayload> {
+  /** Si true, el backend asigna status: "checked" automáticamente. */
+  checked?: boolean
+}
 
 export interface GetTransactionsParams {
   status?: string | null

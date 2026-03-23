@@ -37,7 +37,8 @@ function parseTransaction(item: unknown): Transaction {
     payment_voucher: o.payment_voucher != null ? String(o.payment_voucher) : undefined,
     created_at: o.created_at != null ? String(o.created_at) : undefined,
     created_by: o.created_by != null ? String(o.created_by) : undefined,
-    updated_at: o.updated_at != null ? String(o.updated_at) : undefined
+    updated_at: o.updated_at != null ? String(o.updated_at) : undefined,
+    checked: o.checked === true || o.checked === 'true'
   }
 }
 
@@ -120,6 +121,7 @@ export class TransactionsApiAdapter implements TransactionsRepository {
       formData.append('payment_voucher', payload.payment_voucher)
     else if (typeof payload.payment_voucher === 'string' && payload.payment_voucher)
       formData.append('payment_voucher', payload.payment_voucher)
+    if (payload.checked === true) formData.append('checked', 'true')
 
     const response = await apiClient.post<unknown>(url, formData)
     const raw = response.data
@@ -129,8 +131,10 @@ export class TransactionsApiAdapter implements TransactionsRepository {
   }
 
   async updateTransaction(id: string, payload: UpdateTransactionPayload): Promise<Transaction> {
-    const url = this.endpoint(`${id}/`)
-    const response = await apiClient.put<unknown>(url, payload)
+    // Backend espera PUT /transactions/ con id en el body (no PUT /transactions/{id}/)
+    const url = this.endpoint('')
+    const body = { id, ...payload }
+    const response = await apiClient.put<unknown>(url, body)
     const raw = response.data
     const obj = raw != null && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
     const item = (obj.data ?? obj) as Record<string, unknown>

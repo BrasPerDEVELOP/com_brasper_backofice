@@ -19,4 +19,5 @@ export interface CuponesRepository {
   getCoupons(): Promise<Coupon[]>
   createCoupon(payload: CouponPayload): Promise<Coupon>
   updateCoupon(payload: CouponUpdatePayload): Promise<Coupon>
+  deleteCoupon(id: string): Promise<void>
 }

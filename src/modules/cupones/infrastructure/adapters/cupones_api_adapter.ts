@@ -67,4 +67,8 @@ export class CuponesApiAdapter implements CuponesRepository {
     const response = await apiClient.put<unknown>(this.endpoint(), payload)
     return parseCoupon(response.data)
   }
+
+  async deleteCoupon(id: string): Promise<void> {
+    await apiClient.delete(this.endpoint(`${id}/`))
+  }
 }

@@ -27,6 +27,11 @@ async function handleUpdate(id: string, payload: CouponFormModel): Promise<void>
   await cuponesStore.validateAndUpdateCoupon(id, payload)
 }
 
+async function handleDelete(coupon: { id: string; code: string }): Promise<void> {
+  if (!window.confirm(`¿Eliminar el cupón "${coupon.code}"? Esta acción no se puede deshacer.`)) return
+  await cuponesStore.deleteCoupon(coupon.id)
+}
+
 onMounted(() => {
   cuponesStore.loadCoupons()
 })
@@ -68,7 +73,9 @@ onMounted(() => {
         :coupons="cuponesStore.coupons"
         :currency-options="cuponesStore.currencyOptions"
         :saving-id="cuponesStore.savingId"
+        :deleting-id="cuponesStore.deletingId"
         @save="handleUpdate"
+        @delete="handleDelete"
       />
     </template>
   </div>

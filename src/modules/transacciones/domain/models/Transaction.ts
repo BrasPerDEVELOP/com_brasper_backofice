@@ -15,6 +15,7 @@ export interface Transaction {
   payment_date?: string
   send_voucher?: string
   payment_voucher?: string
+  checked?: boolean
   created_at?: string
   created_by?: string
   updated_at?: string
@@ -22,12 +23,13 @@ export interface Transaction {
   [key: string]: unknown
 }
 
-export const TRANSACTION_STATUSES = ['pending', 'completed', 'failed', 'cancelled'] as const
+export const TRANSACTION_STATUSES = ['pending', 'completed', 'failed', 'checked', 'cancelled'] as const
 export type TransactionStatus = (typeof TRANSACTION_STATUSES)[number]
 
 export const TRANSACTION_STATUS_LABELS: Record<TransactionStatus, string> = {
   pending: 'Pendiente',
   completed: 'Completado',
   failed: 'Fallido',
+  checked: 'Verificada',
   cancelled: 'Cancelado'
 }
