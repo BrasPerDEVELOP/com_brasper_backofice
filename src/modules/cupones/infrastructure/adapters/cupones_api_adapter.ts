@@ -69,6 +69,6 @@ export class CuponesApiAdapter implements CuponesRepository {
   }
 
   async deleteCoupon(id: string): Promise<void> {
-    await apiClient.delete(this.endpoint(`${id}/`))
+    await apiClient.delete(this.endpoint(id))
   }
 }

@@ -44,7 +44,7 @@ export class TasasApiAdapter implements TasasRepository {
   }
 
   async getTaxRates(): Promise<TaxRate[]> {
-    const url = this.endpoint('tax-rate/')
+    const url = this.endpoint('tax-rate')
     const response = await apiClient.get<unknown>(url)
     const data = Array.isArray(response.data) ? response.data : []
     return parseTaxRates(data)
@@ -54,7 +54,7 @@ export class TasasApiAdapter implements TasasRepository {
     id: string,
     payload: { coin_a: string; coin_b: string; tax: string }
   ): Promise<TaxRate> {
-    const url = this.endpoint('tax-rate/')
+    const url = this.endpoint('tax-rate')
     const body = { ...payload, id }
     try {
       const response = await apiClient.put<unknown>(url, body)
@@ -73,7 +73,7 @@ export class TasasApiAdapter implements TasasRepository {
   }
 
   async deleteTaxRate(id: string): Promise<void> {
-    const url = this.endpoint(`tax-rate/${id}/`)
+    const url = this.endpoint(`tax-rate/${id}`)
     await apiClient.delete(url)
   }
 
@@ -82,7 +82,7 @@ export class TasasApiAdapter implements TasasRepository {
     coin_b: string
     tax: string
   }): Promise<TaxRate> {
-    const url = this.endpoint('tax-rate/')
+    const url = this.endpoint('tax-rate')
     try {
       const response = await apiClient.post<unknown>(url, payload)
       return parseTaxRate(

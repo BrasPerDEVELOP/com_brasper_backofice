@@ -50,7 +50,7 @@ export class ComisionesApiAdapter implements ComisionesRepository {
   }
 
   async getCommissions(): Promise<Commission[]> {
-    const url = this.endpoint('commission/')
+    const url = this.endpoint('commission')
     const response = await apiClient.get<unknown>(url)
     const data = Array.isArray(response.data) ? response.data : []
     return parseCommissions(data)
@@ -64,7 +64,7 @@ export class ComisionesApiAdapter implements ComisionesRepository {
     min_amount: string
     max_amount: string
   }): Promise<Commission> {
-    const url = this.endpoint('commission/')
+    const url = this.endpoint('commission')
     const response = await apiClient.post<unknown>(url, payload)
     return parseCommission(
       response.data != null && typeof response.data === 'object'
@@ -80,7 +80,7 @@ export class ComisionesApiAdapter implements ComisionesRepository {
     id: string,
     body: import('./comisiones_repository').CommissionUpdateBody
   ): Promise<Commission> {
-    const url = this.endpoint('commission/')
+    const url = this.endpoint('commission')
     const requestBody: import('./comisiones_repository').CommissionUpdateBody = { ...body }
     requestBody.id = id
     const response = await apiClient.put<unknown>(url, requestBody)
@@ -92,7 +92,7 @@ export class ComisionesApiAdapter implements ComisionesRepository {
   }
 
   async deleteCommission(id: string): Promise<void> {
-    const url = this.endpoint(`commission/${id}/`)
+    const url = this.endpoint(`commission/${id}`)
     await apiClient.delete(url)
   }
 
