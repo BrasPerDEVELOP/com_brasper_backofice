@@ -1,261 +1,45 @@
 <template>
-  <div class="mx-auto max-w-xl px-2 py-4 lg:py-6">
-    <div class="mb-4 text-center">
-      <div class="flex items-center justify-center gap-2">
-        <h1 class="text-xl font-semibold text-[#232b4d] md:text-2xl">
-          Envía dinero al extranjero
-        </h1>
-        <span
-          v-if="isDemo"
-          class="rounded-full bg-brasper-cyanLight/90 px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-brasper-indigoDark"
+  <div class="mx-auto max-w-6xl px-3 pb-8 md:px-4">
+    <div
+      class="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:items-start lg:gap-6 xl:gap-8"
+    >
+      <div id="calculator-produccion" class="min-w-0 space-y-5 scroll-mt-4">
+        <p
+          class="text-center text-[10px] font-semibold uppercase tracking-[0.22em] text-brasper-indigoStrong"
         >
-          Demo
-        </span>
-      </div>
-      <p class="mt-1.5 text-xs text-[#666] md:text-sm">
-        Transferencias internacionales rápidas, seguras y transparentes.
-      </p>
-    </div>
-
-    <div class="rounded-2xl border border-[#d8e5fb] bg-white px-4 py-5 shadow-lg md:px-6 md:py-6">
-      <div
-        v-if="calculatorStore.error"
-        class="mb-4 rounded-xl bg-[#dc3545]/10 px-4 py-2 text-center text-xs font-medium text-[#dc3545]"
-      >
-        {{ calculatorStore.error }}
+          Producción
+        </p>
+        <CalculatorConversionCard variant="production" />
+        <TasasView compact />
       </div>
 
-      <div v-if="calculatorStore.isLoading" class="py-8 text-center text-sm text-[#666]">
-        Cargando tasas y comisiones...
+      <div id="calculator-demo" class="min-w-0 space-y-5 scroll-mt-4">
+        <p
+          class="text-center text-[10px] font-semibold uppercase tracking-[0.22em] text-brasper-cyanLight"
+        >
+          Demo (trial)
+        </p>
+        <CalculatorConversionCard variant="demo" />
+        <TasasDemoCompact />
       </div>
-
-      <template v-else>
-        <div class="space-y-4">
-          <div class="rounded-xl border border-[#dbe7fb] bg-[#f9fbff] px-4 py-3 shadow-inner">
-            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p class="text-xs font-semibold uppercase tracking-[0.25em] text-brasper-indigoStrong">
-                Tú envías
-              </p>
-              <span class="text-right text-[11px] font-medium uppercase tracking-[0.2em] text-[#666]">
-                {{ CURRENCY_LABELS[calculatorStore.currencyFrom] }}
-              </span>
-            </div>
-            <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-              <input
-                v-model.number="amountSendLocal"
-                type="number"
-                min="0"
-                step="0.01"
-                inputmode="decimal"
-                placeholder="0.00"
-                class="w-full flex-1 appearance-none rounded-xl border border-[#d0def6] bg-white px-4 py-2.5 text-lg font-semibold text-[#232b4d] shadow-sm outline-none transition focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/30"
-                @input="onAmountSendInput"
-              />
-              <div class="w-full sm:w-auto">
-                <AppDropdown
-                  v-model="currencyFrom"
-                  :options="currencyFromOptions"
-                  placeholder="PEN"
-                  :searchable="false"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div class="rounded-xl border border-[#dbe7fb] bg-[#f9fbff] px-4 py-3 shadow-inner">
-            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p class="text-xs font-semibold uppercase tracking-[0.25em] text-brasper-indigoStrong">
-                El destinatario recibe
-              </p>
-              <span class="text-right text-[11px] font-medium uppercase tracking-[0.2em] text-[#666]">
-                {{ CURRENCY_LABELS[calculatorStore.currencyTo] }}
-              </span>
-            </div>
-            <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-              <input
-                v-model.number="amountReceiveLocal"
-                type="number"
-                min="0"
-                step="0.01"
-                inputmode="decimal"
-                placeholder="0.00"
-                class="w-full flex-1 appearance-none rounded-xl border border-[#d0def6] bg-white px-4 py-2.5 text-lg font-semibold text-[#232b4d] shadow-sm outline-none transition focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/30"
-                @input="onAmountReceiveInput"
-              />
-              <div class="w-full sm:w-auto">
-                <AppDropdown
-                  v-model="currencyTo"
-                  :options="currencyToOptions"
-                  placeholder="USD"
-                  :searchable="false"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div
-            v-if="calculatorStore.result"
-            class="space-y-3 rounded-xl border border-[#dbe7fb] bg-white px-4 py-3 shadow-sm"
-          >
-            <div class="flex items-center justify-between text-xs text-[#666]">
-              <span class="font-medium text-[#555]">Comisión</span>
-              <span class="text-sm font-semibold text-brasper-indigoStrong">
-                {{ formatCurrency(calculatorStore.result.commission, calculatorStore.currencyFrom) }}
-              </span>
-            </div>
-            <div class="flex items-center justify-between text-xs text-[#666]">
-              <span class="font-medium text-[#555]">Tipo de cambio</span>
-              <span class="text-sm font-semibold text-[#232b4d]">
-                1 {{ calculatorStore.currencyFrom.toUpperCase() }} = {{ formatRate(calculatorStore.result.rate) }}
-                {{ calculatorStore.currencyTo.toUpperCase() }}
-              </span>
-            </div>
-            <div class="flex items-center justify-between text-xs text-[#666]">
-              <span class="font-medium text-[#555]">Total a pagar</span>
-              <span class="text-sm font-semibold text-brasper-indigoStrong">
-                {{ formatCurrency(calculatorStore.result.totalToSend, calculatorStore.currencyFrom) }}
-              </span>
-            </div>
-            <div class="rounded-xl bg-[#f3f8ff] px-4 py-3 shadow-inner">
-              <div class="flex items-center justify-between text-xs text-[#666]">
-                <span>El destinatario recibe</span>
-                <span class="text-sm font-semibold text-[#232b4d]">
-                  {{ formatCurrency(calculatorStore.result.amountReceive, calculatorStore.currencyTo) }}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            class="flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-brasper-cyanLight via-brasper-cyan to-brasper-indigoStrong px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-white shadow-md shadow-brasper-indigoStrong/25 transition hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-brasper-cyan/30"
-          >
-            Enviar dinero ahora
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              class="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14m-6-6 6 6-6 6" />
-            </svg>
-          </button>
-
-          <p class="text-center text-[10px] uppercase tracking-[0.2em] text-[#666]">
-            Garantizamos la tasa durante los próximos 15 minutos
-          </p>
-
-          <div class="flex flex-wrap items-center justify-center gap-3 text-[10px] font-medium uppercase tracking-[0.2em] text-brasper-indigoStrong/70">
-            <span>Transacción Segura</span>
-            <span>SSL</span>
-            <span>Regulación FCA</span>
-          </div>
-        </div>
-      </template>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, computed } from 'vue'
+import { onMounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import { useCalculatorStore } from '../controllers/use_calculator_store_controller'
-import { CURRENCY_CODES, CURRENCY_LABELS, type CurrencyCode } from '../../domain/models'
-import AppDropdown from '@/interface/components/AppDropdown.vue'
+import CalculatorConversionCard from '../components/CalculatorConversionCard.vue'
+import TasasView from '@modules/tasas/presentation/bodies/tasas_view.vue'
+import TasasDemoCompact from '@modules/tasas/presentation/components/tasas_demo_compact.vue'
 
 const route = useRoute()
-const calculatorStore = useCalculatorStore()
-
-const isDemo = computed(() => route.query.demo === '1' || route.path.includes('calculator-demo'))
-
-const currencyFromOptions = computed(() =>
-  CURRENCY_CODES.map((code) => ({ value: code, label: code.toUpperCase() }))
-)
-const currencyToOptions = computed(() =>
-  calculatorStore.destinationOptions.map((code) => ({ value: code, label: code.toUpperCase() }))
-)
-const currencyFrom = computed({
-  get: () => calculatorStore.currencyFrom,
-  set: (v: CurrencyCode) => calculatorStore.setCurrencyFrom(v)
-})
-const currencyTo = computed({
-  get: () => calculatorStore.currencyTo,
-  set: (v: CurrencyCode) => calculatorStore.setCurrencyTo(v)
-})
-
-const amountSendLocal = ref(0)
-const amountReceiveLocal = ref(0)
-
-function normalizeTwoDecimals(value: number): number {
-  if (!Number.isFinite(value)) return 0
-  return Math.round(value * 100) / 100
-}
-
-watch(
-  () => calculatorStore.amountSend,
-  (v: number) => { amountSendLocal.value = normalizeTwoDecimals(v) },
-  { immediate: true }
-)
-watch(
-  () => calculatorStore.amountReceive,
-  (v: number) => { amountReceiveLocal.value = normalizeTwoDecimals(v) },
-  { immediate: true }
-)
-
-function onAmountSendInput() {
-  const normalized = normalizeTwoDecimals(amountSendLocal.value || 0)
-  amountSendLocal.value = normalized
-  calculatorStore.setAmountSend(normalized)
-  calculatorStore.recalcFromSend()
-  amountReceiveLocal.value = normalizeTwoDecimals(calculatorStore.amountReceive)
-}
-
-function onAmountReceiveInput() {
-  const normalized = normalizeTwoDecimals(amountReceiveLocal.value || 0)
-  amountReceiveLocal.value = normalized
-  calculatorStore.setAmountReceive(normalized)
-  calculatorStore.recalcFromReceive()
-  amountSendLocal.value = normalizeTwoDecimals(calculatorStore.amountSend)
-}
-
-const currencyLocales: Record<CurrencyCode, string> = {
-  pen: 'es-PE',
-  usd: 'en-US',
-  brl: 'pt-BR'
-}
-
-function formatCurrency(value: number, currency: CurrencyCode): string {
-  const amount = Number.isFinite(value) ? value : 0
-  const formatter = new Intl.NumberFormat(currencyLocales[currency], {
-    style: 'currency',
-    currency: currency.toUpperCase(),
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  })
-  return formatter.format(amount)
-}
-
-function formatRate(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return '—'
-  return value.toFixed(2)
-}
 
 onMounted(() => {
-  calculatorStore.setDemoMode(isDemo.value)
-  calculatorStore.loadData()
-})
-
-// Al cambiar de ruta o query (calculadora ↔ demo) recargar con el modo correcto
-watch(
-  () => [route.path, route.query.demo] as const,
-  ([path, demoQuery]) => {
-    const demo = demoQuery === '1' || path.includes('calculator-demo')
-    if (calculatorStore.demoMode !== demo) {
-      calculatorStore.setDemoMode(demo)
-      calculatorStore.loadData()
+  nextTick(() => {
+    if (route.hash === '#calculator-demo') {
+      document.getElementById('calculator-demo')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
-  }
-)
+  })
+})
 </script>

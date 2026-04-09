@@ -15,13 +15,16 @@ interface TasasState {
   isLoading: boolean
   error: string | null
   savingId: string | null
+  savingTrialId: string | null
   deletingId: string | null
   loadingHistoryId: string | null
+  loadingHistoryTrialId: string | null
   historyByTaxRateId: Record<string, TaxRateHistoryEntry[]>
+  historyTrialByTaxRateId: Record<string, TaxRateHistoryEntry[]>
 }
 
-function getRepository(): TasasRepository {
-  return new TasasApiAdapter()
+function getRepository(trial = false): TasasRepository {
+  return new TasasApiAdapter(trial)
 }
 
 export const useTasasStore = defineStore('tasas', {
@@ -30,9 +33,12 @@ export const useTasasStore = defineStore('tasas', {
     isLoading: false,
     error: null,
     savingId: null,
+    savingTrialId: null,
     deletingId: null,
     loadingHistoryId: null,
-    historyByTaxRateId: {}
+    loadingHistoryTrialId: null,
+    historyByTaxRateId: {},
+    historyTrialByTaxRateId: {}
   }),
 
   actions: {
@@ -40,7 +46,7 @@ export const useTasasStore = defineStore('tasas', {
       this.isLoading = true
       this.error = null
       try {
-        const repo = getRepository()
+        const repo = getRepository(false)
         const useCase = new GetTaxRatesUseCase(repo)
         this.taxRates = await useCase.execute()
       } catch (e) {
@@ -57,7 +63,7 @@ export const useTasasStore = defineStore('tasas', {
       this.savingId = id
       this.error = null
       try {
-        const repo = getRepository()
+        const repo = getRepository(false)
         const useCase = new UpdateTaxRateUseCase(repo)
         const updated = await useCase.execute(id, payload)
         const idx = this.taxRates.findIndex((r) => r.id === id)
@@ -77,7 +83,7 @@ export const useTasasStore = defineStore('tasas', {
       this.savingId = 'new'
       this.error = null
       try {
-        const repo = getRepository()
+        const repo = getRepository(false)
         const useCase = new CreateTaxRateUseCase(repo)
         const created = await useCase.execute(payload)
         this.taxRates.push(created)
@@ -92,7 +98,7 @@ export const useTasasStore = defineStore('tasas', {
       this.deletingId = id
       this.error = null
       try {
-        const repo = getRepository()
+        const repo = getRepository(false)
         const useCase = new DeleteTaxRateUseCase(repo)
         await useCase.execute(id)
         this.taxRates = this.taxRates.filter((rate) => rate.id !== id)
@@ -108,7 +114,7 @@ export const useTasasStore = defineStore('tasas', {
       this.loadingHistoryId = id
       this.error = null
       try {
-        const repo = getRepository()
+        const repo = getRepository(false)
         const useCase = new GetTaxRateHistoryUseCase(repo)
         const history = await useCase.execute(id)
         this.historyByTaxRateId = {
@@ -142,6 +148,54 @@ export const useTasasStore = defineStore('tasas', {
         coin_b: coinB,
         tax: String(taxValue)
       })
+      return !this.error
+    },
+
+    async loadTaxRateHistoryTrial(id: string, force = false) {
+      if (!force && this.historyTrialByTaxRateId[id]) return
+      this.loadingHistoryTrialId = id
+      this.error = null
+      try {
+        const repo = getRepository(true)
+        const useCase = new GetTaxRateHistoryUseCase(repo)
+        const history = await useCase.execute(id)
+        this.historyTrialByTaxRateId = {
+          ...this.historyTrialByTaxRateId,
+          [id]: history
+        }
+      } catch (e) {
+        this.error = e instanceof Error ? e.message : 'Error al cargar historial de tasa (demo)'
+      } finally {
+        this.loadingHistoryTrialId = null
+      }
+    },
+
+    async validateAndUpdateTaxRateTrial(
+      id: string,
+      taxValue: number,
+      coinA: string,
+      coinB: string
+    ): Promise<boolean> {
+      if (Number.isNaN(taxValue) || taxValue <= 0) {
+        this.error = 'Ingresa una tasa válida mayor a 0.'
+        return false
+      }
+      this.savingTrialId = id
+      this.error = null
+      try {
+        const repo = getRepository(true)
+        const useCase = new UpdateTaxRateUseCase(repo)
+        await useCase.execute(id, {
+          coin_a: coinA,
+          coin_b: coinB,
+          tax: String(taxValue)
+        })
+      } catch (e) {
+        this.error = e instanceof Error ? e.message : 'Error al guardar tasa (demo)'
+        return false
+      } finally {
+        this.savingTrialId = null
+      }
       return !this.error
     }
   }

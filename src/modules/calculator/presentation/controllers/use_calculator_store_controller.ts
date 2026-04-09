@@ -1,9 +1,83 @@
+// @ts-nocheck — defineStore + factory: TS no infiere `this` en getters/actions del objeto devuelto.
 import { defineStore } from 'pinia'
 import type { CurrencyCode, ExchangeRate, CommissionRange, CalculatorResult } from '../../domain/models'
 import type { CurrencyReadDTO } from '../../infrastructure/adapters/calculator_repository'
 import { getCurrencyPairKey, CURRENCY_OPTIONS } from '../../domain/models'
 import { LoadCalculatorDataUseCase } from '../../application/use_cases'
 import { CalculatorApiAdapter } from '../../infrastructure/adapters'
+
+/** Tramo de comisión según monto bruto enviado (origen). */
+function pickCommissionBracket(
+  grossSend: number,
+  pairCommissions: CommissionRange[]
+): CommissionRange | null {
+  if (pairCommissions.length === 0) return null
+  const match = pairCommissions.find(
+    (c) => grossSend >= c.min_amount && grossSend <= c.max_amount
+  )
+  return match ?? pairCommissions[pairCommissions.length - 1]!
+}
+
+/**
+ * Monto bruto en origen si el usuario indicó cuánto recibe el destinatario.
+ * neto_origen = recibe / tasa; bruto * (1 - p) = neto_origen → bruto = neto / (1-p).
+ * Si hay varios tramos, se prueba cada uno y se elige el que cuadra con `receive`.
+ */
+function resolveGrossFromReceive(
+  receive: number,
+  rate: number,
+  pairCommissions: CommissionRange[]
+): number {
+  const net = receive / rate
+  if (pairCommissions.length === 0 || net <= 0) return net
+
+  const candidates: number[] = []
+  for (const c of pairCommissions) {
+    const p = c.percentage / 100
+    if (p >= 1) continue
+    const S = net / (1 - p)
+    if (S + 1e-9 >= c.min_amount && S - 1e-9 <= c.max_amount) {
+      candidates.push(S)
+    }
+  }
+
+  if (candidates.length > 0) {
+    let best = candidates[0]!
+    let bestErr = Infinity
+    for (const S of candidates) {
+      const def = pickCommissionBracket(S, pairCommissions)
+      const p = (def?.percentage ?? 0) / 100
+      const recv = (S - S * p) * rate
+      const err = Math.abs(recv - receive)
+      if (err < bestErr) {
+        bestErr = err
+        best = S
+      }
+    }
+    return best
+  }
+
+  const p0 = pairCommissions[pairCommissions.length - 1]!.percentage / 100
+  let gross = net / (1 - Math.min(Math.max(p0, 0), 0.999999))
+  for (let i = 0; i < 25; i++) {
+    const def = pickCommissionBracket(gross, pairCommissions)
+    const p = (def?.percentage ?? 0) / 100
+    if (p >= 1) break
+    const next = net / (1 - p)
+    if (Math.abs(next - gross) < 1e-10) return next
+    gross = next
+  }
+  return gross
+}
+
+function rateForPair(
+  taxRates: ExchangeRate[],
+  from: CurrencyCode,
+  to: CurrencyCode
+): number {
+  const row = taxRates.find((r) => r.from === from && r.to === to)
+  return row?.rate ?? 0
+}
 
 interface CalculatorState {
   /** Si true, modo demo: URLs con sufijo -trial (coin/tax-rate-trial, coin/currencies-trial, etc.) sin /demo en la ruta. */
@@ -25,9 +99,11 @@ interface CalculatorState {
 const DEFAULT_FROM: CurrencyCode = 'pen'
 const DEFAULT_TO: CurrencyCode = 'brl'
 
-export const useCalculatorStore = defineStore('calculator', {
+/** Si `lockTrial`, siempre API `-trial` (store aislado para calculadora demo en la misma página que producción). */
+function buildCalculatorStoreDefinition(lockTrial: boolean) {
+  return {
   state: (): CalculatorState => ({
-    demoMode: false,
+    demoMode: lockTrial,
     currencies: [],
     currencyFrom: DEFAULT_FROM,
     currencyTo: DEFAULT_TO,
@@ -60,54 +136,76 @@ export const useCalculatorStore = defineStore('calculator', {
       )
     },
 
-    /** Comisión cuyo rango contiene el monto actual (o null si no hay match). */
+    /** Tramo de comisión según monto bruto (origen), también si el usuario editó “recibe”. */
     currentCommission(state): CommissionRange | null {
       const pairCommissions = this.commissionsForPair
-      const amount = state.amountSend || state.amountReceive
-      if (amount <= 0) return pairCommissions[0] ?? null
-      const match = pairCommissions.find(
-        (c) => amount >= c.min_amount && amount <= c.max_amount
-      )
-      return match ?? pairCommissions[pairCommissions.length - 1] ?? null
+      if (pairCommissions.length === 0) return null
+
+      const rate = rateForPair(state.taxRates, state.currencyFrom, state.currencyTo)
+      let gross = 0
+      if (state.amountSend > 0) {
+        gross = state.amountSend
+      } else if (state.amountReceive > 0 && rate > 0) {
+        gross = resolveGrossFromReceive(state.amountReceive, rate, pairCommissions)
+      } else {
+        return pairCommissions[0] ?? null
+      }
+
+      return pickCommissionBracket(gross, pairCommissions)
     },
 
-    /** Porcentaje de comisión aplicable al monto (respeta min_amount/max_amount). */
-    currentCommissionPercentage(state): number {
+    /** Porcentaje del tramo actual (alineado con `result`). */
+    currentCommissionPercentage(): number {
       const c = this.currentCommission
-      if (!c) return 0
-      const amount = state.amountSend || state.amountReceive
-      if (amount <= 0) return 0
-      if (amount < c.min_amount || amount > c.max_amount) return 0
-      return c.percentage
+      return c ? c.percentage : 0
     },
 
-    /** Resultado calculado: destination = (origin - commission) * tax. */
+    /**
+     * Enviás `amountSend` (bruto origen): comisión sobre bruto, convierte el neto a destino.
+     * O indicás `amountReceive`: se infiere el bruto con neto = recibe/tasa y bruto = neto/(1-p).
+     */
     result(state): CalculatorResult | null {
-      const rate = state.taxRates.find(
-        (r) => r.from === state.currencyFrom && r.to === state.currencyTo
-      )?.rate
+      const rate = rateForPair(state.taxRates, state.currencyFrom, state.currencyTo)
       if (!rate || rate <= 0) return null
       const pairCommissions = this.commissionsForPair
-      const amount =
-        state.amountSend > 0 ? state.amountSend : state.amountReceive > 0 ? state.amountReceive / rate : 0
-      if (amount <= 0) return null
-      const commissionDef = pairCommissions.find(
-        (c) => amount >= c.min_amount && amount <= c.max_amount
-      ) ?? pairCommissions[pairCommissions.length - 1]
-      const commissionRate = commissionDef ? commissionDef.percentage / 100 : 0
-      const commission = amount * commissionRate
-      const totalToSend = amount - commission
-      const amountReceive = totalToSend * rate
-      const couponDiscount = 0
-      return {
-        amountSend: amount,
-        amountReceive,
-        rate,
-        commission,
-        commissionRate: commissionRate * 100,
-        totalToSend,
-        couponDiscount
+
+      if (state.amountSend > 0) {
+        const gross = state.amountSend
+        const commissionDef = pickCommissionBracket(gross, pairCommissions)
+        const p = commissionDef ? commissionDef.percentage / 100 : 0
+        const commission = gross * p
+        const totalToSend = gross - commission
+        const amountReceive = totalToSend * rate
+        return {
+          amountSend: gross,
+          amountReceive,
+          rate,
+          commission,
+          commissionRate: p * 100,
+          totalToSend,
+          couponDiscount: 0
+        }
       }
+
+      if (state.amountReceive > 0) {
+        const receive = state.amountReceive
+        const gross = resolveGrossFromReceive(receive, rate, pairCommissions)
+        const commissionDef = pickCommissionBracket(gross, pairCommissions)
+        const p = commissionDef ? commissionDef.percentage / 100 : 0
+        const commission = gross * p
+        const totalToSend = gross - commission
+        return {
+          amountSend: gross,
+          amountReceive: receive,
+          rate,
+          commission,
+          commissionRate: p * 100,
+          totalToSend,
+          couponDiscount: 0
+        }
+      }
+
+      return null
     },
 
     minAmount(_state): number {
@@ -125,6 +223,7 @@ export const useCalculatorStore = defineStore('calculator', {
 
   actions: {
     setDemoMode(value: boolean) {
+      if (lockTrial) return
       this.demoMode = value
     },
 
@@ -132,7 +231,8 @@ export const useCalculatorStore = defineStore('calculator', {
       this.isLoading = true
       this.error = null
       try {
-        const repo = new CalculatorApiAdapter(this.demoMode)
+        const useTrial = lockTrial || this.demoMode
+        const repo = new CalculatorApiAdapter(useTrial)
         const useCase = new LoadCalculatorDataUseCase(repo)
         const data = await useCase.execute()
         this.currencies = data.currencies
@@ -200,4 +300,10 @@ export const useCalculatorStore = defineStore('calculator', {
       this.amountReceive = 0
     }
   }
-})
+}
+}
+
+export const useCalculatorStore = defineStore('calculator', buildCalculatorStoreDefinition(false))
+
+/** Store independiente para la calculadora/tasas trial (misma pantalla que producción sin pisar estado). */
+export const useCalculatorDemoStore = defineStore('calculator-demo', buildCalculatorStoreDefinition(true))

@@ -44,7 +44,6 @@ const navItems = [
   { to: "/app/transacciones", label: "Transacciones", icon: "transactions" },
   { to: "/app/calculator", label: "Calculadora", icon: "calc" },
   { to: "/app/cupones", label: "Cupones", icon: "ticket" },
-  { to: "/app/calculator?demo=1", label: "Calculadora Demo", icon: "demo" },
   { to: "/app/cuentas", label: "Cuentas", icon: "bank" },
   { to: "/app/comisiones", label: "Comisiones", icon: "folder" },
   { to: "/app/tasas", label: "Tasas", icon: "exchange" },
@@ -63,8 +62,6 @@ const breadcrumbs = computed(() => {
   const name = (route.name as string) ?? "";
   const meta = (route.meta?.breadcrumb as string) ?? "";
   if (meta) return meta;
-  if (name === "calculator" && route.query.demo === "1")
-    return "Operaciones > Calculadora Demo";
   const map: Record<string, string> = {
     transacciones: "Operaciones > Transacciones",
     calculator: "Operaciones > Calculadora",
@@ -78,17 +75,8 @@ const breadcrumbs = computed(() => {
   return map[name];
 });
 
-const isActive = (
-  to: string | { path: string; query?: Record<string, string> },
-) => {
+const isActive = (to: string | { path: string; query?: Record<string, string> }) => {
   const path = typeof to === "string" ? to.split("?")[0] : to.path;
-  const queryDemo =
-    typeof to === "string" ? to.includes("demo=1") : to.query?.demo === "1";
-  const routeDemo = route.query.demo === "1";
-  if (path === "/app/calculator" && queryDemo)
-    return route.path === "/app/calculator" && routeDemo;
-  if (path === "/app/calculator" && !queryDemo)
-    return route.path === "/app/calculator" && !routeDemo;
   return route.path === path || route.path.startsWith(path + "/");
 };
 
@@ -139,7 +127,7 @@ watch(showSidebar, (vis) => {
           class="flex shrink-0 items-center gap-3"
         >
           <img
-            src="/images/logo_completo.png"
+            src="/assets/logos/logo_completo.png"
             alt="Brasper"
             class="h-9 w-auto max-w-[140px] object-contain"
           />

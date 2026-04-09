@@ -34,6 +34,8 @@ function parseTaxRateHistory(data: unknown): TaxRateHistoryEntry[] {
 }
 
 export class TasasApiAdapter implements TasasRepository {
+  constructor(private readonly useTrial = false) {}
+
   private base(): string {
     return Domain.http('coin')
   }
@@ -43,8 +45,13 @@ export class TasasApiAdapter implements TasasRepository {
     return base.endsWith('/') ? `${base}${path}` : `${base}/${path}`
   }
 
+  /** Colección `tax-rate` o `tax-rate-trial` (alineado con la calculadora en modo demo). */
+  private taxRateCollection(): string {
+    return this.useTrial ? 'tax-rate-trial' : 'tax-rate'
+  }
+
   async getTaxRates(): Promise<TaxRate[]> {
-    const url = this.endpoint('tax-rate')
+    const url = this.endpoint(this.taxRateCollection())
     const response = await apiClient.get<unknown>(url)
     const data = Array.isArray(response.data) ? response.data : []
     return parseTaxRates(data)
@@ -54,15 +61,31 @@ export class TasasApiAdapter implements TasasRepository {
     id: string,
     payload: { coin_a: string; coin_b: string; tax: string }
   ): Promise<TaxRate> {
-    const url = this.endpoint('tax-rate')
+    const collection = this.taxRateCollection()
     const body = { ...payload, id }
-    try {
+    const put = async (url: string): Promise<TaxRate> => {
       const response = await apiClient.put<unknown>(url, body)
       return parseTaxRate(
         response.data != null && typeof response.data === 'object'
           ? (response.data as Record<string, unknown>)
           : { id, ...payload, tax: Number(payload.tax) }
       )
+    }
+    const urlCollection = this.endpoint(collection)
+    try {
+      if (this.useTrial) {
+        const urlById = this.endpoint(`${collection}/${encodeURIComponent(id)}`)
+        try {
+          return await put(urlCollection)
+        } catch (err: unknown) {
+          const st = (err as { response?: { status?: number } })?.response?.status
+          if (st === 404 || st === 405) {
+            return await put(urlById)
+          }
+          throw err
+        }
+      }
+      return await put(urlCollection)
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status
       if (status === 405) {
@@ -73,7 +96,7 @@ export class TasasApiAdapter implements TasasRepository {
   }
 
   async deleteTaxRate(id: string): Promise<void> {
-    const url = this.endpoint(`tax-rate/${id}`)
+    const url = this.endpoint(`${this.taxRateCollection()}/${id}`)
     await apiClient.delete(url)
   }
 
@@ -82,7 +105,7 @@ export class TasasApiAdapter implements TasasRepository {
     coin_b: string
     tax: string
   }): Promise<TaxRate> {
-    const url = this.endpoint('tax-rate')
+    const url = this.endpoint(this.taxRateCollection())
     try {
       const response = await apiClient.post<unknown>(url, payload)
       return parseTaxRate(
@@ -100,7 +123,7 @@ export class TasasApiAdapter implements TasasRepository {
   }
 
   async getTaxRateHistory(id: string): Promise<TaxRateHistoryEntry[]> {
-    const url = this.endpoint(`tax-rate/${id}/history`)
+    const url = this.endpoint(`${this.taxRateCollection()}/${id}/history`)
     const response = await apiClient.get<unknown>(url)
     return parseTaxRateHistory(response.data)
   }

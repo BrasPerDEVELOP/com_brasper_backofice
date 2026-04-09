@@ -104,6 +104,7 @@ import { ref, watch, onMounted, computed } from 'vue'
 import { useCalculatorStore } from '../controllers/use_calculator_store_controller'
 import { CURRENCY_CODES, type CurrencyCode } from '../../domain/models'
 import AppDropdown from '@/interface/components/AppDropdown.vue'
+import { formatCurrency, formatRate, normalizeTwoDecimals } from '../utils/calculator_format'
 
 const calculatorStore = useCalculatorStore()
 
@@ -124,11 +125,6 @@ const currencyTo = computed({
 
 const amountSendLocal = ref(0)
 const amountReceiveLocal = ref(0)
-
-function normalizeTwoDecimals(value: number): number {
-  if (!Number.isFinite(value)) return 0
-  return Math.round(value * 100) / 100
-}
 
 watch(
   () => calculatorStore.amountSend,
@@ -155,27 +151,6 @@ function onAmountReceiveInput() {
   calculatorStore.setAmountReceive(normalized)
   calculatorStore.recalcFromReceive()
   amountSendLocal.value = normalizeTwoDecimals(calculatorStore.amountSend)
-}
-
-const currencyLocales: Record<CurrencyCode, string> = {
-  pen: 'es-PE',
-  usd: 'en-US',
-  brl: 'pt-BR'
-}
-
-function formatCurrency(value: number, currency: CurrencyCode): string {
-  const amount = Number.isFinite(value) ? value : 0
-  return new Intl.NumberFormat(currencyLocales[currency], {
-    style: 'currency',
-    currency: currency.toUpperCase(),
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  }).format(amount)
-}
-
-function formatRate(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return '—'
-  return value.toFixed(2)
 }
 
 onMounted(() => {

@@ -74,7 +74,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/tasas', redirect: '/app/tasas' },
   { path: '/calculator', redirect: '/app/calculator' },
   { path: '/cupones', redirect: '/app/cupones' },
-  { path: '/calculator-demo', redirect: { path: '/app/calculator', query: { demo: '1' } } }
+  { path: '/calculator-demo', redirect: { path: '/app/calculator', hash: '#calculator-demo' } }
 ]
 
 export const router = createRouter({
@@ -83,8 +83,12 @@ export const router = createRouter({
 })
 
 router.beforeEach(async (to) => {
+  if (to.path === '/app/calculator' && to.query.demo === '1') {
+    return { path: '/app/calculator', query: {}, hash: '#calculator-demo', replace: true }
+  }
+
   const authStore = useAuthStore()
-  
+
   if (import.meta.env.DEV) {
     console.log('Router guard - Navegando a:', to.path, 'Meta:', to.meta)
   }
