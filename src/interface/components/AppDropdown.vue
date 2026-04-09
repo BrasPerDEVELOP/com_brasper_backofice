@@ -92,7 +92,7 @@ watch(
         props.size === 'sm'
           ? 'min-h-[32px] py-1.5 pl-2.5 pr-7 text-xs'
           : 'h-10 px-3 py-2.5 text-sm',
-        isOpen ? 'border-[#2563eb] ring-1 ring-[#2563eb]' : 'border-[#e5e7eb] hover:border-[#9ca3af]'
+        isOpen ? 'border-brasper-indigoStrong ring-1 ring-brasper-indigoStrong' : 'border-[#e5e7eb] hover:border-[#9ca3af]'
       ]"
       :style="minWidth ? { minWidth } : undefined"
       @click="toggle"
@@ -120,7 +120,7 @@ watch(
           v-model="searchQuery"
           type="text"
           :placeholder="`Buscar...`"
-          class="w-full rounded-md border border-[#e5e7eb] px-3 py-2 text-sm placeholder-[#9ca3af] focus:border-[#2563eb] focus:outline-none focus:ring-1 focus:ring-[#2563eb]"
+          class="w-full rounded-md border border-[#e5e7eb] px-3 py-2 text-sm placeholder-[#9ca3af] focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
           @click.stop
         />
       </div>
@@ -129,7 +129,7 @@ watch(
           type="button"
           :class="[
             'flex w-full items-center px-3 py-2 text-left text-sm transition',
-            !(props.modelValue ?? '') ? 'bg-[#eff6ff] text-[#2563eb]' : 'text-[#374151] hover:bg-[#f9fafb]'
+            !(props.modelValue ?? '') ? 'bg-brasper-cyanLight/15 text-brasper-indigoStrong' : 'text-[#374151] hover:bg-[#f9fafb]'
           ]"
           @click.stop="select('')"
         >
@@ -142,7 +142,7 @@ watch(
           :class="[
             'flex w-full items-center px-3 py-2 text-left text-sm transition',
             (props.modelValue ?? '') === item.value
-              ? 'bg-[#eff6ff] text-[#2563eb]'
+              ? 'bg-brasper-cyanLight/15 text-brasper-indigoStrong'
               : 'text-[#374151] hover:bg-[#f9fafb]'
           ]"
           @click.stop="select(item.value)"

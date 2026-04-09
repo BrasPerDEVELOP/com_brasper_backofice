@@ -702,13 +702,13 @@ onMounted(() => {
     <div class="mb-6">
       <div class="mb-4 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[#066ac9]">Operaciones</p>
+          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brasper-indigoStrong">Operaciones</p>
           <h1 class="text-2xl font-semibold text-[#232b4d]">Transacciones</h1>
         </div>
         <div class="flex items-center gap-2">
           <button
             type="button"
-            class="inline-flex items-center gap-2 rounded-xl border border-[#5ED6B3]/60 bg-white px-4 py-2.5 text-sm font-medium text-[#066ac9] transition hover:bg-[#5ED6B3]/10"
+            class="inline-flex items-center gap-2 rounded-xl border border-brasper-cyan/40 bg-white px-4 py-2.5 text-sm font-medium text-brasper-indigoStrong transition hover:bg-brasper-cyanLight/10"
             @click="showImportModal = true"
           >
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -728,7 +728,7 @@ onMounted(() => {
           </button>
           <button
             type="button"
-            class="inline-flex items-center gap-2 rounded-lg bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1d4ed8]"
+            class="inline-flex items-center gap-2 rounded-lg bg-brasper-indigoStrong px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brasper-indigoDark"
             @click="openCreateModal"
           >
             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -814,7 +814,7 @@ onMounted(() => {
           v-model="searchQuery"
           type="text"
           placeholder="Buscar por código"
-          class="h-10 w-full rounded-lg border border-[#e5e7eb] bg-white py-2.5 pl-10 pr-4 text-sm text-[#374151] placeholder-[#9ca3af] focus:border-[#2563eb] focus:outline-none focus:ring-1 focus:ring-[#2563eb]"
+          class="h-10 w-full rounded-lg border border-[#e5e7eb] bg-white py-2.5 pl-10 pr-4 text-sm text-[#374151] placeholder-[#9ca3af] focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
         />
       </div>
     </div>
@@ -839,14 +839,14 @@ onMounted(() => {
             <th class="w-10 px-2 py-3" title="Verificada">
               <span class="sr-only">Verificada</span>
             </th>
-            <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">Código</th>
-            <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">Cuenta de origen</th>
-            <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">Cuenta destino</th>
-            <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">Cliente</th>
-            <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">Monto origen</th>
-            <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">Monto destino</th>
-            <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">Estado</th>
-            <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">Fecha envío</th>
+            <th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">Código</th>
+            <th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">Cuenta de origen</th>
+            <th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">Cuenta destino</th>
+            <th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">Cliente</th>
+            <th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">Monto origen</th>
+            <th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">Monto destino</th>
+            <th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">Estado</th>
+            <th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">Fecha envío</th>
             <th class="w-12 px-2 py-3"></th>
           </tr>
         </thead>
@@ -873,7 +873,7 @@ onMounted(() => {
                 class="flex h-6 w-6 items-center justify-center rounded border transition"
                 :class="
                   isChecked(t)
-                    ? 'border-[#10b981] bg-[#10b981] text-white'
+                    ? 'border-brasper-indigoStrong bg-brasper-indigoStrong text-white'
                     : 'border-[#d1d5db] bg-white text-transparent hover:border-[#9ca3af]'
                 "
                 :disabled="updatingCheckedId === t.id"
@@ -900,11 +900,11 @@ onMounted(() => {
                 class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium"
                 :class="{
                   'bg-amber-100 text-amber-800': (t.status ?? '').toLowerCase() === 'pending',
-                  'bg-green-100 text-green-800': (t.status ?? '').toLowerCase() === 'completed',
+                  'bg-indigo-100 text-indigo-900': (t.status ?? '').toLowerCase() === 'completed',
                   'bg-red-100 text-red-800': (t.status ?? '').toLowerCase() === 'failed',
-                  'bg-teal-100 text-teal-800': (t.status ?? '').toLowerCase() === 'checked',
+                  'bg-sky-100 text-sky-900': (t.status ?? '').toLowerCase() === 'checked',
                   'bg-gray-100 text-gray-800': (t.status ?? '').toLowerCase() === 'cancelled',
-                  'bg-[#dbeafe] text-[#1d4ed8]': !['pending', 'completed', 'failed', 'checked', 'cancelled'].includes((t.status ?? '').toLowerCase())
+                  'bg-[#dbeafe] text-brasper-indigoDark': !['pending', 'completed', 'failed', 'checked', 'cancelled'].includes((t.status ?? '').toLowerCase())
                 }"
               >
                 {{ getStatusLabel(t.status) }}
@@ -1143,7 +1143,7 @@ onMounted(() => {
               :class="[
                 'rounded-full px-4 py-2 text-sm font-medium transition',
                 createTab === 'calculadora'
-                  ? 'bg-[#2563eb] text-white'
+                  ? 'bg-brasper-indigoStrong text-white'
                   : 'bg-[#f3f4f6] text-[#6b7280] hover:bg-[#e5e7eb]'
               ]"
               @click="createTab = 'calculadora'"
@@ -1155,7 +1155,7 @@ onMounted(() => {
               :class="[
                 'rounded-full px-4 py-2 text-sm font-medium transition',
                 createTab === 'datos'
-                  ? 'bg-[#2563eb] text-white'
+                  ? 'bg-brasper-indigoStrong text-white'
                   : 'bg-[#f3f4f6] text-[#6b7280] hover:bg-[#e5e7eb]'
               ]"
               @click="createTab = 'datos'"
@@ -1167,7 +1167,7 @@ onMounted(() => {
               :class="[
                 'rounded-full px-4 py-2 text-sm font-medium transition',
                 createTab === 'vouchers'
-                  ? 'bg-[#2563eb] text-white'
+                  ? 'bg-brasper-indigoStrong text-white'
                   : 'bg-[#f3f4f6] text-[#6b7280] hover:bg-[#e5e7eb]'
               ]"
               @click="createTab = 'vouchers'"
@@ -1225,7 +1225,7 @@ onMounted(() => {
                     <input
                       v-model="form.checked"
                       type="checkbox"
-                      class="h-4 w-4 rounded border-[#d1d5db] text-[#10b981] focus:ring-[#10b981]"
+                      class="h-4 w-4 rounded border-[#d1d5db] text-brasper-indigoStrong focus:ring-brasper-indigoStrong"
                     />
                     <span class="text-sm font-medium text-[#374151]">Verificada</span>
                   </label>
@@ -1315,7 +1315,7 @@ onMounted(() => {
                     {{ getVoucherLabel(form.payment_voucher) }}
                   </p>
                 </div>
-                <p v-if="form.send_voucher && form.payment_voucher" class="sm:col-span-2 text-xs text-green-600">
+                <p v-if="form.send_voucher && form.payment_voucher" class="sm:col-span-2 text-xs text-brasper-indigoStrong">
                   Ambos vouchers subidos. El estado se establecerá como finalizado al guardar.
                 </p>
               </div>
@@ -1341,7 +1341,7 @@ onMounted(() => {
             </button>
             <button
               type="button"
-              class="rounded-lg bg-[#2563eb] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#1d4ed8] disabled:opacity-60"
+              class="rounded-lg bg-brasper-indigoStrong px-5 py-2.5 text-sm font-semibold text-white hover:bg-brasper-indigoDark disabled:opacity-60"
               :disabled="transactionsStore.isCreating || transactionsStore.isUpdating"
               @click="submitForm"
             >
@@ -1363,7 +1363,7 @@ onMounted(() => {
           <h2 class="mb-4 text-lg font-semibold text-[#232b4d]">Importar transacciones</h2>
           <div class="mb-4 rounded-lg bg-[#fbfdff] p-4 text-sm text-[#666]">
             <p class="mb-2 font-medium text-[#333]">Formatos aceptados: JSON o Excel (.xlsx, .xls)</p>
-            <p class="mb-2 text-[#10b981] font-medium">Formato Brasper:</p>
+            <p class="mb-2 font-medium text-brasper-indigoStrong">Formato Brasper:</p>
             <p class="mb-2">Si el Excel tiene columnas <strong>Nombre</strong>, <strong>Correo</strong>, <strong>ENVÍA (PEN)</strong>, <strong>RECIBE (BRL)</strong>, etc., se detecta automáticamente.</p>
             <p class="mb-2">Formato alternativo (JSON o Excel con columnas):</p>
             <p class="mb-2">Columnas del Excel (primera fila = encabezados):</p>
@@ -1392,14 +1392,14 @@ onMounted(() => {
             <div class="flex gap-3 pt-2">
               <button
                 type="submit"
-                class="rounded-xl bg-gradient-to-r from-[#10b981] to-[#5ED6B3] px-4 py-2.5 text-sm font-semibold text-[#06271d] disabled:opacity-60"
+                class="rounded-xl bg-gradient-to-r from-brasper-cyanLight to-brasper-indigoStrong px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
                 :disabled="transactionsStore.isImporting || !importFile"
               >
                 {{ transactionsStore.isImporting ? 'Importando...' : 'Importar' }}
               </button>
               <button
                 type="button"
-                class="rounded-xl border border-[#4A52D8]/30 px-4 py-2.5 text-sm text-[#3C4DA7] hover:bg-[#4A52D8]/10"
+                class="rounded-xl border border-brasper-indigoStrong/30 px-4 py-2.5 text-sm text-brasper-indigoDark hover:bg-brasper-indigoStrong/10"
                 @click="showImportModal = false"
               >
                 Cancelar
@@ -1453,7 +1453,7 @@ onMounted(() => {
             <div class="flex gap-3 pt-2">
               <button
                 type="submit"
-                class="rounded-lg bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1d4ed8] disabled:opacity-60"
+                class="rounded-lg bg-brasper-indigoStrong px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brasper-indigoDark disabled:opacity-60"
                 :disabled="importingSimple || !importSimpleFile"
               >
                 {{ importingSimple ? 'Importando...' : 'Importar' }}

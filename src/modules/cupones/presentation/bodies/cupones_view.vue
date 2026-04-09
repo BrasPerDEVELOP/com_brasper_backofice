@@ -39,10 +39,10 @@ onMounted(() => {
 
 <template>
   <div class="space-y-6">
-    <section class="rounded-2xl border border-[#d8e5fb] bg-white p-6 shadow-lg shadow-[#007bff]/5">
+    <section class="rounded-2xl border border-[#d8e5fb] bg-white p-6 shadow-lg shadow-brasper-indigoStrong/10">
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[#066ac9]">Operaciones</p>
+          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brasper-indigoStrong">Operaciones</p>
           <h1 class="text-2xl font-semibold text-[#232b4d]">Cupones</h1>
           <p class="mt-2 max-w-2xl text-sm text-[#667085]">
             Administra códigos promocionales y su vigencia para las transacciones.
@@ -58,7 +58,7 @@ onMounted(() => {
       </p>
     </section>
 
-    <div v-if="cuponesStore.isLoading" class="rounded-2xl border border-[#d8e5fb] bg-white px-6 py-8 text-[#666] shadow-lg shadow-[#007bff]/5">
+    <div v-if="cuponesStore.isLoading" class="rounded-2xl border border-[#d8e5fb] bg-white px-6 py-8 text-[#666] shadow-lg shadow-brasper-indigoStrong/10">
       Cargando cupones...
     </div>
 

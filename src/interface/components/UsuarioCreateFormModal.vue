@@ -137,7 +137,7 @@ watch(
               <input
                 v-model="form.email"
                 type="email"
-                class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-[#2563eb] focus:outline-none focus:ring-1 focus:ring-[#2563eb]"
+                class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
                 placeholder="usuario@ejemplo.com"
                 required
               />
@@ -147,7 +147,7 @@ watch(
               <input
                 v-model="form.names"
                 type="text"
-                class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-[#2563eb] focus:outline-none focus:ring-1 focus:ring-[#2563eb]"
+                class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
                 placeholder="Nombres"
               />
             </div>
@@ -156,7 +156,7 @@ watch(
               <input
                 v-model="form.lastnames"
                 type="text"
-                class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-[#2563eb] focus:outline-none focus:ring-1 focus:ring-[#2563eb]"
+                class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
                 placeholder="Apellidos"
               />
             </div>
@@ -174,7 +174,7 @@ watch(
               <input
                 v-model="form.document_number"
                 type="text"
-                class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-[#2563eb] focus:outline-none focus:ring-1 focus:ring-[#2563eb]"
+                class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
                 placeholder="Ej. 12345678"
               />
             </div>
@@ -201,7 +201,7 @@ watch(
               <input
                 v-model.number="form.phone"
                 type="number"
-                class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-[#2563eb] focus:outline-none focus:ring-1 focus:ring-[#2563eb]"
+                class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
                 placeholder="987654321"
               />
             </div>
@@ -210,7 +210,7 @@ watch(
               <input
                 type="file"
                 accept="image/*"
-                class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm file:mr-4 file:rounded-lg file:border-0 file:bg-[#2563eb] file:px-4 file:py-2 file:text-sm file:text-white file:hover:bg-[#1d4ed8]"
+                class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm file:mr-4 file:rounded-lg file:border-0 file:bg-brasper-indigoStrong file:px-4 file:py-2 file:text-sm file:text-white file:hover:bg-brasper-indigoDark"
                 @change="onProfileImageChange"
               />
             </div>
@@ -230,7 +230,7 @@ watch(
             </button>
             <button
               type="submit"
-              class="rounded-lg bg-[#2563eb] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1d4ed8] disabled:opacity-60"
+              class="rounded-lg bg-brasper-indigoStrong px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brasper-indigoDark disabled:opacity-60"
               :disabled="creating"
             >
               {{ creating ? 'Creando...' : 'Guardar' }}

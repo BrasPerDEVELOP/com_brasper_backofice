@@ -278,7 +278,7 @@ onMounted(() => {
         </button>
         <button
           type="button"
-          class="inline-flex items-center gap-2 rounded-lg bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1d4ed8] disabled:opacity-50 disabled:cursor-not-allowed"
+          class="inline-flex items-center gap-2 rounded-lg bg-brasper-indigoStrong px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brasper-indigoDark disabled:opacity-50 disabled:cursor-not-allowed"
           @click.stop="openCreateModal"
         >
           <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -305,7 +305,7 @@ onMounted(() => {
         v-model="searchQuery"
         type="text"
         placeholder="Buscar"
-        class="h-10 w-full rounded-lg border border-[#e5e7eb] bg-white py-2.5 pl-10 pr-4 text-sm text-[#374151] placeholder-[#9ca3af] focus:border-[#2563eb] focus:outline-none focus:ring-1 focus:ring-[#2563eb]"
+        class="h-10 w-full rounded-lg border border-[#e5e7eb] bg-white py-2.5 pl-10 pr-4 text-sm text-[#374151] placeholder-[#9ca3af] focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
       />
     </div>
     <div class="flex items-center gap-2">
@@ -330,7 +330,7 @@ onMounted(() => {
   <p v-if="error" class="mb-4 rounded-lg bg-[#dc3545]/10 px-4 py-3 text-sm text-[#dc3545]">
     {{ error }}
   </p>
-  <p v-if="successMessage" class="mb-4 rounded-lg bg-[#10b981]/10 px-4 py-3 text-sm text-[#065f46]">
+  <p v-if="successMessage" class="mb-4 rounded-lg bg-brasper-cyanLight/15 px-4 py-3 text-sm text-brasper-indigoDark">
     {{ successMessage }}
   </p>
 
@@ -344,11 +344,11 @@ onMounted(() => {
     <table class="w-full text-left text-sm">
       <thead>
         <tr class="bg-[#dbeafe]">
-          <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">Nombres</th>
-          <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">Email</th>
-          <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">Tipo documento</th>
-          <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">N. documento</th>
-          <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">Rol</th>
+          <th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">Nombres</th>
+          <th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">Email</th>
+          <th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">Tipo documento</th>
+          <th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">N. documento</th>
+          <th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">Rol</th>
           <th class="w-12 px-2 py-3"></th>
         </tr>
       </thead>
@@ -367,8 +367,8 @@ onMounted(() => {
               class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium"
               :class="
                 (u.role ?? '').toLowerCase() === 'admin'
-                  ? 'bg-[#e6ff00]/30 text-[#232b4d]'
-                  : 'bg-[#dbeafe] text-[#1d4ed8]'
+                  ? 'bg-brasper-cyanLight/30 text-brasper-indigoDark'
+                  : 'bg-[#dbeafe] text-brasper-indigoDark'
               "
             >
               {{ USER_ROLE_LABELS[u.role as keyof typeof USER_ROLE_LABELS] ?? (u.role ?? '—').toUpperCase() }}
@@ -533,7 +533,7 @@ onMounted(() => {
           <div class="flex gap-3 pt-2">
             <button
               type="submit"
-              class="rounded-lg bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1d4ed8] disabled:opacity-60"
+              class="rounded-lg bg-brasper-indigoStrong px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brasper-indigoDark disabled:opacity-60"
               :disabled="importing || !importFile"
             >
               {{ importing ? 'Importando...' : 'Importar' }}

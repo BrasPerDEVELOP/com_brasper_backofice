@@ -1,15 +1,15 @@
 <template>
   <div class="space-y-6">
-    <section class="overflow-hidden rounded-3xl border border-[#d8e5fb] bg-white p-8 shadow-lg shadow-[#007bff]/5">
+    <section class="overflow-hidden rounded-3xl border border-[#d8e5fb] bg-white p-8 shadow-lg shadow-brasper-indigoStrong/10">
       <div class="mb-6 flex items-center justify-between">
         <div>
-          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[#066ac9]">Cuenta</p>
+          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brasper-indigoStrong">Cuenta</p>
           <h1 class="text-2xl font-semibold text-[#232b4d]">Perfil de usuario</h1>
         </div>
         <button
           v-if="authStore.user && !isEditing"
           type="button"
-          class="rounded-xl border border-[#4A52D8]/30 bg-[#4A52D8]/10 px-4 py-2.5 text-sm font-medium text-[#3C4DA7] transition hover:bg-[#4A52D8]/20"
+          class="rounded-xl border border-brasper-indigoStrong/30 bg-brasper-indigoStrong/10 px-4 py-2.5 text-sm font-medium text-brasper-indigoDark transition hover:bg-brasper-indigoStrong/20"
           @click="startEditing"
         >
           Editar
@@ -27,7 +27,7 @@
               :class="[
                 'flex h-28 w-28 shrink-0 overflow-hidden rounded-full border-2 sm:h-32 sm:w-32',
                 isEditing
-                  ? 'cursor-pointer border-dashed border-[#4A52D8]/50 bg-[#fbfdff] hover:border-[#4A52D8]'
+                  ? 'cursor-pointer border-dashed border-brasper-indigoStrong/50 bg-[#fbfdff] hover:border-brasper-indigoStrong'
                   : 'cursor-default border-[#dbe7fb] bg-[#fbfdff]'
               ]"
             >
@@ -47,7 +47,7 @@
               />
               <div
                 v-else
-                class="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#4A52D8]/20 to-[#007aff]/20 text-3xl font-bold text-[#232b4d]"
+                class="flex h-full w-full items-center justify-center bg-gradient-to-br from-brasper-indigoStrong/20 to-brasper-cyan/20 text-3xl font-bold text-[#232b4d]"
               >
                 {{ initials }}
               </div>
@@ -62,7 +62,7 @@
                   <input
                     v-model="form.names"
                     type="text"
-                    class="w-full rounded-xl border border-[#cfdbef] bg-white px-4 py-3 text-sm text-[#333] outline-none focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/20"
+                    class="w-full rounded-xl border border-[#cfdbef] bg-white px-4 py-3 text-sm text-[#333] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
                     placeholder="Nombres"
                   />
                 </div>
@@ -71,7 +71,7 @@
                   <input
                     v-model="form.lastnames"
                     type="text"
-                    class="w-full rounded-xl border border-[#cfdbef] bg-white px-4 py-3 text-sm text-[#333] outline-none focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/20"
+                    class="w-full rounded-xl border border-[#cfdbef] bg-white px-4 py-3 text-sm text-[#333] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
                     placeholder="Apellidos"
                   />
                 </div>
@@ -92,7 +92,7 @@
                   <input
                     v-model="form.document_number"
                     type="text"
-                    class="w-full rounded-xl border border-[#cfdbef] bg-white px-4 py-3 text-sm text-[#333] outline-none focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/20"
+                    class="w-full rounded-xl border border-[#cfdbef] bg-white px-4 py-3 text-sm text-[#333] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
                     placeholder="Documento"
                   />
                 </div>
@@ -122,7 +122,7 @@
                   <input
                     v-model="form.code_phone"
                     type="text"
-                    class="w-full rounded-xl border border-[#cfdbef] bg-white px-4 py-3 text-sm text-[#333] outline-none focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/20"
+                    class="w-full rounded-xl border border-[#cfdbef] bg-white px-4 py-3 text-sm text-[#333] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
                     placeholder="Ej: pe, +51"
                   />
                 </div>
@@ -131,7 +131,7 @@
                   <input
                     v-model.number="form.phone"
                     type="number"
-                    class="w-full rounded-xl border border-[#cfdbef] bg-white px-4 py-3 text-sm text-[#333] outline-none focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/20"
+                    class="w-full rounded-xl border border-[#cfdbef] bg-white px-4 py-3 text-sm text-[#333] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
                     placeholder="987654321"
                   />
                 </div>
@@ -139,7 +139,7 @@
               <div class="mt-6 flex flex-wrap gap-3">
                 <button
                   type="button"
-                  class="rounded-xl bg-gradient-to-r from-[#10b981] to-[#5ED6B3] px-5 py-2.5 text-sm font-semibold text-[#06271d] transition hover:opacity-90 disabled:opacity-60"
+                  class="rounded-xl bg-gradient-to-r from-brasper-cyanLight to-brasper-indigoStrong px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
                   :disabled="authStore.isLoading"
                   @click="saveProfile"
                 >
@@ -147,7 +147,7 @@
                 </button>
                 <button
                   type="button"
-                  class="rounded-xl border border-[#4A52D8]/30 bg-white px-5 py-2.5 text-sm font-medium text-[#3C4DA7] transition hover:bg-[#4A52D8]/10"
+                  class="rounded-xl border border-brasper-indigoStrong/30 bg-white px-5 py-2.5 text-sm font-medium text-brasper-indigoDark transition hover:bg-brasper-indigoStrong/10"
                   :disabled="authStore.isLoading"
                   @click="cancelEditing"
                 >
@@ -182,7 +182,7 @@
           <div v-if="authStore.user.role && !isRoleClient" class="rounded-xl border border-[#dbe7fb] bg-[#fbfdff] px-4 py-3">
             <p class="text-xs font-medium text-[#666]">Rol</p>
             <p class="mt-1">
-              <span class="inline-flex items-center rounded-full bg-[#e6ff00]/30 px-2.5 py-0.5 text-sm font-semibold text-[#232b4d]">
+              <span class="inline-flex items-center rounded-full bg-brasper-cyanLight/25 px-2.5 py-0.5 text-sm font-semibold text-brasper-indigoDark">
                 {{ authStore.user.role.toUpperCase() }}
               </span>
             </p>

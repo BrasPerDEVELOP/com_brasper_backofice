@@ -156,9 +156,9 @@ onMounted(() => {
 
 <template>
   <div class="space-y-6">
-    <section class="rounded-2xl border border-[#d8e5fb] bg-white p-6 shadow-lg shadow-[#007bff]/5">
+    <section class="rounded-2xl border border-[#d8e5fb] bg-white p-6 shadow-lg shadow-brasper-indigoStrong/10">
       <div class="mb-4">
-        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[#066ac9]">Configuración</p>
+        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brasper-indigoStrong">Configuración</p>
         <h1 class="text-2xl font-semibold text-[#232b4d]">Comisiones</h1>
       </div>
 
@@ -176,7 +176,7 @@ onMounted(() => {
             :class="[
               'rounded-t-lg border border-transparent px-4 py-2 text-sm font-medium transition-colors',
               activePair === pair.key
-                ? 'border-[#007aff] bg-[#eef5ff] text-[#066ac9]'
+                ? 'border-brasper-cyan bg-[#eef5ff] text-brasper-indigoStrong'
                 : 'text-[#666] hover:bg-[#f3f8ff] hover:text-[#232b4d]'
             ]"
             @click="activePair = pair.key"
@@ -201,7 +201,7 @@ onMounted(() => {
               <div class="mb-3 flex flex-wrap items-center justify-end gap-2">
                 <button
                   type="button"
-                  class="rounded-lg border border-[#bcd7ff] bg-[#eef5ff] px-3 py-1.5 text-sm font-medium text-[#066ac9] hover:bg-[#e2eeff]"
+                  class="rounded-lg border border-[#bcd7ff] bg-[#eef5ff] px-3 py-1.5 text-sm font-medium text-brasper-indigoStrong hover:bg-[#e2eeff]"
                   @click="toggleHistory(commission.id)"
                 >
                   {{ expandedHistoryId === commission.id ? 'Ocultar historial' : 'Historial' }}
@@ -209,7 +209,7 @@ onMounted(() => {
                 <button
                   v-if="editingId !== commission.id"
                   type="button"
-                  class="rounded-lg border border-[#4A52D8]/30 bg-[#4A52D8]/10 px-3 py-1.5 text-sm font-medium text-[#3C4DA7] hover:bg-[#4A52D8]/20"
+                  class="rounded-lg border border-brasper-indigoStrong/30 bg-brasper-indigoStrong/10 px-3 py-1.5 text-sm font-medium text-brasper-indigoDark hover:bg-brasper-indigoStrong/20"
                   @click="startEditing(commission)"
                 >
                   Editar
@@ -234,7 +234,7 @@ onMounted(() => {
                     v-model="editingForm.coin_a"
                     type="text"
                     maxlength="3"
-                    class="mt-1 w-full rounded-lg border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#333] outline-none focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/20"
+                    class="mt-1 w-full rounded-lg border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#333] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
                   />
                 </div>
                 <div class="text-xs text-on-surface/70">
@@ -244,7 +244,7 @@ onMounted(() => {
                     v-model="editingForm.coin_b"
                     type="text"
                     maxlength="3"
-                    class="mt-1 w-full rounded-lg border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#333] outline-none focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/20"
+                    class="mt-1 w-full rounded-lg border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#333] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
                   />
                 </div>
                 <div class="text-xs text-on-surface/70">
@@ -254,7 +254,7 @@ onMounted(() => {
                     v-model="editingForm.percentage"
                     type="text"
                     inputmode="decimal"
-                    class="mt-1 w-full rounded-lg border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#333] outline-none focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/20"
+                    class="mt-1 w-full rounded-lg border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#333] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
                   />
                 </div>
                 <div class="text-xs text-on-surface/70">
@@ -264,7 +264,7 @@ onMounted(() => {
                     v-model="editingForm.reverse"
                     type="text"
                     inputmode="decimal"
-                    class="mt-1 w-full rounded-lg border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#333] outline-none focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/20"
+                    class="mt-1 w-full rounded-lg border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#333] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
                   />
                 </div>
                 <div class="text-xs text-on-surface/70">
@@ -274,7 +274,7 @@ onMounted(() => {
                     v-model="editingForm.min_amount"
                     type="text"
                     inputmode="decimal"
-                    class="mt-1 w-full rounded-lg border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#333] outline-none focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/20"
+                    class="mt-1 w-full rounded-lg border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#333] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
                   />
                 </div>
                 <div class="text-xs text-on-surface/70">
@@ -284,14 +284,14 @@ onMounted(() => {
                     v-model="editingForm.max_amount"
                     type="text"
                     inputmode="decimal"
-                    class="mt-1 w-full rounded-lg border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#333] outline-none focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/20"
+                    class="mt-1 w-full rounded-lg border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#333] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
                   />
                 </div>
 
                 <div class="sm:col-span-2 lg:col-span-3 mt-2 flex flex-wrap items-center gap-2">
                   <button
                     type="button"
-                    class="cursor-pointer rounded-lg bg-gradient-to-r from-[#10b981] to-[#5ED6B3] px-3 py-2 text-sm font-semibold text-[#06271d] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                    class="cursor-pointer rounded-lg bg-gradient-to-r from-brasper-cyanLight to-brasper-indigoStrong px-3 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                     :disabled="comisionesStore.savingId === commission.id"
                     @click.stop.prevent="saveCommission(commission.id)"
                   >
@@ -299,7 +299,7 @@ onMounted(() => {
                   </button>
                   <button
                     type="button"
-                    class="rounded-lg border border-[#4A52D8]/30 bg-[#4A52D8]/10 px-3 py-2 text-sm text-[#3C4DA7] hover:bg-[#4A52D8]/20"
+                    class="rounded-lg border border-brasper-indigoStrong/30 bg-brasper-indigoStrong/10 px-3 py-2 text-sm text-brasper-indigoDark hover:bg-brasper-indigoStrong/20"
                     @click="cancelEditing"
                   >
                     Cancelar

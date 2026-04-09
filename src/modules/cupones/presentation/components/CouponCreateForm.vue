@@ -51,9 +51,9 @@ defineExpose({ resetForm })
 </script>
 
 <template>
-  <section class="rounded-2xl border border-[#d8e5fb] bg-white p-6 shadow-lg shadow-[#007bff]/5">
+  <section class="rounded-2xl border border-[#d8e5fb] bg-white p-6 shadow-lg shadow-brasper-indigoStrong/10">
     <div class="mb-4">
-      <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[#066ac9]">Operaciones</p>
+      <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brasper-indigoStrong">Operaciones</p>
       <h2 class="text-xl font-semibold text-[#232b4d]">Crear cupón</h2>
     </div>
 
@@ -64,7 +64,7 @@ defineExpose({ resetForm })
           v-model="form.code"
           type="text"
           maxlength="32"
-          class="mt-1 w-full rounded-xl border border-[#cfdbef] bg-white px-3 py-2 text-sm uppercase text-[#232b4d] outline-none focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/20"
+          class="mt-1 w-full rounded-xl border border-[#cfdbef] bg-white px-3 py-2 text-sm uppercase text-[#232b4d] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
         />
       </label>
 
@@ -77,7 +77,7 @@ defineExpose({ resetForm })
           min="0"
           max="100"
           step="0.01"
-          class="mt-1 w-full rounded-xl border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#232b4d] outline-none focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/20"
+          class="mt-1 w-full rounded-xl border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#232b4d] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
         />
       </label>
 
@@ -89,7 +89,7 @@ defineExpose({ resetForm })
           inputmode="numeric"
           min="0"
           step="1"
-          class="mt-1 w-full rounded-xl border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#232b4d] outline-none focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/20"
+          class="mt-1 w-full rounded-xl border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#232b4d] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
         />
       </label>
 
@@ -102,7 +102,7 @@ defineExpose({ resetForm })
         Moneda origen
         <select
           v-model="form.origin_currency"
-          class="mt-1 w-full rounded-xl border border-[#cfdbef] bg-white px-3 py-2 text-sm uppercase text-[#232b4d] outline-none focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/20"
+          class="mt-1 w-full rounded-xl border border-[#cfdbef] bg-white px-3 py-2 text-sm uppercase text-[#232b4d] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
         >
           <option
             v-for="option in props.currencyOptions"
@@ -118,7 +118,7 @@ defineExpose({ resetForm })
         Moneda destino
         <select
           v-model="form.destination_currency"
-          class="mt-1 w-full rounded-xl border border-[#cfdbef] bg-white px-3 py-2 text-sm uppercase text-[#232b4d] outline-none focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/20"
+          class="mt-1 w-full rounded-xl border border-[#cfdbef] bg-white px-3 py-2 text-sm uppercase text-[#232b4d] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
         >
           <option
             v-for="option in props.currencyOptions"
@@ -135,7 +135,7 @@ defineExpose({ resetForm })
         <input
           v-model="form.start_date"
           type="datetime-local"
-          class="mt-1 w-full rounded-xl border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#232b4d] outline-none focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/20"
+          class="mt-1 w-full rounded-xl border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#232b4d] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
         />
       </label>
 
@@ -144,14 +144,14 @@ defineExpose({ resetForm })
         <input
           v-model="form.end_date"
           type="datetime-local"
-          class="mt-1 w-full rounded-xl border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#232b4d] outline-none focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/20"
+          class="mt-1 w-full rounded-xl border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#232b4d] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
         />
       </label>
 
       <div class="flex items-end gap-3 xl:col-span-4">
         <button
           type="submit"
-          class="rounded-xl bg-gradient-to-r from-[#007aff] to-[#4A52D8] px-5 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+          class="rounded-xl bg-gradient-to-r from-brasper-cyanLight to-brasper-indigoStrong px-5 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
           :disabled="props.isSaving"
         >
           {{ props.isSaving ? 'Creando...' : 'Crear cupón' }}

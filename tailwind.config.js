@@ -5,17 +5,24 @@ export default {
     extend: {
       colors: {
         brasper: {
-          primary: '#007bff',
-          ios: '#007aff',
-          blue: '#3b82f6',
-          blueAlt: '#4484f3',
-          blueStrong: '#066ac9',
-          success: '#10b981',
-          successSoft: '#5ED6B3',
-          lime: '#e6ff00',
-          limeStrong: '#cbf000',
-          purple: '#A386FF',
-          purpleDark: '#4A52D8',
+          /** Logo BrasPer: cian → índigo */
+          cyan: '#29B6F6',
+          cyanLight: '#40C4FF',
+          indigo: '#5C6BC0',
+          indigoStrong: '#3F51B5',
+          indigoDark: '#283593',
+          primary: '#3F51B5',
+          ios: '#29B6F6',
+          blue: '#5C6BC0',
+          blueAlt: '#5C6BC0',
+          blueStrong: '#283593',
+          success: '#29B6F6',
+          successSoft: '#40C4FF',
+          accent: '#40C4FF',
+          lime: '#40C4FF',
+          limeStrong: '#29B6F6',
+          purple: '#5C6BC0',
+          purpleDark: '#3F51B5',
           danger: '#dc3545',
           dark: '#232b4d',
           darkSoft: '#1c284c',
@@ -28,7 +35,7 @@ export default {
         surface: 'rgb(248 250 252)',
         'surface-alt': 'rgb(241 245 249)',
         'on-surface': 'rgb(30 41 59)',
-        primary: 'rgb(37 99 235)',
+        primary: 'rgb(63 81 181)',
         error: 'rgb(220 38 38)'
       }
     }

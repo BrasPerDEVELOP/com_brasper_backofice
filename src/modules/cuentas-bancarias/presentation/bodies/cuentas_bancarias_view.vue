@@ -346,7 +346,7 @@ onMounted(() => {
           </button>
           <button
             type="button"
-            class="inline-flex items-center gap-2 rounded-lg bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1d4ed8] disabled:opacity-50 disabled:cursor-not-allowed"
+            class="inline-flex items-center gap-2 rounded-lg bg-brasper-indigoStrong px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brasper-indigoDark disabled:opacity-50 disabled:cursor-not-allowed"
             @click.stop="openCreateModal"
           >
             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -419,7 +419,7 @@ onMounted(() => {
           v-model="searchQuery"
           type="text"
           placeholder="Buscar"
-          class="w-full rounded-lg border border-[#e5e7eb] bg-white py-2.5 pl-10 pr-4 text-sm text-[#374151] placeholder-[#9ca3af] focus:border-[#2563eb] focus:outline-none focus:ring-1 focus:ring-[#2563eb]"
+          class="w-full rounded-lg border border-[#e5e7eb] bg-white py-2.5 pl-10 pr-4 text-sm text-[#374151] placeholder-[#9ca3af] focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
         />
       </div>
       <div
@@ -432,7 +432,7 @@ onMounted(() => {
           :class="[
             'relative rounded-md px-4 py-2 text-sm font-medium transition-all duration-200',
             holderFilter === 'natural'
-              ? 'bg-[#2563eb] text-white shadow-sm'
+              ? 'bg-brasper-indigoStrong text-white shadow-sm'
               : 'bg-white text-[#64748b] shadow-sm hover:text-[#475569] active:scale-[0.98]'
           ]"
           @click="holderFilter = 'natural'"
@@ -444,7 +444,7 @@ onMounted(() => {
           :class="[
             'relative rounded-md px-4 py-2 text-sm font-medium transition-all duration-200',
             holderFilter === 'juridica'
-              ? 'bg-[#2563eb] text-white shadow-sm'
+              ? 'bg-brasper-indigoStrong text-white shadow-sm'
               : 'bg-white text-[#64748b] shadow-sm hover:text-[#475569] active:scale-[0.98]'
           ]"
           @click="holderFilter = 'juridica'"
@@ -472,14 +472,14 @@ onMounted(() => {
       <table class="w-full text-left text-sm">
         <thead>
           <tr class="bg-[#dbeafe]">
-            <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">Banco</th>
-            <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">Moneda</th>
-            <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">
+            <th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">Banco</th>
+            <th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">Moneda</th>
+            <th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">
               {{ holderFilter === 'juridica' ? 'Razón social' : 'Nombres' }}
             </th>
-            <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">tipo documento</th>
-            <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">N. documento</th>
-            <th class="whitespace-nowrap px-4 py-3 font-semibold text-[#1d4ed8]">N. cuenta</th>
+            <th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">tipo documento</th>
+            <th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">N. documento</th>
+            <th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">N. cuenta</th>
             <th class="w-12 px-2 py-3"></th>
           </tr>
         </thead>
@@ -672,7 +672,7 @@ onMounted(() => {
                 <input
                   :value="form.holder_names"
                   type="text"
-                  class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-[#2563eb] focus:outline-none focus:ring-1 focus:ring-[#2563eb]"
+                  class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
                   placeholder="Ej. Juan Carlos"
                   inputmode="text"
                   @input="onStringInput($event, 'holder_names')"
@@ -683,7 +683,7 @@ onMounted(() => {
                 <input
                   :value="form.holder_surnames"
                   type="text"
-                  class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-[#2563eb] focus:outline-none focus:ring-1 focus:ring-[#2563eb]"
+                  class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
                   placeholder="Ej. Pérez García"
                   inputmode="text"
                   @input="onStringInput($event, 'holder_surnames')"
@@ -694,7 +694,7 @@ onMounted(() => {
                 <input
                   :value="form.document_number"
                   type="text"
-                  class="form-input w-full max-w-xs rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-[#2563eb] focus:outline-none focus:ring-1 focus:ring-[#2563eb]"
+                  class="form-input w-full max-w-xs rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
                   placeholder="Ej. 12345678"
                   inputmode="numeric"
                   maxlength="15"
@@ -709,7 +709,7 @@ onMounted(() => {
                 <input
                   :value="form.business_name"
                   type="text"
-                  class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-[#2563eb] focus:outline-none focus:ring-1 focus:ring-[#2563eb]"
+                  class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
                   placeholder="Nombre de la empresa"
                   inputmode="text"
                   @input="onStringInput($event, 'business_name')"
@@ -720,7 +720,7 @@ onMounted(() => {
                 <input
                   :value="form.ruc_number"
                   type="text"
-                  class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-[#2563eb] focus:outline-none focus:ring-1 focus:ring-[#2563eb]"
+                  class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
                   placeholder="11 dígitos"
                   inputmode="numeric"
                   maxlength="11"
@@ -733,7 +733,7 @@ onMounted(() => {
                 <input
                   :value="form.legal_representative_name"
                   type="text"
-                  class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-[#2563eb] focus:outline-none focus:ring-1 focus:ring-[#2563eb]"
+                  class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
                   inputmode="text"
                   @input="onStringInput($event, 'legal_representative_name')"
                 />
@@ -743,7 +743,7 @@ onMounted(() => {
                 <input
                   :value="form.legal_representative_document"
                   type="text"
-                  class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-[#2563eb] focus:outline-none focus:ring-1 focus:ring-[#2563eb]"
+                  class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
                   inputmode="numeric"
                   maxlength="15"
                   @keydown="onNumericKeydown"
@@ -762,7 +762,7 @@ onMounted(() => {
                 <input
                   :value="form.account_number"
                   type="text"
-                  class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-[#2563eb] focus:outline-none focus:ring-1 focus:ring-[#2563eb]"
+                  class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
                   inputmode="numeric"
                   @keydown="onNumericKeydown"
                   @input="onNumericInput($event, 'account_number')"
@@ -773,7 +773,7 @@ onMounted(() => {
                 <input
                   :value="form.account_number_confirmation"
                   type="text"
-                  class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-[#2563eb] focus:outline-none focus:ring-1 focus:ring-[#2563eb]"
+                  class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
                   inputmode="numeric"
                   @keydown="onNumericKeydown"
                   @input="onNumericInput($event, 'account_number_confirmation')"
@@ -791,7 +791,7 @@ onMounted(() => {
                 <input
                   :value="form.cci_number"
                   type="text"
-                  class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-[#2563eb] focus:outline-none focus:ring-1 focus:ring-[#2563eb]"
+                  class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
                   placeholder="Código de cuenta interbancario (PE)"
                   inputmode="numeric"
                   @keydown="onNumericKeydown"
@@ -803,7 +803,7 @@ onMounted(() => {
                 <input
                   :value="form.pix_key"
                   type="text"
-                  class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-[#2563eb] focus:outline-none focus:ring-1 focus:ring-[#2563eb]"
+                  class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
                   placeholder="Clave PIX (BR) - email, teléfono o aleatorio"
                   inputmode="text"
                   @input="onStringInput($event, 'pix_key')"
@@ -829,7 +829,7 @@ onMounted(() => {
             </button>
             <button
               type="submit"
-              class="rounded-lg bg-[#2563eb] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1d4ed8] disabled:opacity-60"
+              class="rounded-lg bg-brasper-indigoStrong px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brasper-indigoDark disabled:opacity-60"
               :disabled="cuentasStore.isCreating"
             >
               {{ cuentasStore.isCreating ? 'Guardando...' : 'Guardar' }}

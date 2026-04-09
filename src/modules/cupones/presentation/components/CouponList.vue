@@ -93,13 +93,13 @@ function emitDelete(coupon: Coupon): void {
 </script>
 
 <template>
-  <section class="rounded-2xl border border-[#d8e5fb] bg-white p-6 shadow-lg shadow-[#007bff]/5">
+  <section class="rounded-2xl border border-[#d8e5fb] bg-white p-6 shadow-lg shadow-brasper-indigoStrong/10">
     <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
       <div>
-        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[#066ac9]">Listado</p>
+        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brasper-indigoStrong">Listado</p>
         <h2 class="text-xl font-semibold text-[#232b4d]">Cupones registrados</h2>
       </div>
-      <span class="rounded-full bg-[#eef5ff] px-3 py-1 text-sm font-medium text-[#066ac9]">
+      <span class="rounded-full bg-[#eef5ff] px-3 py-1 text-sm font-medium text-brasper-indigoStrong">
         {{ props.coupons.length }} cupones
       </span>
     </div>
@@ -121,7 +121,7 @@ function emitDelete(coupon: Coupon): void {
               <span
                 :class="[
                   'rounded-full px-2.5 py-1 text-xs font-semibold',
-                  coupon.is_active ? 'bg-[#dcfce7] text-[#166534]' : 'bg-[#fee2e2] text-[#991b1b]'
+                  coupon.is_active ? 'bg-indigo-100 text-indigo-900' : 'bg-[#fee2e2] text-[#991b1b]'
                 ]"
               >
                 {{ coupon.is_active ? 'Activo' : 'Inactivo' }}
@@ -142,7 +142,7 @@ function emitDelete(coupon: Coupon): void {
           <div v-if="editingId !== coupon.id" class="flex items-center gap-2">
             <button
               type="button"
-              class="rounded-xl border border-[#4A52D8]/30 bg-[#4A52D8]/10 px-4 py-2 text-sm font-medium text-[#3C4DA7] hover:bg-[#4A52D8]/20"
+              class="rounded-xl border border-brasper-indigoStrong/30 bg-brasper-indigoStrong/10 px-4 py-2 text-sm font-medium text-brasper-indigoDark hover:bg-brasper-indigoStrong/20"
               @click="startEditing(coupon)"
             >
               Editar
@@ -169,7 +169,7 @@ function emitDelete(coupon: Coupon): void {
               v-model="editingForm.code"
               type="text"
               maxlength="32"
-              class="mt-1 w-full rounded-xl border border-[#cfdbef] bg-white px-3 py-2 text-sm uppercase text-[#232b4d] outline-none focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/20"
+              class="mt-1 w-full rounded-xl border border-[#cfdbef] bg-white px-3 py-2 text-sm uppercase text-[#232b4d] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
             />
           </label>
           <label class="block text-sm text-[#4d5a77]">
@@ -180,7 +180,7 @@ function emitDelete(coupon: Coupon): void {
               min="0"
               max="100"
               step="0.01"
-              class="mt-1 w-full rounded-xl border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#232b4d] outline-none focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/20"
+              class="mt-1 w-full rounded-xl border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#232b4d] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
             />
           </label>
           <label class="block text-sm text-[#4d5a77]">
@@ -190,7 +190,7 @@ function emitDelete(coupon: Coupon): void {
               type="number"
               min="0"
               step="1"
-              class="mt-1 w-full rounded-xl border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#232b4d] outline-none focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/20"
+              class="mt-1 w-full rounded-xl border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#232b4d] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
             />
           </label>
           <label class="flex items-end gap-3 rounded-xl border border-[#dbe7fb] bg-white px-4 py-3 text-sm font-medium text-[#232b4d]">
@@ -201,7 +201,7 @@ function emitDelete(coupon: Coupon): void {
             Moneda origen
             <select
               v-model="editingForm.origin_currency"
-              class="mt-1 w-full rounded-xl border border-[#cfdbef] bg-white px-3 py-2 text-sm uppercase text-[#232b4d] outline-none focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/20"
+              class="mt-1 w-full rounded-xl border border-[#cfdbef] bg-white px-3 py-2 text-sm uppercase text-[#232b4d] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
             >
               <option
                 v-for="option in props.currencyOptions"
@@ -216,7 +216,7 @@ function emitDelete(coupon: Coupon): void {
             Moneda destino
             <select
               v-model="editingForm.destination_currency"
-              class="mt-1 w-full rounded-xl border border-[#cfdbef] bg-white px-3 py-2 text-sm uppercase text-[#232b4d] outline-none focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/20"
+              class="mt-1 w-full rounded-xl border border-[#cfdbef] bg-white px-3 py-2 text-sm uppercase text-[#232b4d] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
             >
               <option
                 v-for="option in props.currencyOptions"
@@ -232,7 +232,7 @@ function emitDelete(coupon: Coupon): void {
             <input
               v-model="editingForm.start_date"
               type="datetime-local"
-              class="mt-1 w-full rounded-xl border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#232b4d] outline-none focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/20"
+              class="mt-1 w-full rounded-xl border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#232b4d] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
             />
           </label>
           <label class="block text-sm text-[#4d5a77]">
@@ -240,14 +240,14 @@ function emitDelete(coupon: Coupon): void {
             <input
               v-model="editingForm.end_date"
               type="datetime-local"
-              class="mt-1 w-full rounded-xl border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#232b4d] outline-none focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/20"
+              class="mt-1 w-full rounded-xl border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#232b4d] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
             />
           </label>
 
           <div class="flex items-end gap-3 xl:col-span-4">
             <button
               type="submit"
-              class="rounded-xl bg-gradient-to-r from-[#10b981] to-[#5ED6B3] px-5 py-2.5 text-sm font-semibold text-[#06271d] disabled:cursor-not-allowed disabled:opacity-60"
+              class="rounded-xl bg-gradient-to-r from-brasper-cyanLight to-brasper-indigoStrong px-5 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
               :disabled="props.savingId === coupon.id"
             >
               {{ props.savingId === coupon.id ? 'Guardando...' : 'Guardar cambios' }}

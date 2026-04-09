@@ -5,7 +5,7 @@
     <p v-if="error" class="mb-4 rounded-lg bg-[#dc3545]/10 px-4 py-3 text-sm text-[#dc3545]">
       {{ error }}
     </p>
-    <p v-if="successMessage" class="mb-4 rounded-lg bg-[#10b981]/10 px-4 py-3 text-sm text-[#065f46]">
+    <p v-if="successMessage" class="mb-4 rounded-lg bg-brasper-cyanLight/15 px-4 py-3 text-sm text-brasper-indigoDark">
       {{ successMessage }}
     </p>
 
@@ -23,14 +23,14 @@
           id="banner-enable"
           v-model="enable"
           type="checkbox"
-          class="h-4 w-4 rounded border-[#d0def6] text-[#2563eb] focus:ring-[#3b82f6]"
+          class="h-4 w-4 rounded border-[#d0def6] text-brasper-indigoStrong focus:ring-brasper-indigoStrong"
         />
         <label for="banner-enable" class="text-sm font-medium text-[#374151]">Banner visible (habilitado)</label>
       </div>
 
       <div class="space-y-6">
         <div class="rounded-xl border border-[#dbe7fb] bg-[#f9fbff] p-4">
-          <label class="mb-2 block text-xs font-semibold uppercase tracking-wider text-[#066ac9]">
+          <label class="mb-2 block text-xs font-semibold uppercase tracking-wider text-brasper-indigoStrong">
             Banner español (ES)
           </label>
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start">
@@ -45,7 +45,7 @@
               <input
                 type="file"
                 accept="image/*"
-                class="block w-full text-sm text-[#6b7280] file:mr-4 file:rounded-lg file:border-0 file:bg-[#2563eb] file:px-4 file:py-2 file:text-sm file:font-medium file:text-white file:hover:bg-[#1d4ed8]"
+                class="block w-full text-sm text-[#6b7280] file:mr-4 file:rounded-lg file:border-0 file:bg-brasper-indigoStrong file:px-4 file:py-2 file:text-sm file:font-medium file:text-white file:hover:bg-brasper-indigoDark"
                 @change="onFileChange($event, 'es')"
               />
               <p v-if="currentBanner?.banner_es && !fileEs" class="mt-1 text-xs text-[#6b7280]">
@@ -56,7 +56,7 @@
         </div>
 
         <div class="rounded-xl border border-[#dbe7fb] bg-[#f9fbff] p-4">
-          <label class="mb-2 block text-xs font-semibold uppercase tracking-wider text-[#066ac9]">
+          <label class="mb-2 block text-xs font-semibold uppercase tracking-wider text-brasper-indigoStrong">
             Banner portugués (PR)
           </label>
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start">
@@ -71,7 +71,7 @@
               <input
                 type="file"
                 accept="image/*"
-                class="block w-full text-sm text-[#6b7280] file:mr-4 file:rounded-lg file:border-0 file:bg-[#2563eb] file:px-4 file:py-2 file:text-sm file:font-medium file:text-white file:hover:bg-[#1d4ed8]"
+                class="block w-full text-sm text-[#6b7280] file:mr-4 file:rounded-lg file:border-0 file:bg-brasper-indigoStrong file:px-4 file:py-2 file:text-sm file:font-medium file:text-white file:hover:bg-brasper-indigoDark"
                 @change="onFileChange($event, 'pr')"
               />
               <p v-if="currentBanner?.banner_pr && !filePr" class="mt-1 text-xs text-[#6b7280]">
@@ -82,7 +82,7 @@
         </div>
 
         <div class="rounded-xl border border-[#dbe7fb] bg-[#f9fbff] p-4">
-          <label class="mb-2 block text-xs font-semibold uppercase tracking-wider text-[#066ac9]">
+          <label class="mb-2 block text-xs font-semibold uppercase tracking-wider text-brasper-indigoStrong">
             Banner inglés (EN)
           </label>
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start">
@@ -97,7 +97,7 @@
               <input
                 type="file"
                 accept="image/*"
-                class="block w-full text-sm text-[#6b7280] file:mr-4 file:rounded-lg file:border-0 file:bg-[#2563eb] file:px-4 file:py-2 file:text-sm file:font-medium file:text-white file:hover:bg-[#1d4ed8]"
+                class="block w-full text-sm text-[#6b7280] file:mr-4 file:rounded-lg file:border-0 file:bg-brasper-indigoStrong file:px-4 file:py-2 file:text-sm file:font-medium file:text-white file:hover:bg-brasper-indigoDark"
                 @change="onFileChange($event, 'en')"
               />
               <p v-if="currentBanner?.banner_en && !fileEn" class="mt-1 text-xs text-[#6b7280]">
@@ -111,7 +111,7 @@
       <div class="mt-8 flex gap-3">
         <button
           type="submit"
-          class="rounded-xl bg-[#2563eb] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1d4ed8] disabled:opacity-50"
+          class="rounded-xl bg-brasper-indigoStrong px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brasper-indigoDark disabled:opacity-50"
           :disabled="saving"
         >
           {{ saving ? 'Guardando...' : (currentBanner ? 'Actualizar banner' : 'Crear banner') }}

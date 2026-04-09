@@ -1,8 +1,8 @@
 <template>
   <div class="space-y-6">
-    <section class="rounded-2xl border border-[#d8e5fb] bg-white p-6 shadow-lg shadow-[#007bff]/5">
+    <section class="rounded-2xl border border-[#d8e5fb] bg-white p-6 shadow-lg shadow-brasper-indigoStrong/10">
       <div class="mb-4">
-        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[#066ac9]">Configuración</p>
+        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brasper-indigoStrong">Configuración</p>
         <h1 class="text-2xl font-semibold text-[#232b4d]">Tasas de Cambio</h1>
       </div>
 
@@ -26,7 +26,7 @@
               <div class="flex items-center gap-2">
                 <button
                   type="button"
-                  class="rounded-lg border border-[#bcd7ff] bg-[#eef5ff] px-3 py-1.5 text-sm font-medium text-[#066ac9] hover:bg-[#e2eeff]"
+                  class="rounded-lg border border-[#bcd7ff] bg-[#eef5ff] px-3 py-1.5 text-sm font-medium text-brasper-indigoStrong hover:bg-[#e2eeff]"
                   @click="toggleHistory(rate.id)"
                 >
                   {{ expandedHistoryId === rate.id ? 'Ocultar historial' : 'Historial' }}
@@ -34,7 +34,7 @@
                 <button
                   v-if="editingId !== rate.id"
                   type="button"
-                  class="rounded-lg border border-[#4A52D8]/30 bg-[#4A52D8]/10 px-3 py-1.5 text-sm font-medium text-[#3C4DA7] hover:bg-[#4A52D8]/20"
+                  class="rounded-lg border border-brasper-indigoStrong/30 bg-brasper-indigoStrong/10 px-3 py-1.5 text-sm font-medium text-brasper-indigoDark hover:bg-brasper-indigoStrong/20"
                   @click="startEditing(rate)"
                 >
                   Editar
@@ -49,11 +49,11 @@
                 inputmode="decimal"
                 step="0.000001"
                 min="0"
-                class="w-36 rounded-lg border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#333] outline-none focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/20"
+                class="w-36 rounded-lg border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#333] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
               />
               <button
                 type="button"
-                class="rounded-lg bg-gradient-to-r from-[#10b981] to-[#5ED6B3] px-3 py-2 text-sm font-semibold text-[#06271d] disabled:opacity-60"
+                class="rounded-lg bg-gradient-to-r from-brasper-cyanLight to-brasper-indigoStrong px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
                 :disabled="tasasStore.savingId === rate.id"
                 @click="saveRate(rate.id, rate.coin_a, rate.coin_b)"
               >
@@ -61,7 +61,7 @@
               </button>
               <button
                 type="button"
-                class="rounded-lg border border-[#4A52D8]/30 bg-[#4A52D8]/10 px-3 py-2 text-sm text-[#3C4DA7] hover:bg-[#4A52D8]/20"
+                class="rounded-lg border border-brasper-indigoStrong/30 bg-brasper-indigoStrong/10 px-3 py-2 text-sm text-brasper-indigoDark hover:bg-brasper-indigoStrong/20"
                 @click="cancelEditing"
               >
                 Cancelar

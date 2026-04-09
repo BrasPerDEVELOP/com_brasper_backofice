@@ -24,7 +24,7 @@ defineEmits<{
   <div
     :class="[
       'relative flex items-center rounded-lg border border-[#e5e7eb] bg-white transition',
-      'focus-within:border-[#2563eb] focus-within:ring-1 focus-within:ring-[#2563eb]',
+      'focus-within:border-brasper-indigoStrong focus-within:ring-1 focus-within:ring-brasper-indigoStrong',
       size === 'sm' ? 'min-h-[36px]' : 'min-h-[40px]',
       props.class
     ]"

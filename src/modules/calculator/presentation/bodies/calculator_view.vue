@@ -7,7 +7,7 @@
         </h1>
         <span
           v-if="isDemo"
-          class="rounded-full bg-[#e6ff00] px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-[#232b4d]"
+          class="rounded-full bg-brasper-cyanLight/90 px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-brasper-indigoDark"
         >
           Demo
         </span>
@@ -33,7 +33,7 @@
         <div class="space-y-4">
           <div class="rounded-xl border border-[#dbe7fb] bg-[#f9fbff] px-4 py-3 shadow-inner">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[#066ac9]">
+              <p class="text-xs font-semibold uppercase tracking-[0.25em] text-brasper-indigoStrong">
                 Tú envías
               </p>
               <span class="text-right text-[11px] font-medium uppercase tracking-[0.2em] text-[#666]">
@@ -48,7 +48,7 @@
                 step="0.01"
                 inputmode="decimal"
                 placeholder="0.00"
-                class="w-full flex-1 appearance-none rounded-xl border border-[#d0def6] bg-white px-4 py-2.5 text-lg font-semibold text-[#232b4d] shadow-sm outline-none transition focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/30"
+                class="w-full flex-1 appearance-none rounded-xl border border-[#d0def6] bg-white px-4 py-2.5 text-lg font-semibold text-[#232b4d] shadow-sm outline-none transition focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/30"
                 @input="onAmountSendInput"
               />
               <div class="w-full sm:w-auto">
@@ -64,7 +64,7 @@
 
           <div class="rounded-xl border border-[#dbe7fb] bg-[#f9fbff] px-4 py-3 shadow-inner">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[#066ac9]">
+              <p class="text-xs font-semibold uppercase tracking-[0.25em] text-brasper-indigoStrong">
                 El destinatario recibe
               </p>
               <span class="text-right text-[11px] font-medium uppercase tracking-[0.2em] text-[#666]">
@@ -79,7 +79,7 @@
                 step="0.01"
                 inputmode="decimal"
                 placeholder="0.00"
-                class="w-full flex-1 appearance-none rounded-xl border border-[#d0def6] bg-white px-4 py-2.5 text-lg font-semibold text-[#232b4d] shadow-sm outline-none transition focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/30"
+                class="w-full flex-1 appearance-none rounded-xl border border-[#d0def6] bg-white px-4 py-2.5 text-lg font-semibold text-[#232b4d] shadow-sm outline-none transition focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/30"
                 @input="onAmountReceiveInput"
               />
               <div class="w-full sm:w-auto">
@@ -99,7 +99,7 @@
           >
             <div class="flex items-center justify-between text-xs text-[#666]">
               <span class="font-medium text-[#555]">Comisión</span>
-              <span class="text-sm font-semibold text-[#10b981]">
+              <span class="text-sm font-semibold text-brasper-indigoStrong">
                 {{ formatCurrency(calculatorStore.result.commission, calculatorStore.currencyFrom) }}
               </span>
             </div>
@@ -112,7 +112,7 @@
             </div>
             <div class="flex items-center justify-between text-xs text-[#666]">
               <span class="font-medium text-[#555]">Total a pagar</span>
-              <span class="text-sm font-semibold text-[#007bff]">
+              <span class="text-sm font-semibold text-brasper-indigoStrong">
                 {{ formatCurrency(calculatorStore.result.totalToSend, calculatorStore.currencyFrom) }}
               </span>
             </div>
@@ -128,7 +128,7 @@
 
           <button
             type="button"
-            class="flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#007bff] via-[#007aff] to-[#3b82f6] px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-white shadow-md shadow-[#007bff]/30 transition hover:from-[#066ac9] hover:to-[#4484f3] focus:outline-none focus:ring-2 focus:ring-[#3b82f6]/30"
+            class="flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-brasper-cyanLight via-brasper-cyan to-brasper-indigoStrong px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-white shadow-md shadow-brasper-indigoStrong/25 transition hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-brasper-cyan/30"
           >
             Enviar dinero ahora
             <svg
@@ -147,7 +147,7 @@
             Garantizamos la tasa durante los próximos 15 minutos
           </p>
 
-          <div class="flex flex-wrap items-center justify-center gap-3 text-[10px] font-medium uppercase tracking-[0.2em] text-[#4A52D8]/70">
+          <div class="flex flex-wrap items-center justify-center gap-3 text-[10px] font-medium uppercase tracking-[0.2em] text-brasper-indigoStrong/70">
             <span>Transacción Segura</span>
             <span>SSL</span>
             <span>Regulación FCA</span>

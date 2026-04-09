@@ -1,169 +1,325 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { useRoute, useRouter, RouterLink, RouterView } from 'vue-router'
-import { useAuthStore } from '@modules/auth/presentation/controllers/use_auth_store_controller'
-import { Domain } from '@/interface/infrastructure/services'
-import { getNavIcon } from './nav_icons'
+import { computed, ref, watch } from "vue";
+import { useRoute, useRouter, RouterLink, RouterView } from "vue-router";
+import { useAuthStore } from "@modules/auth/presentation/controllers/use_auth_store_controller";
+import { Domain } from "@/interface/infrastructure/services";
+import { getNavIcon } from "./nav_icons";
 
-const route = useRoute()
-const router = useRouter()
-const authStore = useAuthStore()
+const route = useRoute();
+const router = useRouter();
+const authStore = useAuthStore();
 
-async function handleLogout() {
-  await authStore.logout()
-  router.push('/')
-}
-
-const showSidebar = computed(() => route.path.startsWith('/app'))
-
-const navItems = [
-  { to: '/app/perfil', label: 'Perfil', icon: 'user' },
-  { to: '/app/usuarios', label: 'Usuarios', icon: 'users' },
-  { to: '/app/transacciones', label: 'Transacciones', icon: 'transactions' },
-  { to: '/app/calculator', label: 'Calculadora', icon: 'calc' },
-  { to: '/app/cupones', label: 'Cupones', icon: 'ticket' },
-  { to: '/app/calculator?demo=1', label: 'Calculadora Demo', icon: 'demo' },
-  { to: '/app/cuentas', label: 'Cuentas', icon: 'bank' },
-  { to: '/app/comisiones', label: 'Comisiones', icon: 'folder' },
-  { to: '/app/tasas', label: 'Tasas', icon: 'exchange' }
-]
-
-const settingsItem = { to: '/app/tasas', label: 'Configuración', icon: 'settings' }
-
-const breadcrumbs = computed(() => {
-  const name = (route.name as string) ?? ''
-  const meta = (route.meta?.breadcrumb as string) ?? ''
-  if (meta) return meta
-  if (name === 'calculator' && route.query.demo === '1') return 'Operaciones > Calculadora Demo'
-  const map: Record<string, string> = {
-    transacciones: 'Operaciones > Transacciones',
-    calculator: 'Operaciones > Calculadora',
-    cupones: 'Operaciones > Cupones',
-    comisiones: 'Comercial > Comisiones',
-    cuentas: 'Configuración > Cuentas',
-    tasas: 'Configuración > Tasas de cambio',
-    perfil: 'Cuenta > Perfil',
-    usuarios: 'Cuenta > Usuarios'
-  }
-  return map[name] ?? 'Panel Brasper'
-})
-
-const isActive = (to: string | { path: string; query?: Record<string, string> }) => {
-  const path = typeof to === 'string' ? to.split('?')[0] : to.path
-  const queryDemo = typeof to === 'string' ? to.includes('demo=1') : to.query?.demo === '1'
-  const routeDemo = route.query.demo === '1'
-  if (path === '/app/calculator' && queryDemo) return route.path === '/app/calculator' && routeDemo
-  if (path === '/app/calculator' && !queryDemo) return route.path === '/app/calculator' && !routeDemo
-  return route.path === path || route.path.startsWith(path + '/')
-}
+const messageBadgeCount = ref(2);
+const notifyBadgeCount = ref(2);
 
 const userInitial = computed(() => {
-  const email = authStore.user?.email
-  if (!email) return '?'
-  return (email[0] ?? '?').toUpperCase()
-})
+  const email = authStore.user?.email;
+  if (!email) return "?";
+  return (email[0] ?? "?").toUpperCase();
+});
 
 const profileImageUrl = computed(() => {
-  const img = authStore.user?.profile_image
-  if (!img) return ''
-  return Domain.mediaUrl(img)
-})
+  const img = authStore.user?.profile_image;
+  if (!img) return "";
+  return Domain.mediaUrl(img);
+});
 
-const navbarImageError = ref(false)
+const navbarImageError = ref(false);
 watch(
   () => authStore.user?.profile_image,
-  () => { navbarImageError.value = false }
-)
+  () => {
+    navbarImageError.value = false;
+  },
+);
+
+async function handleLogout() {
+  await authStore.logout();
+  router.push("/");
+}
+
+const showSidebar = computed(() => route.path.startsWith("/app"));
+
+const navItems = [
+  { to: "/app/usuarios", label: "Usuarios", icon: "users" },
+  { to: "/app/transacciones", label: "Transacciones", icon: "transactions" },
+  { to: "/app/calculator", label: "Calculadora", icon: "calc" },
+  { to: "/app/cupones", label: "Cupones", icon: "ticket" },
+  { to: "/app/calculator?demo=1", label: "Calculadora Demo", icon: "demo" },
+  { to: "/app/cuentas", label: "Cuentas", icon: "bank" },
+  { to: "/app/comisiones", label: "Comisiones", icon: "folder" },
+  { to: "/app/tasas", label: "Tasas", icon: "exchange" },
+];
+
+const bottomNavItems = [
+  { to: "/app/tasas", label: "Configuración", icon: "settings" },
+];
+
+const sidebarLogoutButtonClass = [
+  "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-all",
+  "text-white/90 hover:bg-white/15 hover:text-white",
+] as const;
+
+const breadcrumbs = computed(() => {
+  const name = (route.name as string) ?? "";
+  const meta = (route.meta?.breadcrumb as string) ?? "";
+  if (meta) return meta;
+  if (name === "calculator" && route.query.demo === "1")
+    return "Operaciones > Calculadora Demo";
+  const map: Record<string, string> = {
+    transacciones: "Operaciones > Transacciones",
+    calculator: "Operaciones > Calculadora",
+    cupones: "Operaciones > Cupones",
+    comisiones: "Comercial > Comisiones",
+    cuentas: "Configuración > Cuentas",
+    tasas: "Configuración > Tasas de cambio",
+    perfil: "Cuenta > Perfil",
+    usuarios: "Cuenta > Usuarios",
+  };
+  return map[name];
+});
+
+const isActive = (
+  to: string | { path: string; query?: Record<string, string> },
+) => {
+  const path = typeof to === "string" ? to.split("?")[0] : to.path;
+  const queryDemo =
+    typeof to === "string" ? to.includes("demo=1") : to.query?.demo === "1";
+  const routeDemo = route.query.demo === "1";
+  if (path === "/app/calculator" && queryDemo)
+    return route.path === "/app/calculator" && routeDemo;
+  if (path === "/app/calculator" && !queryDemo)
+    return route.path === "/app/calculator" && !routeDemo;
+  return route.path === path || route.path.startsWith(path + "/");
+};
+
+const sidebarLinkClass = (to: string) =>
+  [
+    "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-all",
+    isActive(to)
+      ? "bg-white/25 text-white shadow-md"
+      : "text-white/90 hover:bg-white/15 hover:text-white",
+  ] as const;
+
+/** Teleport al body: el nav con overflow-y-auto recorta cualquier tooltip hijo (overflow-x deja de ser visible). */
+const sidebarTooltip = ref<{
+  label: string;
+  top: number;
+  left: number;
+} | null>(null);
+
+function openSidebarTooltip(e: Event, label: string) {
+  const el = e.currentTarget as HTMLElement | null;
+  if (!el) return;
+  const r = el.getBoundingClientRect();
+  sidebarTooltip.value = {
+    label,
+    top: r.top + r.height / 2,
+    left: r.right + 10,
+  };
+}
+
+function closeSidebarTooltip() {
+  sidebarTooltip.value = null;
+}
+
+watch(showSidebar, (vis) => {
+  if (!vis) closeSidebarTooltip();
+});
 </script>
 
 <template>
   <div class="min-h-screen bg-[#f5f7fa]">
-    <!-- Sidebar estrecho con iconos (estilo referencia, colores Brasper) -->
+    <header
+      v-if="showSidebar"
+      class="fixed inset-x-0 top-0 z-30 flex h-16 items-center justify-between border-b border-neutral-200/90 bg-white px-4 shadow-sm sm:px-6 lg:px-8"
+    >
+      <div class="flex min-w-0 flex-1 items-center gap-4 lg:gap-8">
+        <RouterLink
+          to="/app/transacciones"
+          class="flex shrink-0 items-center gap-3"
+        >
+          <img
+            src="/images/logo_completo.png"
+            alt="Brasper"
+            class="h-9 w-auto max-w-[140px] object-contain"
+          />
+        </RouterLink>
+        <div
+          class="hidden min-w-0 items-center gap-2 text-sm text-neutral-600 md:flex"
+        >
+          
+          <span class="truncate font-medium text-neutral-700">{{
+            breadcrumbs
+          }}</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-1 sm:gap-2">
+        <button
+          type="button"
+          class="relative flex h-10 w-10 items-center justify-center rounded-xl text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-800"
+          title="Calendario"
+        >
+          <svg
+            class="h-5 w-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+            />
+          </svg>
+        </button>
+        <RouterLink
+          to="/app/cupones"
+          class="relative flex h-10 w-10 items-center justify-center rounded-xl text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-800"
+          title="Mensajes"
+        >
+          <svg
+            class="h-5 w-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+            />
+          </svg>
+          <span
+            v-if="messageBadgeCount > 0"
+            class="absolute right-1 top-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-brasper-indigoStrong px-1 text-[10px] font-bold leading-none text-white"
+            >{{ messageBadgeCount > 9 ? "9+" : messageBadgeCount }}</span
+          >
+        </RouterLink>
+        <button
+          type="button"
+          class="relative flex h-10 w-10 items-center justify-center rounded-xl text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-800"
+          title="Notificaciones"
+        >
+          <svg
+            class="h-5 w-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+            />
+          </svg>
+          <span
+            v-if="notifyBadgeCount > 0"
+            class="absolute right-1 top-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-brasper-indigoStrong px-1 text-[10px] font-bold leading-none text-white"
+            >{{ notifyBadgeCount > 9 ? "9+" : notifyBadgeCount }}</span
+          >
+        </button>
+        <RouterLink
+          to="/app/perfil"
+          class="ml-1 flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-neutral-200/90 bg-gradient-to-br from-brasper-cyanLight/25 to-brasper-indigoStrong/20 text-sm font-bold text-brasper-indigoDark ring-offset-2 transition hover:ring-2 hover:ring-brasper-indigoStrong/35"
+          title="Mi perfil"
+          aria-label="Ir a mi perfil"
+        >
+          <img
+            v-if="profileImageUrl && !navbarImageError"
+            :src="profileImageUrl"
+            :alt="authStore.user?.name ?? 'Perfil'"
+            class="h-full w-full object-cover"
+            @error="navbarImageError = true"
+          />
+          <span v-else>{{ userInitial }}</span>
+        </RouterLink>
+      </div>
+    </header>
+
     <aside
       v-if="showSidebar"
-      class="fixed inset-y-0 left-0 z-20 w-16 flex flex-col border-r border-[#223160] bg-gradient-to-b from-[#0F123E] via-[#1c284c] to-[#232b4d] shadow-xl"
+      class="fixed bottom-6 left-3 top-[5.25rem] z-20 flex w-[3.75rem] flex-col rounded-2xl bg-gradient-to-b from-brasper-indigoStrong to-brasper-indigoDark py-4 shadow-lg shadow-brasper-indigoDark/35"
+      aria-label="Navegación principal"
     >
-      <div class="flex h-14 items-center justify-center border-b border-white/10 px-2">
-        <img
-          src="/images/logo_completo.png"
-          alt="Brasper"
-          class="h-8 w-auto max-w-full object-contain"
-        />
-      </div>
-      <nav class="flex-1 space-y-1 px-2 py-4">
-        <RouterLink
+      <nav class="flex min-h-0 flex-1 flex-col items-center gap-1 overflow-y-auto px-2">
+        <div
           v-for="item in navItems"
           :key="item.to"
-          :to="item.to"
-          :title="item.label"
-          :class="[
-            'flex h-11 w-11 items-center justify-center rounded-lg transition-all',
-            isActive(item.to)
-              ? 'bg-gradient-to-br from-[#007aff]/50 to-[#4A52D8]/50 text-white shadow-lg'
-              : 'text-[#b9c4ef] hover:bg-white/10 hover:text-white'
-          ]"
+          class="flex w-full justify-center"
         >
-          <component :is="getNavIcon(item.icon)" class="h-5 w-5 shrink-0" />
-        </RouterLink>
+          <RouterLink
+            :to="item.to"
+            :aria-label="item.label"
+            :class="sidebarLinkClass(item.to)"
+            @mouseenter="openSidebarTooltip($event, item.label)"
+            @mouseleave="closeSidebarTooltip"
+            @focus="openSidebarTooltip($event, item.label)"
+            @blur="closeSidebarTooltip"
+          >
+            <component :is="getNavIcon(item.icon)" class="h-5 w-5 shrink-0" />
+          </RouterLink>
+        </div>
       </nav>
-      <div class="border-t border-white/10 p-2">
-        <RouterLink
-          :to="settingsItem.to"
-          :title="settingsItem.label"
-          :class="[
-            'flex h-11 w-11 items-center justify-center rounded-lg transition-all',
-            isActive(settingsItem.to)
-              ? 'bg-gradient-to-br from-[#007aff]/50 to-[#4A52D8]/50 text-white'
-              : 'text-[#b9c4ef] hover:bg-white/10 hover:text-white'
-          ]"
+      <div class="mx-3 my-3 h-px shrink-0 bg-white/35" />
+      <div class="flex flex-col items-center gap-1 px-2 pb-1">
+        <div
+          v-for="item in bottomNavItems"
+          :key="item.to + item.icon"
+          class="flex w-full justify-center"
         >
-          <component :is="getNavIcon(settingsItem.icon)" class="h-5 w-5 shrink-0" />
-        </RouterLink>
+          <RouterLink
+            :to="item.to"
+            :aria-label="item.label"
+            :class="sidebarLinkClass(item.to)"
+            @mouseenter="openSidebarTooltip($event, item.label)"
+            @mouseleave="closeSidebarTooltip"
+            @focus="openSidebarTooltip($event, item.label)"
+            @blur="closeSidebarTooltip"
+          >
+            <component :is="getNavIcon(item.icon)" class="h-5 w-5 shrink-0" />
+          </RouterLink>
+        </div>
+        <div class="flex w-full justify-center">
+          <button
+            type="button"
+            :class="sidebarLogoutButtonClass"
+            aria-label="Cerrar sesión"
+            @click="handleLogout"
+            @mouseenter="openSidebarTooltip($event, 'Cerrar sesión')"
+            @mouseleave="closeSidebarTooltip"
+            @focus="openSidebarTooltip($event, 'Cerrar sesión')"
+            @blur="closeSidebarTooltip"
+          >
+            <component :is="getNavIcon('logout')" class="h-5 w-5 shrink-0" />
+          </button>
+        </div>
       </div>
     </aside>
 
+    <Teleport to="body">
+      <div
+        v-if="sidebarTooltip"
+        role="tooltip"
+        class="pointer-events-none fixed z-[9999] whitespace-nowrap rounded-lg bg-neutral-900/95 px-2.5 py-1.5 text-xs font-medium text-white shadow-lg ring-1 ring-white/15"
+        :style="{
+          top: `${sidebarTooltip.top}px`,
+          left: `${sidebarTooltip.left}px`,
+          transform: 'translateY(-50%)',
+        }"
+      >
+        {{ sidebarTooltip.label }}
+      </div>
+    </Teleport>
+
     <main
       :class="[
-        'min-h-screen transition-all duration-300',
-        showSidebar ? 'ml-16' : 'ml-0'
+        'min-h-screen transition-[margin] duration-300',
+        showSidebar ? 'ml-[5.25rem] pt-16' : 'ml-0 pt-0',
       ]"
     >
-      <!-- Header estilo referencia: branding | breadcrumbs | acciones -->
-      <header
-        v-if="showSidebar"
-        class="sticky top-0 z-10 flex items-center justify-between rounded-b-2xl border-b border-[#d7e3fa] bg-white/95 px-8 py-4 backdrop-blur"
-      >
-        <div class="flex items-center gap-6">
-          <h1 class="text-lg font-bold text-[#232b4d]">Brasper</h1>
-          <span class="text-sm text-[#666]">{{ breadcrumbs }}</span>
-        </div>
-        <div class="flex items-center gap-3">
-          <RouterLink
-            to="/app/perfil"
-            class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#4A52D8]/30 to-[#007aff]/30 text-sm font-bold text-[#232b4d] transition hover:from-[#4A52D8]/50 hover:to-[#007aff]/50"
-          >
-            <img
-              v-if="profileImageUrl && !navbarImageError"
-              :src="profileImageUrl"
-              :alt="authStore.user?.name ?? ''"
-              class="h-full w-full object-cover"
-              @error="navbarImageError = true"
-            />
-            <span v-else>{{ userInitial }}</span>
-          </RouterLink>
-          <button
-            type="button"
-            class="flex h-10 w-10 items-center justify-center rounded-xl text-[#666] transition hover:bg-[#dc3545]/10 hover:text-[#dc3545]"
-            title="Salir"
-            @click="handleLogout"
-          >
-            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-          </button>
-        </div>
-      </header>
-
       <div class="p-8 lg:p-10">
         <RouterView />
       </div>

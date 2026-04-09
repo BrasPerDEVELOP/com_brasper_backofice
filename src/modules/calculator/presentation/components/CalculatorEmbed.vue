@@ -11,7 +11,7 @@
     <template v-else>
       <div class="space-y-5">
         <div class="rounded-xl border border-[#dbe7fb] bg-white px-4 py-4 shadow-sm">
-          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[#066ac9]">Tú envías</p>
+          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brasper-indigoStrong">Tú envías</p>
           <div class="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
             <input
               v-model.number="amountSendLocal"
@@ -20,7 +20,7 @@
               step="0.01"
               inputmode="decimal"
               placeholder="0.00"
-              class="flex-1 rounded-lg border border-[#d0def6] bg-white px-4 py-2.5 text-lg font-semibold text-[#232b4d] focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/30"
+              class="flex-1 rounded-lg border border-[#d0def6] bg-white px-4 py-2.5 text-lg font-semibold text-[#232b4d] focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/30"
               @input="onAmountSendInput"
             />
             <AppDropdown
@@ -33,7 +33,7 @@
         </div>
 
         <div class="flex justify-center">
-          <div class="flex h-10 w-10 items-center justify-center rounded-full bg-[#007bff]/15 text-[#007bff]">
+          <div class="flex h-10 w-10 items-center justify-center rounded-full bg-brasper-indigoStrong/15 text-brasper-indigoStrong">
             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M8 9l4-4 4 4M16 15l-4 4-4-4" />
             </svg>
@@ -41,7 +41,7 @@
         </div>
 
         <div class="rounded-xl border border-[#dbe7fb] bg-white px-4 py-4 shadow-sm">
-          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[#066ac9]">El destinatario recibe</p>
+          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brasper-indigoStrong">El destinatario recibe</p>
           <div class="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
             <input
               v-model.number="amountReceiveLocal"
@@ -50,7 +50,7 @@
               step="0.01"
               inputmode="decimal"
               placeholder="0.00"
-              class="flex-1 rounded-lg border border-[#d0def6] bg-white px-4 py-2.5 text-lg font-semibold text-[#232b4d] focus:border-[#007bff] focus:ring-2 focus:ring-[#3b82f6]/30"
+              class="flex-1 rounded-lg border border-[#d0def6] bg-white px-4 py-2.5 text-lg font-semibold text-[#232b4d] focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/30"
               @input="onAmountReceiveInput"
             />
             <AppDropdown
@@ -68,7 +68,7 @@
         >
           <div class="flex items-center justify-between text-sm text-[#666]">
             <span>Comisión</span>
-            <span class="font-semibold text-[#10b981]">
+            <span class="font-semibold text-brasper-indigoStrong">
               {{ formatCurrency(calculatorStore.result.commission, calculatorStore.currencyFrom) }}
             </span>
           </div>
@@ -81,7 +81,7 @@
           </div>
           <div class="flex items-center justify-between text-sm text-[#666]">
             <span>Total a pagar</span>
-            <span class="font-semibold text-[#007bff]">
+            <span class="font-semibold text-brasper-indigoStrong">
               {{ formatCurrency(calculatorStore.result.totalToSend, calculatorStore.currencyFrom) }}
             </span>
           </div>
