@@ -116,22 +116,25 @@
           </div>
         </div>
 
-        <button
-          type="button"
-          class="relative z-[1] inline-flex w-full cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg bg-brasper-cyan px-5 py-2.5 text-sm font-bold text-white transition-colors duration-500 hover:bg-brasper-indigoStrong"
-          @click="handleButtonClick"
-        >
-          Enviar dinero ahora
-        </button>
-        <p v-if="buttonFeedback" class="text-center text-xs font-medium text-red-600">
-          {{ buttonFeedback }}
-        </p>
+        <template v-if="showSendCta">
+          <button
+            type="button"
+            class="relative z-[1] inline-flex w-full cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg bg-brasper-cyan px-5 py-2.5 text-sm font-bold text-white transition-colors duration-500 hover:bg-brasper-indigoStrong"
+            @click="handleButtonClick"
+          >
+            Enviar dinero ahora
+          </button>
+          <p v-if="buttonFeedback" class="text-center text-xs font-medium text-red-600">
+            {{ buttonFeedback }}
+          </p>
 
-        <p class="text-center text-xs text-gray-500">Garantizamos la tasa durante los proximos 15 minutos.</p>
+          <p class="text-center text-xs text-gray-500">Garantizamos la tasa durante los proximos 15 minutos.</p>
+        </template>
       </div>
     </template>
 
     <CalculatorWhatsappModal
+      v-if="showSendCta"
       :open="showWhatsappModal"
       :message="whatsappMessage"
       :language="messageLanguage"
@@ -151,8 +154,10 @@ import { useCalculatorPage, type CalculatorPageVariant } from '../composables/us
 const props = withDefaults(
   defineProps<{
     variant?: CalculatorPageVariant
+    /** Si es false, oculta el CTA de WhatsApp y el copy de garantía (p. ej. embed en backoffice). */
+    showSendCta?: boolean
   }>(),
-  { variant: 'production' }
+  { variant: 'production', showSendCta: true }
 )
 
 const {
