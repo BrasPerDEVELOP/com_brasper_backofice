@@ -1570,7 +1570,7 @@ onMounted(() => {
               </h2>
               <p class="mt-0.5 text-xs text-[#6b7280]">
                 Paso {{ createStepIndex + 1 }} de {{ CREATE_FLOW_STEPS.length }}
-                · {{ CREATE_FLOW_STEPS[createStepIndex].title }}
+                · {{ CREATE_FLOW_STEPS[createStepIndex]?.title }}
               </p>
             </div>
             <button

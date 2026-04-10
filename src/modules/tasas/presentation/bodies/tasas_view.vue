@@ -198,7 +198,6 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from "vue";
 import { useTasasStore } from "../controllers/use_tasas_store_controller";
-import type { TaxRate } from "../../domain/models";
 
 withDefaults(
   defineProps<{
@@ -212,12 +211,6 @@ withDefaults(
 const tasasStore = useTasasStore();
 const expandedHistoryId = ref<string | null>(null);
 const draftTaxes = ref<Record<string, string>>({});
-
-/** Formatea número con coma decimal para mostrar. */
-function formatTax(value: number): string {
-  if (Number.isNaN(value) || value === 0) return "0";
-  return String(value).replace(".", ",");
-}
 
 async function saveRate(
   id: string,
