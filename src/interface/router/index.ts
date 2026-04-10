@@ -17,13 +17,25 @@ const routes: RouteRecordRaw[] = [
     children: [
       {
         path: '',
-        redirect: '/app/transacciones'
+        redirect: '/app/dashboard'
+      },
+      {
+        path: 'dashboard',
+        name: 'dashboard',
+        component: () => import('@modules/dashboard/presentation/bodies/dashboard_view.vue'),
+        meta: { breadcrumb: 'Panel > Resumen' }
       },
       {
         path: 'transacciones',
         name: 'transacciones',
         component: () => import('@modules/transacciones/presentation/bodies/transacciones_view.vue'),
         meta: { breadcrumb: 'Operaciones > Transacciones' }
+      },
+      {
+        path: 'contabilidad',
+        name: 'contabilidad',
+        component: () => import('@modules/contabilidad/presentation/bodies/contabilidad_view.vue'),
+        meta: { breadcrumb: 'Operaciones > Contabilidad' }
       },
       {
         path: 'calculator',
@@ -74,6 +86,8 @@ const routes: RouteRecordRaw[] = [
   { path: '/tasas', redirect: '/app/tasas' },
   { path: '/calculator', redirect: '/app/calculator' },
   { path: '/cupones', redirect: '/app/cupones' },
+  { path: '/contabilidad', redirect: '/app/contabilidad' },
+  { path: '/dashboard', redirect: '/app/dashboard' },
   { path: '/calculator-demo', redirect: { path: '/app/calculator', hash: '#calculator-demo' } }
 ]
 

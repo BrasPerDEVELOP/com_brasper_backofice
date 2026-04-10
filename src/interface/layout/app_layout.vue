@@ -40,8 +40,10 @@ async function handleLogout() {
 const showSidebar = computed(() => route.path.startsWith("/app"));
 
 const navItems = [
+  { to: "/app/dashboard", label: "Panel", icon: "chart" },
   { to: "/app/usuarios", label: "Usuarios", icon: "users" },
   { to: "/app/transacciones", label: "Transacciones", icon: "transactions" },
+  { to: "/app/contabilidad", label: "Contabilidad", icon: "ledger" },
   { to: "/app/calculator", label: "Calculadora", icon: "calc" },
   { to: "/app/cupones", label: "Cupones", icon: "ticket" },
   { to: "/app/cuentas", label: "Cuentas", icon: "bank" },
@@ -63,7 +65,9 @@ const breadcrumbs = computed(() => {
   const meta = (route.meta?.breadcrumb as string) ?? "";
   if (meta) return meta;
   const map: Record<string, string> = {
+    dashboard: "Panel > Resumen",
     transacciones: "Operaciones > Transacciones",
+    contabilidad: "Operaciones > Contabilidad",
     calculator: "Operaciones > Calculadora",
     cupones: "Operaciones > Cupones",
     comisiones: "Comercial > Comisiones",
@@ -123,7 +127,7 @@ watch(showSidebar, (vis) => {
     >
       <div class="flex min-w-0 flex-1 items-center gap-4 lg:gap-8">
         <RouterLink
-          to="/app/transacciones"
+          to="/app/dashboard"
           class="flex shrink-0 items-center gap-3"
         >
           <img

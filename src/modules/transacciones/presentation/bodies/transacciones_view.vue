@@ -1,5 +1,14 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, reactive, watch, nextTick } from "vue";
+import {
+  ref,
+  computed,
+  onMounted,
+  onBeforeUnmount,
+  reactive,
+  watch,
+  nextTick,
+} from "vue";
+import type { Ref } from "vue";
 import { useTransactionsStore } from "../controllers/use_transactions_store_controller";
 import { useCuentasBancariasStore } from "@modules/cuentas-bancarias/presentation/controllers/use_cuentas_bancarias_store_controller";
 import { useTasasStore } from "@modules/tasas/presentation/controllers/use_tasas_store_controller";
@@ -17,12 +26,16 @@ import AppDropdown from "@/interface/components/AppDropdown.vue";
 import AppDateInput from "@/interface/components/AppDateInput.vue";
 import CalculatorConversionCard from "@modules/calculator/presentation/components/CalculatorConversionCard.vue";
 import { Domain } from "@/interface/infrastructure/services";
+import { useTransactionPreviewController } from "../controllers/use_transaction_preview_controller";
 
 const transactionsStore = useTransactionsStore();
 const cuentasStore = useCuentasBancariasStore();
 const tasasStore = useTasasStore();
 const comisionesStore = useComisionesStore();
 const calculatorStore = useCalculatorStore();
+
+const { ensurePreviewCatalogLoaded, buildPreviewSections } =
+  useTransactionPreviewController();
 
 const showCreateModal = ref(false);
 const showImportModal = ref(false);
@@ -34,7 +47,6 @@ const importSimpleError = ref("");
 const showPreviewModal = ref(false);
 const previewTransaction = ref<Transaction | null>(null);
 const previewLoading = ref(false);
-const previewError = ref<string | null>(null);
 const searchQuery = ref("");
 const openMenuId = ref<string | null>(null);
 const menuTriggerEl = ref<HTMLElement | null>(null);
@@ -134,8 +146,75 @@ const form = reactive<{
 
 const editingId = ref<string | null>(null);
 
-type CreateTab = "calculadora" | "datos" | "vouchers";
-const createTab = ref<CreateTab>("calculadora");
+const CREATE_FLOW_STEPS = [
+  {
+    key: "calculadora" as const,
+    title: "Cotización",
+    subtitle: "Montos y tipo de cambio",
+  },
+  {
+    key: "datos" as const,
+    title: "Datos",
+    subtitle: "Cliente y cuentas",
+  },
+  {
+    key: "vouchers" as const,
+    title: "Comprobantes",
+    subtitle: "Vouchers opcionales",
+  },
+] as const;
+
+const createStepIndex = ref(0);
+
+const isLastCreateStep = computed(
+  () => createStepIndex.value === CREATE_FLOW_STEPS.length - 1,
+);
+
+function goToCreateStep(index: number) {
+  if (index < 0 || index >= CREATE_FLOW_STEPS.length) return;
+  if (index > createStepIndex.value) return;
+  createStepIndex.value = index;
+  if (transactionsStore.error) transactionsStore.error = null;
+}
+
+function goCreateNext() {
+  const i = createStepIndex.value;
+  if (i === 0) {
+    syncFromCalculator();
+    if (
+      !form.tax_rate_id?.trim() ||
+      !form.commission_id?.trim() ||
+      (Number(form.origin_amount) <= 0 && Number(form.destination_amount) <= 0)
+    ) {
+      transactionsStore.error =
+        "Completa la cotización: montos y tasa/comisión antes de continuar.";
+      return;
+    }
+    transactionsStore.error = null;
+    createStepIndex.value = 1;
+    return;
+  }
+  if (i === 1) {
+    if (
+      !form.user_id?.trim() ||
+      !form.bank_account_origin_id?.trim() ||
+      !form.bank_account_destination_id?.trim()
+    ) {
+      transactionsStore.error =
+        "Indica cliente, cuenta origen y cuenta destino para continuar.";
+      return;
+    }
+    transactionsStore.error = null;
+    createStepIndex.value = 2;
+  }
+}
+
+function goCreatePrev() {
+  if (createStepIndex.value > 0) {
+    createStepIndex.value--;
+    if (transactionsStore.error) transactionsStore.error = null;
+  }
+}
 
 function bankAccountToOption(a: BankAccount) {
   const bank = cuentasStore.banks.find((b) => b.id === a.bank_id);
@@ -324,7 +403,7 @@ function syncFromCalculator() {
 function openCreateModal() {
   transactionsStore.error = null;
   resetForm();
-  createTab.value = "calculadora";
+  createStepIndex.value = 0;
   showCreateModal.value = true;
   loadFormOptions();
   calculatorStore.setDemoMode(false);
@@ -345,7 +424,7 @@ function openEditModal(t: Transaction) {
   if (!t.id) return;
   transactionsStore.error = null;
   editingId.value = t.id;
-  createTab.value = "datos";
+  createStepIndex.value = 1;
   form.bank_account_origin_id = t.bank_account_origin_id ?? "";
   form.bank_account_destination_id =
     t.bank_account_destination_id ?? t.bank_account_id ?? "";
@@ -496,146 +575,60 @@ function updateMenuPosition() {
   menuPosition.left = left;
 }
 
-const PREVIEW_FIELD_ORDER = [
-  "code",
-  "id",
-  "checked",
-  "bank_account_origin_id",
-  "bank_account_destination_id",
-  "user_id",
-  "tax_rate_id",
-  "commission_id",
-  "status",
-  "origin_amount",
-  "destination_amount",
-  "commission_result",
-  "resultado_comision",
-  "total_to_send",
-  "total_a_enviar",
-  "coupon_id",
-  "send_date",
-  "payment_date",
-  "created_at",
-  "created_by",
-  "updated_at",
-];
-
-const previewDisplayEntries = computed(() => {
+const previewSections = computed(() => {
   const t = previewTransaction.value;
-  if (!t || typeof t !== "object") return [];
-  const seen = new Set<string>();
-  const entries: { key: string; label: string; displayValue: string }[] = [];
-  for (const key of PREVIEW_FIELD_ORDER) {
-    if (key in t) {
-      seen.add(key);
-      entries.push({
-        key,
-        label: PREVIEW_FIELD_LABELS[key] ?? key,
-        displayValue: formatPreviewValue(
-          key,
-          (t as Record<string, unknown>)[key],
-        ),
-      });
-    }
-  }
-  for (const key of Object.keys(t)) {
-    if (typeof key === "string" && !seen.has(key) && !key.startsWith("_")) {
-      entries.push({
-        key,
-        label: PREVIEW_FIELD_LABELS[key] ?? key,
-        displayValue: formatPreviewValue(
-          key,
-          (t as Record<string, unknown>)[key],
-        ),
-      });
-    }
-  }
-  return entries;
+  if (!t) return [];
+  return buildPreviewSections(t);
 });
 
-const PREVIEW_FIELD_LABELS: Record<string, string> = {
-  id: "ID",
-  code: "Código",
-  checked: "Verificada",
-  bank_account_origin_id: "Cuenta origen",
-  bank_account_destination_id: "Cuenta destino",
-  user_id: "Cliente",
-  tax_rate_id: "Tasa",
-  commission_id: "Comisión",
-  status: "Estado",
-  origin_amount: "Monto origen",
-  destination_amount: "Monto destino",
-  commission_result: "Resultado comisión",
-  resultado_comision: "Resultado comisión",
-  total_to_send: "Total a enviar",
-  total_a_enviar: "Total a enviar",
-  coupon_id: "Cupón",
-  send_date: "Fecha envío",
-  payment_date: "Fecha pago",
-  send_voucher: "Comprobante envío",
-  payment_voucher: "Comprobante pago",
-  created_at: "Creado",
-  created_by: "Creado por",
-  updated_at: "Actualizado",
-};
-
-function openPreviewModal(t: Transaction | null) {
+async function openPreviewModal(t: Transaction | null) {
   if (!t) return;
   openMenuId.value = null;
   previewTransaction.value = null;
-  previewError.value = null;
   showPreviewModal.value = true;
-  previewLoading.value = false;
+  previewLoading.value = true;
+  await ensurePreviewCatalogLoaded();
   previewTransaction.value = { ...t };
+  previewLoading.value = false;
 }
 
 function closePreviewModal() {
   showPreviewModal.value = false;
   previewTransaction.value = null;
-  previewError.value = null;
 }
 
-function formatPreviewValue(key: string, value: unknown): string {
-  if (value == null || value === "") return "-";
-  if (key === "checked")
-    return value === true || value === "true" ? "Sí" : "No";
-  if (
-    key === "bank_account_origin_id" ||
-    key === "bank_account_destination_id"
-  ) {
-    return getBankAccountLabel(value as string);
-  }
-  if (key === "user_id") return getClientLabel(value as string);
-  if (key === "status") return getStatusLabel(value as string);
-  if (
-    [
-      "origin_amount",
-      "destination_amount",
-      "commission_result",
-      "resultado_comision",
-      "total_to_send",
-      "total_a_enviar",
-    ].includes(key)
-  ) {
-    return formatValue(value);
-  }
-  if (
-    (key === "send_date" ||
-      key === "payment_date" ||
-      key === "created_at" ||
-      key === "updated_at") &&
-    typeof value === "string"
-  ) {
-    return formatDate(value);
-  }
-  if (typeof value === "object") return JSON.stringify(value);
-  return String(value);
+function openEditFromPreview() {
+  const t = previewTransaction.value;
+  if (!t?.id) return;
+  closePreviewModal();
+  openEditModal(t);
+}
+
+/** Cerrar menú contextual de fila (sin perder la ref a la transacción antes de usarla). */
+function closeRowActionMenu() {
+  openMenuId.value = null;
+  menuTriggerEl.value = null;
+}
+
+/**
+ * Editar / Borrar deben capturar la fila antes de poner openMenuId en null:
+ * si no, selectedMenuTransaction queda null en el mismo tick y el modal no abre / el borrado no corre.
+ */
+function confirmEditFromMenu() {
+  const t = selectedMenuTransaction.value;
+  closeRowActionMenu();
+  if (t) openEditModal(t);
+}
+
+function confirmDeleteFromMenu() {
+  const t = selectedMenuTransaction.value;
+  closeRowActionMenu();
+  if (t) void handleDelete(t);
 }
 
 function toggleMenu(id: string, event?: Event) {
   if (openMenuId.value === id) {
-    openMenuId.value = null;
-    menuTriggerEl.value = null;
+    closeRowActionMenu();
     return;
   }
   menuTriggerEl.value =
@@ -647,8 +640,7 @@ function toggleMenu(id: string, event?: Event) {
     updateMenuPosition();
     const scrollParent = menuTriggerEl.value?.closest(".overflow-x-auto");
     const close = () => {
-      openMenuId.value = null;
-      menuTriggerEl.value = null;
+      closeRowActionMenu();
       document.removeEventListener("click", close);
       window.removeEventListener("resize", updateMenuPosition);
       scrollParent?.removeEventListener("scroll", updateMenuPosition);
@@ -711,6 +703,35 @@ function getVoucherLabel(v: unknown): string {
     : "Archivo seleccionado";
 }
 
+const sendVoucherPreviewSrc = ref<string | null>(null);
+const paymentVoucherPreviewSrc = ref<string | null>(null);
+
+function revokeIfBlob(url: string | null) {
+  if (url?.startsWith("blob:")) URL.revokeObjectURL(url);
+}
+
+function updateVoucherPreview(target: Ref<string | null>, v: unknown) {
+  revokeIfBlob(target.value);
+  target.value = null;
+  if (v instanceof File) target.value = URL.createObjectURL(v);
+  else if (typeof v === "string" && v.trim())
+    target.value = Domain.mediaUrl(v.trim());
+}
+
+watch(
+  () => form.send_voucher,
+  (v) => updateVoucherPreview(sendVoucherPreviewSrc, v),
+);
+watch(
+  () => form.payment_voucher,
+  (v) => updateVoucherPreview(paymentVoucherPreviewSrc, v),
+);
+
+onBeforeUnmount(() => {
+  revokeIfBlob(sendVoucherPreviewSrc.value);
+  revokeIfBlob(paymentVoucherPreviewSrc.value);
+});
+
 async function submitImport() {
   if (!importFile.value) return;
   try {
@@ -766,10 +787,6 @@ async function submitImportSimple() {
 function loadTransactions() {
   transactionsStore.loadTransactions(apiFilterParams.value);
 }
-
-watch(createTab, (tab) => {
-  if (tab === "datos" && !editingId.value) syncFromCalculator();
-});
 
 watch(
   () => form.user_id,
@@ -1190,10 +1207,7 @@ onMounted(() => {
         <button
           type="button"
           class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-[#374151] hover:bg-[#f9fafb]"
-          @click="
-            openMenuId = null;
-            openEditModal(selectedMenuTransaction);
-          "
+          @click="confirmEditFromMenu"
         >
           <svg
             class="h-4 w-4 shrink-0"
@@ -1214,10 +1228,7 @@ onMounted(() => {
           type="button"
           class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-[#dc3545] hover:bg-[#fef2f2]"
           :disabled="deletingId === selectedMenuTransaction.id"
-          @click="
-            openMenuId = null;
-            handleDelete(selectedMenuTransaction);
-          "
+          @click="confirmDeleteFromMenu"
         >
           <svg
             class="h-4 w-4 shrink-0"
@@ -1245,14 +1256,19 @@ onMounted(() => {
         @click.self="closePreviewModal"
       >
         <div
-          class="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-[#e5e7eb] bg-white shadow-xl"
+          class="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-[#d8e5fb] bg-white shadow-xl"
         >
           <div
-            class="flex items-center justify-between border-b border-[#e5e7eb] px-6 py-4"
+            class="flex items-center justify-between border-b border-[#e5e7eb] bg-[#fafbfc] px-6 py-4"
           >
-            <h2 class="text-lg font-semibold text-[#1f2937]">
-              Previsualizar transacción
-            </h2>
+            <div>
+              <h2 class="text-lg font-semibold text-[#1f2937]">
+                Previsualizar transacción
+              </h2>
+              <p class="mt-0.5 text-xs text-[#6b7280]">
+                Datos resueltos con tasas, comisiones y cuentas del backoffice
+              </p>
+            </div>
             <button
               type="button"
               class="rounded-lg p-2 text-[#6b7280] hover:bg-[#f3f4f6]"
@@ -1274,96 +1290,207 @@ onMounted(() => {
               </svg>
             </button>
           </div>
-          <div class="flex-1 overflow-y-auto p-6">
-            <p v-if="previewLoading" class="text-center text-sm text-[#6b7280]">
-              Cargando...
-            </p>
+          <div class="flex-1 overflow-y-auto px-6 py-5">
             <p
-              v-else-if="previewError"
-              class="rounded-lg bg-[#dc3545]/10 px-4 py-3 text-sm text-[#dc3545]"
+              v-if="previewLoading"
+              class="flex items-center justify-center gap-2 py-12 text-sm text-[#6b7280]"
             >
-              {{ previewError }}
+              <span
+                class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-brasper-indigoStrong border-t-transparent"
+              />
+              Cargando catálogo (tasas, comisiones, cuentas)…
             </p>
-            <div v-else-if="previewTransaction" class="space-y-6">
-              <div class="space-y-4">
-                <div
-                  v-for="entry in previewDisplayEntries"
-                  :key="entry.key"
-                  class="flex flex-col gap-0.5 sm:flex-row sm:items-start sm:gap-4"
+            <template v-else-if="previewTransaction">
+              <div class="space-y-5">
+                <section
+                  v-for="section in previewSections"
+                  :key="section.id"
+                  class="rounded-xl border border-[#e8eef8] bg-[#fbfdff] p-5 shadow-sm"
                 >
-                  <span
-                    class="min-w-[140px] shrink-0 text-sm font-medium text-[#6b7280]"
-                  >
-                    {{ entry.label }}
-                  </span>
-                  <span class="min-w-0 break-words text-sm text-[#374151]">
-                    {{ entry.displayValue }}
-                  </span>
-                </div>
-              </div>
-              <div
-                v-if="
-                  previewTransaction.send_voucher ||
-                  previewTransaction.payment_voucher
-                "
-                class="border-t border-[#e5e7eb] pt-6"
-              >
-                <h3 class="mb-4 text-sm font-semibold text-[#374151]">
-                  Comprobantes
-                </h3>
-                <div class="grid gap-6 sm:grid-cols-2">
-                  <div v-if="previewTransaction.send_voucher" class="space-y-2">
-                    <p class="text-sm font-medium text-[#6b7280]">
-                      Comprobante envío
-                    </p>
-                    <a
-                      :href="Domain.mediaUrl(previewTransaction.send_voucher)"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="block overflow-hidden rounded-lg border border-[#e5e7eb] bg-[#f9fafb]"
+                  <div class="mb-4 border-b border-[#e5e7eb]/80 pb-3">
+                    <h3
+                      class="text-[11px] font-semibold uppercase tracking-[0.14em] text-brasper-indigoStrong"
                     >
-                      <img
-                        :src="Domain.mediaUrl(previewTransaction.send_voucher)"
-                        alt="Comprobante envío"
-                        class="h-auto max-h-64 w-full object-contain"
-                        @error="
-                          ($event.target as HTMLImageElement).style.display =
-                            'none'
-                        "
-                      />
-                    </a>
+                      {{ section.title }}
+                    </h3>
+                    <p
+                      v-if="section.subtitle"
+                      class="mt-1 text-xs text-[#6b7280]"
+                    >
+                      {{ section.subtitle }}
+                    </p>
                   </div>
-                  <div
-                    v-if="previewTransaction.payment_voucher"
-                    class="space-y-2"
-                  >
-                    <p class="text-sm font-medium text-[#6b7280]">
-                      Comprobante pago
-                    </p>
-                    <a
-                      :href="
-                        Domain.mediaUrl(previewTransaction.payment_voucher)
-                      "
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="block overflow-hidden rounded-lg border border-[#e5e7eb] bg-[#f9fafb]"
+                  <dl class="space-y-3">
+                    <div
+                      v-for="(item, i) in section.items"
+                      :key="`${section.id}-${i}-${item.label}`"
+                      class="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6"
                     >
-                      <img
-                        :src="
+                      <dt
+                        class="shrink-0 text-xs font-medium uppercase tracking-wide text-[#6b7280] sm:min-w-[9rem]"
+                      >
+                        {{ item.label }}
+                      </dt>
+                      <dd class="min-w-0 text-right text-sm font-medium sm:flex-1">
+                        <span
+                          v-if="item.variant === 'status'"
+                          class="inline-flex rounded-full bg-[#dbeafe] px-2.5 py-0.5 text-xs font-semibold text-brasper-indigoDark"
+                        >
+                          {{ item.value }}
+                        </span>
+                        <span
+                          v-else-if="item.variant === 'mono'"
+                          class="break-all font-mono text-xs text-[#374151]"
+                        >
+                          {{ item.value }}
+                        </span>
+                        <span v-else class="text-[#111827]">
+                          {{ item.value }}
+                        </span>
+                      </dd>
+                    </div>
+                  </dl>
+                </section>
+
+                <section
+                  v-if="
+                    previewTransaction.send_voucher ||
+                    previewTransaction.payment_voucher
+                  "
+                  class="rounded-xl border border-[#d8e5fb] bg-white p-5 shadow-sm"
+                >
+                  <div class="mb-4 border-b border-[#e5e7eb]/80 pb-3">
+                    <h3
+                      class="text-[11px] font-semibold uppercase tracking-[0.14em] text-brasper-indigoStrong"
+                    >
+                      Comprobantes
+                    </h3>
+                    <p class="mt-1 text-xs text-[#6b7280]">
+                      Vista previa e imagen a tamaño completo en nueva pestaña
+                    </p>
+                  </div>
+                  <div class="grid gap-5 sm:grid-cols-2">
+                    <div
+                      v-if="previewTransaction.send_voucher"
+                      class="flex flex-col overflow-hidden rounded-xl border border-[#e5e7eb] bg-[#f9fafb]"
+                    >
+                      <div
+                        class="flex items-center justify-between border-b border-[#e5e7eb] bg-white px-3 py-2"
+                      >
+                        <span class="text-xs font-semibold text-[#374151]"
+                          >Envío</span
+                        >
+                        <a
+                          :href="
+                            Domain.mediaUrl(previewTransaction.send_voucher)
+                          "
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="text-xs font-medium text-brasper-indigoStrong hover:underline"
+                        >
+                          Abrir imagen
+                        </a>
+                      </div>
+                      <a
+                        :href="
+                          Domain.mediaUrl(previewTransaction.send_voucher)
+                        "
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="block bg-[#f3f4f6]"
+                      >
+                        <img
+                          :src="
+                            Domain.mediaUrl(previewTransaction.send_voucher)
+                          "
+                          alt="Comprobante envío"
+                          class="mx-auto max-h-56 w-full object-contain"
+                          @error="
+                            ($event.target as HTMLImageElement).style.display =
+                              'none'
+                          "
+                        />
+                      </a>
+                    </div>
+                    <div
+                      v-if="previewTransaction.payment_voucher"
+                      class="flex flex-col overflow-hidden rounded-xl border border-[#e5e7eb] bg-[#f9fafb]"
+                    >
+                      <div
+                        class="flex items-center justify-between border-b border-[#e5e7eb] bg-white px-3 py-2"
+                      >
+                        <span class="text-xs font-semibold text-[#374151]"
+                          >Pago</span
+                        >
+                        <a
+                          :href="
+                            Domain.mediaUrl(previewTransaction.payment_voucher)
+                          "
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="text-xs font-medium text-brasper-indigoStrong hover:underline"
+                        >
+                          Abrir imagen
+                        </a>
+                      </div>
+                      <a
+                        :href="
                           Domain.mediaUrl(previewTransaction.payment_voucher)
                         "
-                        alt="Comprobante pago"
-                        class="h-auto max-h-64 w-full object-contain"
-                        @error="
-                          ($event.target as HTMLImageElement).style.display =
-                            'none'
-                        "
-                      />
-                    </a>
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="block bg-[#f3f4f6]"
+                      >
+                        <img
+                          :src="
+                            Domain.mediaUrl(previewTransaction.payment_voucher)
+                          "
+                          alt="Comprobante pago"
+                          class="mx-auto max-h-56 w-full object-contain"
+                          @error="
+                            ($event.target as HTMLImageElement).style.display =
+                              'none'
+                          "
+                        />
+                      </a>
+                    </div>
                   </div>
-                </div>
+                </section>
               </div>
-            </div>
+            </template>
+          </div>
+          <div
+            v-if="previewTransaction && !previewLoading"
+            class="flex flex-wrap items-center justify-end gap-2 border-t border-[#e5e7eb] bg-[#fafbfc] px-6 py-4"
+          >
+            <button
+              type="button"
+              class="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2.5 text-sm font-medium text-[#6b7280] hover:bg-white"
+              @click="closePreviewModal"
+            >
+              Cerrar
+            </button>
+            <button
+              v-if="previewTransaction.id"
+              type="button"
+              class="inline-flex items-center gap-2 rounded-lg bg-brasper-indigoStrong px-4 py-2.5 text-sm font-semibold text-white hover:bg-brasper-indigoDark"
+              @click="openEditFromPreview"
+            >
+              <svg
+                class="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                />
+              </svg>
+              Editar
+            </button>
           </div>
         </div>
       </div>
@@ -1437,9 +1564,15 @@ onMounted(() => {
           <div
             class="flex items-center justify-between border-b border-[#e5e7eb] px-6 py-4"
           >
-            <h2 class="text-lg font-semibold text-[#1f2937]">
-              {{ editingId ? "Editar transacción" : "Nueva transacción" }}
-            </h2>
+            <div>
+              <h2 class="text-lg font-semibold text-[#1f2937]">
+                {{ editingId ? "Editar transacción" : "Nueva transacción" }}
+              </h2>
+              <p class="mt-0.5 text-xs text-[#6b7280]">
+                Paso {{ createStepIndex + 1 }} de {{ CREATE_FLOW_STEPS.length }}
+                · {{ CREATE_FLOW_STEPS[createStepIndex].title }}
+              </p>
+            </div>
             <button
               type="button"
               class="rounded-lg p-2 text-[#6b7280] hover:bg-[#f3f4f6]"
@@ -1462,50 +1595,93 @@ onMounted(() => {
             </button>
           </div>
 
-          <!-- Chips -->
-          <div class="flex gap-2 border-b border-[#e5e7eb] px-6 py-3">
-            <button
-              type="button"
-              :class="[
-                'rounded-full px-4 py-2 text-sm font-medium transition',
-                createTab === 'calculadora'
-                  ? 'bg-brasper-indigoStrong text-white'
-                  : 'bg-[#f3f4f6] text-[#6b7280] hover:bg-[#e5e7eb]',
-              ]"
-              @click="createTab = 'calculadora'"
-            >
-              Calculadora
-            </button>
-            <button
-              type="button"
-              :class="[
-                'rounded-full px-4 py-2 text-sm font-medium transition',
-                createTab === 'datos'
-                  ? 'bg-brasper-indigoStrong text-white'
-                  : 'bg-[#f3f4f6] text-[#6b7280] hover:bg-[#e5e7eb]',
-              ]"
-              @click="createTab = 'datos'"
-            >
-              Datos
-            </button>
-            <button
-              type="button"
-              :class="[
-                'rounded-full px-4 py-2 text-sm font-medium transition',
-                createTab === 'vouchers'
-                  ? 'bg-brasper-indigoStrong text-white'
-                  : 'bg-[#f3f4f6] text-[#6b7280] hover:bg-[#e5e7eb]',
-              ]"
-              @click="createTab = 'vouchers'"
-            >
-              Vouchers
-            </button>
-          </div>
+          <!-- Stepper -->
+          <nav
+            class="border-b border-[#e5e7eb] bg-[#fafbfc] px-4 py-4 sm:px-6"
+            aria-label="Pasos de creación"
+          >
+            <ol class="flex w-full items-start">
+              <li
+                v-for="(step, idx) in CREATE_FLOW_STEPS"
+                :key="step.key"
+                class="relative flex min-w-0 flex-1 flex-col items-center"
+              >
+                <div class="flex w-full min-h-[2.75rem] items-center">
+                  <div
+                    v-if="idx > 0"
+                    class="h-0.5 min-w-[8px] flex-1"
+                    :class="
+                      createStepIndex >= idx
+                        ? 'bg-brasper-indigoStrong'
+                        : 'bg-[#e5e7eb]'
+                    "
+                  />
+                  <button
+                    type="button"
+                    class="group flex shrink-0 flex-col items-center gap-1 px-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brasper-indigoStrong focus-visible:ring-offset-2 disabled:pointer-events-none"
+                    :disabled="idx > createStepIndex"
+                    :aria-current="idx === createStepIndex ? 'step' : undefined"
+                    @click="goToCreateStep(idx)"
+                  >
+                    <span
+                      class="flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold transition sm:h-10 sm:w-10"
+                      :class="
+                        idx < createStepIndex
+                          ? 'bg-brasper-indigoStrong text-white shadow-sm'
+                          : idx === createStepIndex
+                            ? 'bg-white text-brasper-indigoStrong ring-2 ring-brasper-indigoStrong ring-offset-2 ring-offset-[#fafbfc]'
+                            : 'bg-[#e5e7eb] text-[#9ca3af]'
+                      "
+                    >
+                      <svg
+                        v-if="idx < createStepIndex"
+                        class="h-5 w-5"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                        aria-hidden="true"
+                      >
+                        <path
+                          fill-rule="evenodd"
+                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                          clip-rule="evenodd"
+                        />
+                      </svg>
+                      <span v-else>{{ idx + 1 }}</span>
+                    </span>
+                    <span
+                      class="max-w-[5.5rem] text-center text-[10px] font-semibold leading-tight sm:max-w-[6.5rem] sm:text-[11px]"
+                      :class="
+                        idx === createStepIndex
+                          ? 'text-brasper-indigoStrong'
+                          : 'text-[#6b7280] group-hover:text-[#374151]'
+                      "
+                    >
+                      {{ step.title }}
+                    </span>
+                  </button>
+                  <div
+                    v-if="idx < CREATE_FLOW_STEPS.length - 1"
+                    class="h-0.5 min-w-[8px] flex-1"
+                    :class="
+                      createStepIndex > idx
+                        ? 'bg-brasper-indigoStrong'
+                        : 'bg-[#e5e7eb]'
+                    "
+                  />
+                </div>
+                <p
+                  class="mt-0.5 max-w-[6.5rem] text-center text-[9px] leading-snug text-[#9ca3af] sm:text-[10px]"
+                >
+                  {{ step.subtitle }}
+                </p>
+              </li>
+            </ol>
+          </nav>
 
           <!-- Contenido -->
           <div class="flex-1 overflow-y-auto p-6">
             <div
-              v-if="createTab === 'calculadora'"
+              v-if="createStepIndex === 0"
               class="min-w-0 space-y-5"
             >
               <p
@@ -1520,195 +1696,469 @@ onMounted(() => {
             </div>
 
             <form
-              v-else-if="createTab === 'datos'"
-              class="space-y-6"
-              @submit.prevent="submitForm"
+              v-else-if="createStepIndex === 1"
+              class="space-y-5"
+              @submit.prevent="goCreateNext"
             >
-              <div class="grid gap-6 sm:grid-cols-2">
-                <div class="space-y-1.5">
-                  <label class="block text-sm font-medium text-[#374151]"
-                    >Cliente *</label
+              <p class="text-sm leading-relaxed text-[#6b7280]">
+                Asocia el movimiento a un cliente y sus cuentas. Los montos y
+                tasa vienen de la cotización; ajústalos solo si hace falta.
+              </p>
+
+              <section
+                class="rounded-xl border border-[#d8e5fb] bg-white p-5 shadow-sm shadow-brasper-indigoStrong/5"
+              >
+                <div class="mb-4 flex items-center gap-2">
+                  <span
+                    class="flex h-8 w-8 items-center justify-center rounded-lg bg-brasper-cyanLight/40 text-brasper-indigoStrong"
                   >
-                  <AppDropdown
-                    v-model="form.user_id"
-                    :options="clientOptions"
-                    placeholder="Seleccionar cliente (rol cliente)"
-                    :searchable="clientOptions.length > 10"
-                  />
+                    <svg
+                      class="h-4 w-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                      />
+                    </svg>
+                  </span>
+                  <div>
+                    <h3
+                      class="text-[11px] font-semibold uppercase tracking-[0.16em] text-brasper-indigoStrong"
+                    >
+                      Cliente y cuentas
+                    </h3>
+                    <p class="text-xs text-[#6b7280]">
+                      Filtradas por el cliente seleccionado
+                    </p>
+                  </div>
                 </div>
-                <div class="space-y-1.5">
-                  <label class="block text-sm font-medium text-[#374151]"
-                    >Cuenta origen</label
+                <div class="grid gap-5 sm:grid-cols-2">
+                  <div class="space-y-1.5 sm:col-span-2">
+                    <label class="block text-sm font-medium text-[#374151]"
+                      >Cliente *</label
+                    >
+                    <AppDropdown
+                      v-model="form.user_id"
+                      :options="clientOptions"
+                      placeholder="Seleccionar cliente"
+                      :searchable="clientOptions.length > 10"
+                    />
+                  </div>
+                  <div class="space-y-1.5">
+                    <label class="block text-sm font-medium text-[#374151]"
+                      >Cuenta origen *</label
+                    >
+                    <AppDropdown
+                      v-model="form.bank_account_origin_id"
+                      :options="originAccountOptions"
+                      placeholder="Cuenta de origen"
+                      :searchable="originAccountOptions.length > 5"
+                    />
+                  </div>
+                  <div class="space-y-1.5">
+                    <label class="block text-sm font-medium text-[#374151]"
+                      >Cuenta destino *</label
+                    >
+                    <AppDropdown
+                      v-model="form.bank_account_destination_id"
+                      :options="destinationAccountOptions"
+                      placeholder="Cuenta de destino"
+                      :searchable="destinationAccountOptions.length > 5"
+                    />
+                  </div>
+                </div>
+              </section>
+
+              <section
+                class="rounded-xl border border-[#d8e5fb] bg-[#fbfdff] p-5 shadow-sm shadow-brasper-indigoStrong/5"
+              >
+                <div class="mb-4 flex items-center gap-2">
+                  <span
+                    class="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-brasper-indigoStrong shadow-sm"
                   >
-                  <AppDropdown
-                    v-model="form.bank_account_origin_id"
-                    :options="originAccountOptions"
-                    placeholder="Cuentas de origen"
-                    :searchable="originAccountOptions.length > 5"
-                  />
+                    <svg
+                      class="h-4 w-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                  </span>
+                  <div>
+                    <h3
+                      class="text-[11px] font-semibold uppercase tracking-[0.16em] text-brasper-indigoStrong"
+                    >
+                      Importes y condiciones
+                    </h3>
+                    <p class="text-xs text-[#6b7280]">
+                      Heredados del paso de cotización; editables si es
+                      necesario
+                    </p>
+                  </div>
                 </div>
-                <div class="space-y-1.5">
-                  <label class="block text-sm font-medium text-[#374151]"
-                    >Cuenta destino *</label
+                <div class="grid gap-5 sm:grid-cols-2">
+                  <div class="space-y-1.5">
+                    <label class="block text-sm font-medium text-[#374151]"
+                      >Tasa</label
+                    >
+                    <AppDropdown
+                      v-model="form.tax_rate_id"
+                      :options="taxRateOptions"
+                      placeholder="Par de monedas / tasa"
+                      :searchable="taxRateOptions.length > 10"
+                    />
+                  </div>
+                  <div class="space-y-1.5">
+                    <label class="block text-sm font-medium text-[#374151]"
+                      >Comisión</label
+                    >
+                    <AppDropdown
+                      v-model="form.commission_id"
+                      :options="commissionOptions"
+                      placeholder="Comisión aplicable"
+                      :searchable="commissionOptions.length > 10"
+                    />
+                  </div>
+                  <div class="space-y-1.5">
+                    <label class="block text-sm font-medium text-[#374151]"
+                      >Monto origen</label
+                    >
+                    <input
+                      v-model.number="form.origin_amount"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      class="form-input w-full rounded-lg border border-[#cfdbef] bg-white px-3 py-2.5 text-sm"
+                    />
+                  </div>
+                  <div class="space-y-1.5">
+                    <label class="block text-sm font-medium text-[#374151]"
+                      >Monto destino</label
+                    >
+                    <input
+                      v-model.number="form.destination_amount"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      class="form-input w-full rounded-lg border border-[#cfdbef] bg-white px-3 py-2.5 text-sm"
+                    />
+                  </div>
+                </div>
+              </section>
+
+              <section
+                class="rounded-xl border border-[#d8e5fb] bg-white p-5 shadow-sm shadow-brasper-indigoStrong/5"
+              >
+                <div class="mb-4 flex items-center gap-2">
+                  <span
+                    class="flex h-8 w-8 items-center justify-center rounded-lg bg-brasper-cyanLight/40 text-brasper-indigoStrong"
                   >
-                  <AppDropdown
-                    v-model="form.bank_account_destination_id"
-                    :options="destinationAccountOptions"
-                    placeholder="Cuentas de destino"
-                    :searchable="destinationAccountOptions.length > 5"
-                  />
+                    <svg
+                      class="h-4 w-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
+                      />
+                    </svg>
+                  </span>
+                  <div>
+                    <h3
+                      class="text-[11px] font-semibold uppercase tracking-[0.16em] text-brasper-indigoStrong"
+                    >
+                      Referencia y fechas
+                    </h3>
+                    <p class="text-xs text-[#6b7280]">
+                      Código interno y fechas de envío / pago
+                    </p>
+                  </div>
                 </div>
-                <div class="space-y-1.5" v-if="editingId">
-                  <label class="block text-sm font-medium text-[#374151]"
-                    >Estado</label
+                <div class="grid gap-5 sm:grid-cols-2">
+                  <div class="space-y-1.5 sm:col-span-2">
+                    <label class="block text-sm font-medium text-[#374151]"
+                      >Código</label
+                    >
+                    <input
+                      v-model="form.code"
+                      type="text"
+                      class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm"
+                      placeholder="Se genera si lo dejas vacío"
+                    />
+                  </div>
+                  <div class="space-y-1.5">
+                    <label class="block text-sm font-medium text-[#374151]"
+                      >Fecha envío</label
+                    >
+                    <AppDateInput v-model="form.send_date" />
+                  </div>
+                  <div class="space-y-1.5">
+                    <label class="block text-sm font-medium text-[#374151]"
+                      >Fecha pago</label
+                    >
+                    <AppDateInput v-model="form.payment_date" />
+                  </div>
+                </div>
+              </section>
+
+              <section
+                v-if="editingId"
+                class="rounded-xl border border-amber-200/80 bg-amber-50/60 p-5"
+              >
+                <h3
+                  class="mb-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-900/90"
+                >
+                  Estado en el sistema
+                </h3>
+                <div
+                  class="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"
+                >
+                  <div class="min-w-0 flex-1 space-y-1.5">
+                    <label class="block text-sm font-medium text-[#374151]"
+                      >Estado</label
+                    >
+                    <AppDropdown
+                      v-model="form.status"
+                      :options="statusFormOptions"
+                      placeholder="Pendiente"
+                      :searchable="false"
+                    />
+                  </div>
+                  <label
+                    class="flex cursor-pointer items-center gap-3 rounded-lg border border-amber-200/90 bg-white/80 px-4 py-3 sm:shrink-0"
                   >
-                  <AppDropdown
-                    v-model="form.status"
-                    :options="statusFormOptions"
-                    placeholder="Pendiente"
-                    :searchable="false"
-                  />
-                </div>
-                <div class="space-y-1.5" v-if="editingId">
-                  <label class="flex cursor-pointer items-center gap-2">
                     <input
                       v-model="form.checked"
                       type="checkbox"
                       class="h-4 w-4 rounded border-[#d1d5db] text-brasper-indigoStrong focus:ring-brasper-indigoStrong"
                     />
-                    <span class="text-sm font-medium text-[#374151]"
-                      >Verificada</span
-                    >
+                    <span class="text-sm font-medium text-[#374151]">
+                      Verificada
+                    </span>
                   </label>
-                  <p class="text-xs text-[#6b7280]">
-                    Si marcado, el backend asigna estado "Verificada"
-                  </p>
                 </div>
-                <div class="space-y-1.5">
-                  <label class="block text-sm font-medium text-[#374151]"
-                    >Tasa</label
-                  >
-                  <AppDropdown
-                    v-model="form.tax_rate_id"
-                    :options="taxRateOptions"
-                    placeholder="Seleccionar"
-                    :searchable="taxRateOptions.length > 10"
-                  />
-                </div>
-                <div class="space-y-1.5">
-                  <label class="block text-sm font-medium text-[#374151]"
-                    >Comisión</label
-                  >
-                  <AppDropdown
-                    v-model="form.commission_id"
-                    :options="commissionOptions"
-                    placeholder="Seleccionar"
-                    :searchable="commissionOptions.length > 10"
-                  />
-                </div>
-                <div class="space-y-1.5">
-                  <label class="block text-sm font-medium text-[#374151]"
-                    >Código</label
-                  >
-                  <input
-                    v-model="form.code"
-                    type="text"
-                    class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm"
-                    placeholder="Código único"
-                  />
-                </div>
-                <div class="space-y-1.5">
-                  <label class="block text-sm font-medium text-[#374151]"
-                    >Monto origen</label
-                  >
-                  <input
-                    v-model.number="form.origin_amount"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm"
-                  />
-                </div>
-                <div class="space-y-1.5">
-                  <label class="block text-sm font-medium text-[#374151]"
-                    >Monto destino</label
-                  >
-                  <input
-                    v-model.number="form.destination_amount"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm"
-                  />
-                </div>
-                <div class="space-y-1.5">
-                  <label class="block text-sm font-medium text-[#374151]"
-                    >Fecha envío</label
-                  >
-                  <AppDateInput v-model="form.send_date" />
-                </div>
-                <div class="space-y-1.5">
-                  <label class="block text-sm font-medium text-[#374151]"
-                    >Fecha pago</label
-                  >
-                  <AppDateInput v-model="form.payment_date" />
-                </div>
-              </div>
+                <p class="mt-3 text-xs text-amber-900/70">
+                  Si marcas verificada, el backend puede reflejar el estado
+                  correspondiente.
+                </p>
+              </section>
             </form>
 
             <form
-              v-else-if="createTab === 'vouchers'"
-              class="space-y-6"
+              v-else-if="createStepIndex === 2"
+              class="space-y-5"
               @submit.prevent="submitForm"
             >
-              <div class="grid gap-6 sm:grid-cols-2">
-                <div class="space-y-1.5 sm:col-span-2">
-                  <label class="block text-sm font-medium text-[#374151]"
-                    >Voucher envío (send_voucher)</label
+              <p class="text-sm leading-relaxed text-[#6b7280]">
+                Sube capturas o comprobantes en imagen. Son opcionales; si
+                cargas ambos, al guardar se puede marcar la operación como
+                finalizada según tu flujo.
+              </p>
+
+              <div
+                v-if="form.send_voucher && form.payment_voucher"
+                class="flex items-start gap-3 rounded-xl border border-brasper-indigoStrong/25 bg-brasper-cyanLight/15 px-4 py-3 text-sm text-brasper-indigoDark"
+              >
+                <svg
+                  class="mt-0.5 h-5 w-5 shrink-0 text-brasper-indigoStrong"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                <span>
+                  Tienes ambos comprobantes listos. Al guardar, el estado puede
+                  pasar a finalizado si aplica.
+                </span>
+              </div>
+
+              <div class="grid gap-5 md:grid-cols-2">
+                <div
+                  class="flex flex-col rounded-xl border border-[#d8e5fb] bg-white p-5 shadow-sm shadow-brasper-indigoStrong/5"
+                >
+                  <div class="mb-4 flex items-start gap-3">
+                    <span
+                      class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brasper-cyanLight/50 text-brasper-indigoStrong"
+                    >
+                      <svg
+                        class="h-5 w-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                        />
+                      </svg>
+                    </span>
+                    <div class="min-w-0">
+                      <h3 class="text-base font-semibold text-[#232b4d]">
+                        Envío
+                      </h3>
+                      <p class="mt-0.5 text-xs text-[#6b7280]">
+                        Comprobante del envío al destinatario (send_voucher)
+                      </p>
+                    </div>
+                  </div>
+                  <label
+                    class="group relative flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#cfdbef] bg-[#fbfdff] px-4 py-10 transition hover:border-brasper-indigoStrong/40 hover:bg-white"
                   >
-                  <input
-                    type="file"
-                    accept="image/*"
-                    class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm"
-                    @change="
-                      form.send_voucher =
-                        ($event.target as HTMLInputElement).files?.[0] ?? null
-                    "
+                    <input
+                      type="file"
+                      accept="image/*"
+                      class="sr-only"
+                      @change="
+                        form.send_voucher =
+                          ($event.target as HTMLInputElement).files?.[0] ?? null
+                      "
+                    />
+                    <svg
+                      class="mb-2 h-10 w-10 text-[#93c5fd]"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.5"
+                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                      />
+                    </svg>
+                    <span
+                      class="text-sm font-semibold text-brasper-indigoStrong"
+                    >
+                      Elegir imagen
+                    </span>
+                    <span class="mt-1 text-center text-xs text-[#6b7280]">
+                      PNG o JPG · arrastra o haz clic
+                    </span>
+                  </label>
+                  <img
+                    v-if="sendVoucherPreviewSrc"
+                    :src="sendVoucherPreviewSrc"
+                    alt="Vista previa comprobante de envío"
+                    class="mt-4 max-h-44 w-full rounded-lg border border-[#e5e7eb] object-contain"
                   />
                   <p
                     v-if="form.send_voucher"
-                    class="mt-1 text-xs text-[#6b7280]"
+                    class="mt-3 truncate text-xs font-medium text-[#374151]"
+                    :title="getVoucherLabel(form.send_voucher)"
                   >
                     {{ getVoucherLabel(form.send_voucher) }}
                   </p>
                 </div>
-                <div class="space-y-1.5 sm:col-span-2">
-                  <label class="block text-sm font-medium text-[#374151]"
-                    >Voucher pago (payment_voucher)</label
+
+                <div
+                  class="flex flex-col rounded-xl border border-[#d8e5fb] bg-white p-5 shadow-sm shadow-brasper-indigoStrong/5"
+                >
+                  <div class="mb-4 flex items-start gap-3">
+                    <span
+                      class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-800"
+                    >
+                      <svg
+                        class="h-5 w-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
+                        />
+                      </svg>
+                    </span>
+                    <div class="min-w-0">
+                      <h3 class="text-base font-semibold text-[#232b4d]">
+                        Pago
+                      </h3>
+                      <p class="mt-0.5 text-xs text-[#6b7280]">
+                        Comprobante del pago recibido (payment_voucher)
+                      </p>
+                    </div>
+                  </div>
+                  <label
+                    class="group relative flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#cfdbef] bg-[#fbfdff] px-4 py-10 transition hover:border-brasper-indigoStrong/40 hover:bg-white"
                   >
-                  <input
-                    type="file"
-                    accept="image/*"
-                    class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm"
-                    @change="
-                      form.payment_voucher =
-                        ($event.target as HTMLInputElement).files?.[0] ?? null
-                    "
+                    <input
+                      type="file"
+                      accept="image/*"
+                      class="sr-only"
+                      @change="
+                        form.payment_voucher =
+                          ($event.target as HTMLInputElement).files?.[0] ?? null
+                      "
+                    />
+                    <svg
+                      class="mb-2 h-10 w-10 text-[#6ee7b7]"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.5"
+                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                      />
+                    </svg>
+                    <span
+                      class="text-sm font-semibold text-brasper-indigoStrong"
+                    >
+                      Elegir imagen
+                    </span>
+                    <span class="mt-1 text-center text-xs text-[#6b7280]">
+                      PNG o JPG · arrastra o haz clic
+                    </span>
+                  </label>
+                  <img
+                    v-if="paymentVoucherPreviewSrc"
+                    :src="paymentVoucherPreviewSrc"
+                    alt="Vista previa comprobante de pago"
+                    class="mt-4 max-h-44 w-full rounded-lg border border-[#e5e7eb] object-contain"
                   />
                   <p
                     v-if="form.payment_voucher"
-                    class="mt-1 text-xs text-[#6b7280]"
+                    class="mt-3 truncate text-xs font-medium text-[#374151]"
+                    :title="getVoucherLabel(form.payment_voucher)"
                   >
                     {{ getVoucherLabel(form.payment_voucher) }}
                   </p>
                 </div>
-                <p
-                  v-if="form.send_voucher && form.payment_voucher"
-                  class="sm:col-span-2 text-xs text-brasper-indigoStrong"
-                >
-                  Ambos vouchers subidos. El estado se establecerá como
-                  finalizado al guardar.
-                </p>
               </div>
             </form>
           </div>
@@ -1721,9 +2171,9 @@ onMounted(() => {
             {{ transactionsStore.error }}
           </p>
 
-          <!-- Footer con botones -->
+          <!-- Footer -->
           <div
-            class="flex flex-wrap justify-end gap-3 border-t border-[#e5e7eb] px-6 py-4"
+            class="flex flex-wrap items-center justify-between gap-3 border-t border-[#e5e7eb] px-6 py-4"
           >
             <button
               type="button"
@@ -1732,20 +2182,39 @@ onMounted(() => {
             >
               Cancelar
             </button>
-            <button
-              type="button"
-              class="rounded-lg bg-brasper-indigoStrong px-5 py-2.5 text-sm font-semibold text-white hover:bg-brasper-indigoDark disabled:opacity-60"
-              :disabled="
-                transactionsStore.isCreating || transactionsStore.isUpdating
-              "
-              @click="submitForm"
-            >
-              {{
-                transactionsStore.isCreating || transactionsStore.isUpdating
-                  ? "Guardando..."
-                  : "Guardar"
-              }}
-            </button>
+            <div class="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
+              <button
+                v-if="createStepIndex > 0"
+                type="button"
+                class="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2.5 text-sm font-medium text-brasper-indigoStrong hover:bg-[#f9fafb]"
+                @click="goCreatePrev"
+              >
+                Atrás
+              </button>
+              <button
+                v-if="!isLastCreateStep"
+                type="button"
+                class="rounded-lg bg-brasper-indigoStrong px-5 py-2.5 text-sm font-semibold text-white hover:bg-brasper-indigoDark"
+                @click="goCreateNext"
+              >
+                Siguiente
+              </button>
+              <button
+                v-else
+                type="button"
+                class="rounded-lg bg-brasper-indigoStrong px-5 py-2.5 text-sm font-semibold text-white hover:bg-brasper-indigoDark disabled:opacity-60"
+                :disabled="
+                  transactionsStore.isCreating || transactionsStore.isUpdating
+                "
+                @click="submitForm"
+              >
+                {{
+                  transactionsStore.isCreating || transactionsStore.isUpdating
+                    ? "Guardando..."
+                    : "Guardar"
+                }}
+              </button>
+            </div>
           </div>
         </div>
       </div>
