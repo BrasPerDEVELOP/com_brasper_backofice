@@ -9,20 +9,90 @@ import type {
 } from './transactions_repository'
 import type { Transaction } from '../../domain/models'
 
+function parseOptionalAmount(v: unknown): number | undefined {
+  if (v == null || v === '') return undefined
+  const n = typeof v === 'number' ? v : Number(v)
+  return Number.isFinite(n) ? n : undefined
+}
+
+/** UUID/string o objeto anidado `{ id }` desde el API (evita String(obj) → "[object Object]"). */
+function coerceBankAccountId(value: unknown): string | undefined {
+  if (value == null || value === '') return undefined
+  if (typeof value === 'string' || typeof value === 'number') {
+    const s = String(value).trim()
+    return s ? s : undefined
+  }
+  if (typeof value === 'object' && value !== null && 'id' in value) {
+    const id = (value as { id: unknown }).id
+    if (id != null && id !== '') return String(id).trim() || undefined
+  }
+  return undefined
+}
+
 function parseTransaction(item: unknown): Transaction {
   if (item == null || typeof item !== 'object') return {}
   const o = item as Record<string, unknown>
+  const resultado =
+    parseOptionalAmount(o.resultado_comision) ??
+    parseOptionalAmount(o.commission_result)
+  const totalSend =
+    parseOptionalAmount(o.total_a_enviar) ?? parseOptionalAmount(o.total_to_send)
+  const originFromFlat =
+    coerceBankAccountId(o.bank_account_origin_id) ??
+    coerceBankAccountId(o.bank_account_origin) ??
+    coerceBankAccountId(o.cuenta_origen_id)
+  const destFromFlat =
+    coerceBankAccountId(o.bank_account_destination_id) ??
+    coerceBankAccountId(o.bank_account_destination) ??
+    coerceBankAccountId(o.cuenta_destino_id)
+  const legacySingle = coerceBankAccountId(o.bank_account_id)
+
+  const comisionFinalInterna =
+    parseOptionalAmount(o.comision_final_interna) ??
+    parseOptionalAmount(o.comision_final_interno) ??
+    parseOptionalAmount(o.comision_final)
+  const impuestoFinalInterno =
+    parseOptionalAmount(o.impuesto_final_interno) ??
+    parseOptionalAmount(o.impuesto_final) ??
+    parseOptionalAmount(o.impuesto_interno) ??
+    parseOptionalAmount(o.impuesto)
+  let ventaFinal =
+    parseOptionalAmount(o.venta_final) ??
+    parseOptionalAmount(o.venta_total) ??
+    parseOptionalAmount(o.venta)
+  if (
+    ventaFinal == null &&
+    comisionFinalInterna != null &&
+    impuestoFinalInterno != null
+  ) {
+    ventaFinal =
+      Math.round((comisionFinalInterna + impuestoFinalInterno) * 100) / 100
+  }
+
+  const fechaEmisionRaw = o.fecha_emision ?? o.fecha_de_emision ?? o.issue_date
+  const fechaEmision =
+    fechaEmisionRaw != null && String(fechaEmisionRaw).trim()
+      ? String(fechaEmisionRaw)
+      : undefined
+
+  const observacionesRaw = o.observaciones ?? o.observations ?? o.notes
+  const observaciones =
+    observacionesRaw != null && String(observacionesRaw).trim()
+      ? String(observacionesRaw).trim()
+      : undefined
+
+  let diasAtraso: number | undefined
+  const diasRaw = o.dias_atraso ?? o.dias_de_atraso ?? o.delay_days
+  if (diasRaw != null && diasRaw !== '') {
+    const n = typeof diasRaw === 'number' ? diasRaw : Number(diasRaw)
+    if (Number.isFinite(n)) diasAtraso = Math.trunc(n)
+  }
+
   return {
     id: o.id != null ? String(o.id) : undefined,
-    bank_account_id: o.bank_account_id != null ? String(o.bank_account_id) : undefined,
-    bank_account_origin_id:
-      (o.bank_account_origin_id ?? o.bank_account_origin) != null
-        ? String(o.bank_account_origin_id ?? o.bank_account_origin)
-        : undefined,
-    bank_account_destination_id:
-      (o.bank_account_destination_id ?? o.bank_account_destination) != null
-        ? String(o.bank_account_destination_id ?? o.bank_account_destination)
-        : undefined,
+    bank_account_id: legacySingle,
+    bank_account_origin_id: originFromFlat,
+    bank_account_destination_id: destFromFlat,
     user_id: o.user_id != null ? String(o.user_id) : undefined,
     tax_rate_id: o.tax_rate_id != null ? String(o.tax_rate_id) : undefined,
     commission_id: o.commission_id != null ? String(o.commission_id) : undefined,
@@ -31,6 +101,10 @@ function parseTransaction(item: unknown): Transaction {
     destination_amount:
       typeof o.destination_amount === 'number' ? o.destination_amount : Number(o.destination_amount) || 0,
     code: o.code != null ? String(o.code) : undefined,
+    resultado_comision: resultado,
+    commission_result: parseOptionalAmount(o.commission_result) ?? resultado,
+    total_a_enviar: totalSend,
+    total_to_send: parseOptionalAmount(o.total_to_send) ?? totalSend,
     send_date: o.send_date != null ? String(o.send_date) : undefined,
     payment_date: o.payment_date != null ? String(o.payment_date) : undefined,
     send_voucher: o.send_voucher != null ? String(o.send_voucher) : undefined,
@@ -38,7 +112,13 @@ function parseTransaction(item: unknown): Transaction {
     created_at: o.created_at != null ? String(o.created_at) : undefined,
     created_by: o.created_by != null ? String(o.created_by) : undefined,
     updated_at: o.updated_at != null ? String(o.updated_at) : undefined,
-    checked: o.checked === true || o.checked === 'true'
+    checked: o.checked === true || o.checked === 'true',
+    comision_final_interna: comisionFinalInterna ?? resultado,
+    impuesto_final_interno: impuestoFinalInterno,
+    venta_final: ventaFinal,
+    fecha_emision: fechaEmision,
+    observaciones,
+    dias_atraso: diasAtraso
   }
 }
 
@@ -67,6 +147,10 @@ export class TransactionsApiAdapter implements TransactionsRepository {
     const search = new URLSearchParams()
     if (params?.status?.trim()) search.set('status', params.status.trim())
     if (params?.user_id?.trim()) search.set('user_id', params.user_id.trim())
+    if (params?.bank_account_origin_id?.trim())
+      search.set('bank_account_origin_id', params.bank_account_origin_id.trim())
+    if (params?.bank_account_destination_id?.trim())
+      search.set('bank_account_destination_id', params.bank_account_destination_id.trim())
     if (params?.bank_account_id?.trim()) search.set('bank_account_id', params.bank_account_id.trim())
     if (params?.created_at_from?.trim()) search.set('created_at_from', params.created_at_from.trim())
     if (params?.created_at_to?.trim()) search.set('created_at_to', params.created_at_to.trim())
@@ -106,13 +190,15 @@ export class TransactionsApiAdapter implements TransactionsRepository {
     formData.append('origin_amount', String(payload.origin_amount))
     formData.append('destination_amount', String(payload.destination_amount))
     formData.append('code', payload.code)
-    if (payload.status) formData.append('status', payload.status)
-    if (payload.resultado_comision != null)
+    /** POST: el servidor fuerza `verification` y `checked: false`; no enviar status/fechas/checklist. */
+    if (payload.resultado_comision != null) {
       formData.append('resultado_comision', String(payload.resultado_comision))
-    if (payload.total_a_enviar != null)
+      formData.append('commission_result', String(payload.resultado_comision))
+    }
+    if (payload.total_a_enviar != null) {
       formData.append('total_a_enviar', String(payload.total_a_enviar))
-    if (payload.send_date) formData.append('send_date', payload.send_date)
-    if (payload.payment_date) formData.append('payment_date', payload.payment_date)
+      formData.append('total_to_send', String(payload.total_a_enviar))
+    }
     if (payload.send_voucher instanceof File)
       formData.append('send_voucher', payload.send_voucher)
     else if (typeof payload.send_voucher === 'string' && payload.send_voucher)
@@ -121,7 +207,8 @@ export class TransactionsApiAdapter implements TransactionsRepository {
       formData.append('payment_voucher', payload.payment_voucher)
     else if (typeof payload.payment_voucher === 'string' && payload.payment_voucher)
       formData.append('payment_voucher', payload.payment_voucher)
-    if (payload.checked === true) formData.append('checked', 'true')
+    if (payload.coupon_id != null && String(payload.coupon_id).trim())
+      formData.append('coupon_id', String(payload.coupon_id).trim())
 
     const response = await apiClient.post<unknown>(url, formData)
     const raw = response.data
@@ -133,7 +220,29 @@ export class TransactionsApiAdapter implements TransactionsRepository {
   async updateTransaction(id: string, payload: UpdateTransactionPayload): Promise<Transaction> {
     // Backend espera PUT /transactions/ con id en el body (no PUT /transactions/{id}/)
     const url = this.endpoint('')
-    const body = { id, ...payload }
+    const body: Record<string, unknown> = { id: id.trim() }
+    for (const [key, value] of Object.entries(payload)) {
+      if (value === undefined) continue
+      body[key] = value
+    }
+    if (body.resultado_comision != null) {
+      body.commission_result = body.resultado_comision
+    }
+    if (body.total_a_enviar != null) {
+      body.total_to_send = body.total_a_enviar
+    }
+    /**
+     * El servidor recalcula `status` salvo `failed`.
+     * No enviar otros estados manualmente (verification / verified / completed).
+     */
+    if (
+      body.status !== undefined &&
+      typeof body.status === 'string' &&
+      body.status.toLowerCase().trim() !== 'failed'
+    ) {
+      delete body.status
+    }
+
     const response = await apiClient.put<unknown>(url, body)
     const raw = response.data
     const obj = raw != null && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}

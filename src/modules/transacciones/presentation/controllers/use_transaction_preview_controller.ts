@@ -1,5 +1,8 @@
 import type { Transaction } from "../../domain/models";
-import { TRANSACTION_STATUS_LABELS } from "../../domain/models";
+import {
+  TRANSACTION_STATUS_LABELS,
+  isTransactionChecked,
+} from "../../domain/models";
 import { useTasasStore } from "@modules/tasas/presentation/controllers/use_tasas_store_controller";
 import { useComisionesStore } from "@modules/comisiones/presentation/controllers/use_comisiones_store_controller";
 import { useCuentasBancariasStore } from "@modules/cuentas-bancarias/presentation/controllers/use_cuentas_bancarias_store_controller";
@@ -95,9 +98,12 @@ export function useTransactionPreviewController() {
       ];
     const esToKey: Record<string, keyof typeof TRANSACTION_STATUS_LABELS> = {
       verificada: "checked",
+      "en verificación": "verification",
+      verificado: "verified",
       pendiente: "pending",
       completado: "completed",
       finalizado: "completed",
+      finalizada: "completed",
       fallido: "failed",
       cancelado: "cancelled",
     };
@@ -150,7 +156,10 @@ export function useTransactionPreviewController() {
 
     const code = (rec.code as string) ?? "";
     const status = rec.status as string | undefined;
-    const checked = rec.checked;
+    const isVerified = isTransactionChecked({
+      checked: rec.checked === true || rec.checked === "true",
+      status: typeof status === "string" ? status : undefined,
+    });
 
     sections.push({
       id: "resumen",
@@ -169,10 +178,7 @@ export function useTransactionPreviewController() {
         },
         {
           label: "Verificada",
-          value:
-            checked === true || String(status).toLowerCase() === "checked"
-              ? "Sí"
-              : "No",
+          value: isVerified ? "Sí" : "No",
         },
       ],
     });

@@ -8,9 +8,11 @@ import type { GetTransactionsParams } from "@modules/transacciones/infrastructur
 import {
   TRANSACTION_STATUSES,
   TRANSACTION_STATUS_LABELS,
+  isTransactionChecked,
 } from "@modules/transacciones/domain/models";
 import AppDropdown from "@/interface/components/AppDropdown.vue";
 import AppDateInput from "@/interface/components/AppDateInput.vue";
+import { Domain } from "@/interface/infrastructure/services";
 
 const transactionsStore = useTransactionsStore();
 const cuentasStore = useCuentasBancariasStore();
@@ -180,6 +182,94 @@ function formatDate(value: string | undefined): string {
   }
 }
 
+/** Contabilidad: moneda PEN como en reportes (S/ 0.00). */
+function formatPen(value: number | null | undefined): string {
+  if (value == null || Number.isNaN(Number(value))) return "—";
+  const n = Number(value);
+  return `S/ ${n.toLocaleString("es-PE", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+/** Fecha de emisión (d/M/yyyy). */
+function formatFechaEmision(value: string | undefined): string {
+  if (!value?.trim()) return "—";
+  try {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return value;
+    return d.toLocaleDateString("es-PE", {
+      day: "numeric",
+      month: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return value;
+  }
+}
+
+function comisionFinalInterna(t: Transaction): number | undefined {
+  const v =
+    t.comision_final_interna ??
+    t.resultado_comision ??
+    t.commission_result;
+  if (v == null || v === "") return undefined;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function impuestoFinalInterno(t: Transaction): number | undefined {
+  const v = t.impuesto_final_interno;
+  if (v == null || v === "") return undefined;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function ventaFinalMonto(t: Transaction): number | undefined {
+  if (t.venta_final != null) {
+    const n = Number(t.venta_final);
+    if (Number.isFinite(n)) return n;
+  }
+  const c = comisionFinalInterna(t);
+  const i = impuestoFinalInterno(t);
+  if (c != null && i != null) return Math.round((c + i) * 100) / 100;
+  const tot = t.total_a_enviar ?? t.total_to_send;
+  if (tot != null && tot !== "") {
+    const n = Number(tot);
+    if (Number.isFinite(n)) return n;
+  }
+  return undefined;
+}
+
+function fechaEmisionTx(t: Transaction): string | undefined {
+  const raw = t.fecha_emision ?? t.send_date ?? t.created_at;
+  return raw?.trim() ? raw : undefined;
+}
+
+function observacionesTx(t: Transaction): string {
+  const o = t.observaciones;
+  if (typeof o === "string" && o.trim()) return o.trim();
+  const rec = t as Record<string, unknown>;
+  const alt = rec.notes ?? rec.note;
+  if (typeof alt === "string" && alt.trim()) return alt.trim();
+  return "";
+}
+
+function diasAtrasoTx(t: Transaction): string {
+  if (t.dias_atraso != null) {
+    const n = Number(t.dias_atraso);
+    if (Number.isFinite(n)) return String(Math.trunc(n));
+  }
+  return "—";
+}
+
+function voucherMediaHref(path: unknown): string {
+  if (path == null || typeof path !== "string") return "";
+  const s = path.trim();
+  if (!s) return "";
+  return Domain.mediaUrl(s);
+}
+
 function getStatusLabel(status: string | undefined): string {
   if (!status) return "-";
   const s = status.toLowerCase();
@@ -189,11 +279,37 @@ function getStatusLabel(status: string | undefined): string {
   );
 }
 
-function getBankAccountLabel(id: string | undefined): string {
+function statusRowBadgeClass(status: string | undefined): string {
+  const s = (status ?? "").toLowerCase();
+  switch (s) {
+    case "verification":
+    case "pending":
+      return "bg-amber-100 text-amber-900";
+    case "verified":
+      return "bg-violet-100 text-violet-900";
+    case "completed":
+      return "bg-emerald-100 text-emerald-900";
+    case "failed":
+      return "bg-red-100 text-red-800";
+    case "checked":
+      return "bg-sky-100 text-sky-900";
+    case "cancelled":
+      return "bg-gray-100 text-gray-800";
+    default:
+      return "bg-[#dbeafe] text-brasper-indigoDark";
+  }
+}
+
+/** Tabla: solo banco + moneda (sin número de cuenta ni titular). */
+function getBankCurrencyTableLabel(id: string | undefined): string {
   if (!id) return "-";
   const acc = cuentasStore.bankAccounts.find((a) => a.id === id);
   if (!acc) return id;
-  return bankAccountToOption(acc).label;
+  const bank = cuentasStore.banks.find((b) => b.id === acc.bank_id);
+  if (!bank) return "-";
+  return bank.currency
+    ? `${bank.bank} (${bank.currency})`
+    : bank.bank;
 }
 
 function getClientLabel(id: string | undefined): string {
@@ -202,13 +318,9 @@ function getClientLabel(id: string | undefined): string {
   return u?.name ?? id;
 }
 
-function isChecked(t: Transaction): boolean {
-  return t.checked === true || (t.status ?? "").toLowerCase() === "checked";
-}
-
 async function toggleChecked(t: Transaction) {
   if (!t.id || updatingCheckedId.value) return;
-  const newChecked = !isChecked(t);
+  const newChecked = !isTransactionChecked(t);
   updatingCheckedId.value = t.id;
   transactionsStore.error = null;
   try {
@@ -363,7 +475,7 @@ onMounted(() => {
 
       <table
         v-show="!transactionsStore.isLoading"
-        class="w-full min-w-[800px] text-left text-sm"
+        class="w-full min-w-[1400px] text-left text-sm"
       >
         <thead>
           <tr class="bg-[#dbeafe]">
@@ -378,7 +490,17 @@ onMounted(() => {
             <th
               class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark"
             >
+              Cliente
+            </th>
+            <th
+              class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark"
+            >
               Cuenta de origen
+            </th>
+            <th
+              class="whitespace-nowrap px-4 py-3 text-center font-semibold text-brasper-indigoDark"
+            >
+              Monto de envío
             </th>
             <th
               class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark"
@@ -386,19 +508,39 @@ onMounted(() => {
               Cuenta destino
             </th>
             <th
-              class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark"
+              class="whitespace-nowrap px-4 py-3 text-center font-semibold text-brasper-indigoDark"
             >
-              Cliente
+              Monto a recibir
             </th>
             <th
-              class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark"
+              class="whitespace-nowrap px-2 py-3 text-right text-[10px] font-bold uppercase leading-tight tracking-wide text-white bg-[#1e3a8a]"
             >
-              Monto origen
+              Comisión<br />final interna
             </th>
             <th
-              class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark"
+              class="whitespace-nowrap px-2 py-3 text-right text-[10px] font-bold uppercase leading-tight tracking-wide text-white bg-[#1e3a8a]"
             >
-              Monto destino
+              Impuesto<br />final interno
+            </th>
+            <th
+              class="whitespace-nowrap px-2 py-3 text-right text-[10px] font-bold uppercase leading-tight tracking-wide text-white bg-emerald-600"
+            >
+              Venta final
+            </th>
+            <th
+              class="whitespace-nowrap px-2 py-3 text-center text-[10px] font-bold uppercase leading-tight tracking-wide text-white bg-[#1e3a8a]"
+            >
+              Fecha de<br />emisión
+            </th>
+            <th
+              class="min-w-[120px] max-w-[200px] px-2 py-3 text-left text-[10px] font-bold uppercase leading-tight tracking-wide text-white bg-[#1e3a8a]"
+            >
+              Observaciones
+            </th>
+            <th
+              class="whitespace-nowrap px-2 py-3 text-center text-[10px] font-bold uppercase leading-tight tracking-wide text-white bg-[#1e3a8a]"
+            >
+              Días de<br />atraso
             </th>
             <th
               class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark"
@@ -410,6 +552,18 @@ onMounted(() => {
             >
               Fecha envío
             </th>
+            <th
+              class="whitespace-nowrap px-2 py-3 text-center text-xs font-semibold leading-tight text-brasper-indigoDark"
+              title="Comprobante de envío (imagen)"
+            >
+              Comp.<br />envío
+            </th>
+            <th
+              class="whitespace-nowrap px-2 py-3 text-center text-xs font-semibold leading-tight text-brasper-indigoDark"
+              title="Comprobante de pago (imagen)"
+            >
+              Comp.<br />pago
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -418,7 +572,7 @@ onMounted(() => {
             class="border-t border-[#e5e7eb]"
           >
             <td
-              colspan="9"
+              colspan="17"
               class="rounded-xl border border-[#dbe7fb] bg-[#fbfdff] px-6 py-12 text-center text-[#666]"
             >
               No hay movimientos para mostrar.
@@ -434,20 +588,20 @@ onMounted(() => {
                 type="button"
                 class="flex h-6 w-6 items-center justify-center rounded border transition"
                 :class="
-                  isChecked(t)
+                  isTransactionChecked(t)
                     ? 'border-brasper-indigoStrong bg-brasper-indigoStrong text-white'
                     : 'border-[#d1d5db] bg-white text-transparent hover:border-[#9ca3af]'
                 "
                 :disabled="updatingCheckedId === t.id"
                 :title="
-                  isChecked(t)
+                  isTransactionChecked(t)
                     ? 'Verificada (clic para desmarcar)'
                     : 'Marcar como verificada'
                 "
                 @click.stop="toggleChecked(t)"
               >
                 <svg
-                  v-if="isChecked(t)"
+                  v-if="isTransactionChecked(t)"
                   class="h-4 w-4"
                   fill="currentColor"
                   viewBox="0 0 20 20"
@@ -463,55 +617,124 @@ onMounted(() => {
             <td class="px-4 py-3 font-medium text-[#374151]">
               {{ t.code ?? "-" }}
             </td>
-            <td
-              class="max-w-[180px] truncate px-4 py-3 text-[#374151]"
-              :title="getBankAccountLabel(t.bank_account_origin_id)"
-            >
-              {{ getBankAccountLabel(t.bank_account_origin_id) }}
-            </td>
-            <td
-              class="max-w-[180px] truncate px-4 py-3 text-[#374151]"
-              :title="getBankAccountLabel(t.bank_account_destination_id)"
-            >
-              {{ getBankAccountLabel(t.bank_account_destination_id) }}
-            </td>
-            <td class="px-4 py-3 text-[#374151]">
+            <td class="max-w-[160px] truncate px-4 py-3 text-[#374151]">
               {{ getClientLabel(t.user_id) }}
             </td>
-            <td class="px-4 py-3 text-[#374151]">
+            <td
+              class="max-w-[180px] truncate px-4 py-3 text-[#374151]"
+              :title="getBankCurrencyTableLabel(t.bank_account_origin_id)"
+            >
+              {{ getBankCurrencyTableLabel(t.bank_account_origin_id) }}
+            </td>
+            <td class="whitespace-nowrap px-4 py-3 text-center tabular-nums text-[#374151]">
               {{ formatValue(t.origin_amount) }}
             </td>
-            <td class="px-4 py-3 text-[#374151]">
+            <td
+              class="max-w-[180px] truncate px-4 py-3 text-[#374151]"
+              :title="getBankCurrencyTableLabel(t.bank_account_destination_id)"
+            >
+              {{ getBankCurrencyTableLabel(t.bank_account_destination_id) }}
+            </td>
+            <td class="whitespace-nowrap px-4 py-3 text-center tabular-nums text-[#374151]">
               {{ formatValue(t.destination_amount) }}
+            </td>
+            <td
+              class="whitespace-nowrap bg-slate-50/80 px-2 py-3 text-right tabular-nums text-[#111827]"
+            >
+              {{ formatPen(comisionFinalInterna(t)) }}
+            </td>
+            <td
+              class="whitespace-nowrap bg-slate-50/80 px-2 py-3 text-right tabular-nums text-[#111827]"
+            >
+              {{ formatPen(impuestoFinalInterno(t)) }}
+            </td>
+            <td
+              class="whitespace-nowrap bg-emerald-50/90 px-2 py-3 text-right text-sm font-semibold tabular-nums text-emerald-900"
+            >
+              {{ formatPen(ventaFinalMonto(t)) }}
+            </td>
+            <td
+              class="whitespace-nowrap bg-slate-50/80 px-2 py-3 text-center text-sm text-[#374151]"
+            >
+              {{ formatFechaEmision(fechaEmisionTx(t)) }}
+            </td>
+            <td
+              class="max-w-[200px] truncate bg-slate-50/80 px-2 py-3 text-left text-xs text-[#374151]"
+              :title="observacionesTx(t) || undefined"
+            >
+              {{ observacionesTx(t) || "—" }}
+            </td>
+            <td
+              class="whitespace-nowrap bg-slate-50/80 px-2 py-3 text-center tabular-nums text-[#374151]"
+            >
+              {{ diasAtrasoTx(t) }}
             </td>
             <td class="px-4 py-3">
               <span
                 class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium"
-                :class="{
-                  'bg-amber-100 text-amber-800':
-                    (t.status ?? '').toLowerCase() === 'pending',
-                  'bg-indigo-100 text-indigo-900':
-                    (t.status ?? '').toLowerCase() === 'completed',
-                  'bg-red-100 text-red-800':
-                    (t.status ?? '').toLowerCase() === 'failed',
-                  'bg-sky-100 text-sky-900':
-                    (t.status ?? '').toLowerCase() === 'checked',
-                  'bg-gray-100 text-gray-800':
-                    (t.status ?? '').toLowerCase() === 'cancelled',
-                  'bg-[#dbeafe] text-brasper-indigoDark': ![
-                    'pending',
-                    'completed',
-                    'failed',
-                    'checked',
-                    'cancelled',
-                  ].includes((t.status ?? '').toLowerCase()),
-                }"
+                :class="statusRowBadgeClass(t.status)"
               >
                 {{ getStatusLabel(t.status) }}
               </span>
             </td>
             <td class="px-4 py-3 text-[#374151]">
               {{ formatDate(t.send_date) }}
+            </td>
+            <td class="px-2 py-2 align-middle text-center">
+              <template v-if="voucherMediaHref(t.send_voucher)">
+                <a
+                  :href="voucherMediaHref(t.send_voucher)"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex max-w-[5rem] flex-col items-center gap-1"
+                  :title="'Abrir comprobante de envío en nueva pestaña'"
+                >
+                  <img
+                    :src="voucherMediaHref(t.send_voucher)"
+                    alt=""
+                    class="h-11 w-11 rounded border border-[#e5e7eb] bg-[#f3f4f6] object-cover"
+                    loading="lazy"
+                    @error="
+                      ($event.target as HTMLImageElement).style.display =
+                        'none'
+                    "
+                  />
+                  <span
+                    class="text-[10px] font-medium leading-tight text-brasper-indigoStrong underline decoration-transparent hover:decoration-current"
+                  >
+                    Abrir
+                  </span>
+                </a>
+              </template>
+              <span v-else class="text-[#9ca3af]">—</span>
+            </td>
+            <td class="px-2 py-2 align-middle text-center">
+              <template v-if="voucherMediaHref(t.payment_voucher)">
+                <a
+                  :href="voucherMediaHref(t.payment_voucher)"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex max-w-[5rem] flex-col items-center gap-1"
+                  :title="'Abrir comprobante de pago en nueva pestaña'"
+                >
+                  <img
+                    :src="voucherMediaHref(t.payment_voucher)"
+                    alt=""
+                    class="h-11 w-11 rounded border border-[#e5e7eb] bg-[#f3f4f6] object-cover"
+                    loading="lazy"
+                    @error="
+                      ($event.target as HTMLImageElement).style.display =
+                        'none'
+                    "
+                  />
+                  <span
+                    class="text-[10px] font-medium leading-tight text-brasper-indigoStrong underline decoration-transparent hover:decoration-current"
+                  >
+                    Abrir
+                  </span>
+                </a>
+              </template>
+              <span v-else class="text-[#9ca3af]">—</span>
             </td>
           </tr>
         </tbody>

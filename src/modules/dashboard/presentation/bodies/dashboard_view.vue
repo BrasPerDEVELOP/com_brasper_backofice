@@ -35,11 +35,17 @@ const txByStatus = computed(() => {
   return map;
 });
 
-const pendingCount = computed(
-  () => txByStatus.value.pending ?? 0,
+/** En verificación: estado nuevo + legado pendiente */
+const inVerificationCount = computed(
+  () =>
+    (txByStatus.value.verification ?? 0) + (txByStatus.value.pending ?? 0),
 );
-const completedCount = computed(
-  () => (txByStatus.value.completed ?? 0) + (txByStatus.value.checked ?? 0),
+/** Cerrada según API (no confundir con `verified` intermedio) */
+const completedCount = computed(() => txByStatus.value.completed ?? 0);
+const verifiedIntermediateCount = computed(
+  () =>
+    (txByStatus.value.verified ?? 0) +
+    (txByStatus.value.checked ?? 0),
 );
 const failedCount = computed(() => txByStatus.value.failed ?? 0);
 
@@ -190,7 +196,7 @@ onMounted(async () => {
       <div class="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-brasper-indigoStrong/80">
         Operación
       </div>
-      <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <RouterLink
           to="/app/transacciones"
           class="group relative overflow-hidden rounded-2xl border border-white/80 bg-white/90 p-6 shadow-lg shadow-brasper-indigoStrong/10 ring-1 ring-brasper-indigoStrong/5 transition duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-brasper-indigoStrong/20"
@@ -225,12 +231,34 @@ onMounted(async () => {
             </svg>
           </div>
           <p class="mt-4 text-xs font-bold uppercase tracking-wider text-amber-900/80">
-            Pendientes
+            En verificación
           </p>
           <p class="mt-1 text-4xl font-bold tabular-nums text-amber-950">
-            {{ formatInt(pendingCount) }}
+            {{ formatInt(inVerificationCount) }}
           </p>
-          <p class="mt-1 text-xs font-medium text-amber-800/70">Requieren acción</p>
+          <p class="mt-1 text-xs font-medium text-amber-800/70">
+            <code class="rounded bg-amber-100/80 px-1 text-[10px]">verification</code>
+            + pendiente (legado)
+          </p>
+        </div>
+
+        <div
+          class="relative overflow-hidden rounded-2xl border border-violet-200/60 bg-gradient-to-br from-violet-100/90 via-violet-50 to-white p-6 shadow-lg shadow-violet-500/15 ring-1 ring-violet-400/20"
+        >
+          <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-purple-700 text-white shadow-lg shadow-violet-500/30">
+            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <p class="mt-4 text-xs font-bold uppercase tracking-wider text-violet-900/80">
+            Verificado (revisión)
+          </p>
+          <p class="mt-1 text-4xl font-bold tabular-nums text-violet-950">
+            {{ formatInt(verifiedIntermediateCount) }}
+          </p>
+          <p class="mt-1 text-xs font-medium text-violet-800/70">
+            Checklist OK, cierre incompleto
+          </p>
         </div>
 
         <div
@@ -242,12 +270,14 @@ onMounted(async () => {
             </svg>
           </div>
           <p class="mt-4 text-xs font-bold uppercase tracking-wider text-emerald-900/80">
-            Completadas / verificadas
+            Finalizadas
           </p>
           <p class="mt-1 text-4xl font-bold tabular-nums text-emerald-950">
             {{ formatInt(completedCount) }}
           </p>
-          <p class="mt-1 text-xs font-medium text-emerald-800/70">Listas o verificadas</p>
+          <p class="mt-1 text-xs font-medium text-emerald-800/70">
+            Estado <code class="rounded bg-emerald-100/80 px-1 text-[10px]">completed</code>
+          </p>
         </div>
 
         <div
@@ -286,7 +316,8 @@ onMounted(async () => {
                 Volumen liquidado
               </h2>
               <p class="text-xs text-[#64748b]">
-                Suma en operaciones completadas o verificadas
+                Suma en <code class="rounded bg-slate-100 px-1 text-[10px]">completed</code> (y legado
+                <code class="rounded bg-slate-100 px-1 text-[10px]">checked</code>)
               </p>
             </div>
           </div>
@@ -469,15 +500,23 @@ onMounted(async () => {
                 <div
                   class="h-full rounded-full bg-gradient-to-r shadow-sm transition-all duration-500"
                   :class="{
-                    'from-amber-400 via-amber-500 to-orange-500': row.key === 'pending',
+                    'from-amber-400 via-amber-500 to-orange-500':
+                      row.key === 'pending' || row.key === 'verification',
+                    'from-violet-400 via-violet-500 to-purple-600': row.key === 'verified',
                     'from-emerald-400 via-emerald-500 to-teal-600': row.key === 'completed',
                     'from-rose-400 via-red-500 to-red-700': row.key === 'failed',
                     'from-sky-400 via-sky-500 to-indigo-500': row.key === 'checked',
                     'from-slate-400 via-slate-500 to-slate-600': row.key === 'cancelled',
                     'from-brasper-cyanLight via-brasper-indigo to-brasper-indigoDark':
-                      !['pending', 'completed', 'failed', 'checked', 'cancelled'].includes(
-                        row.key,
-                      ),
+                      ![
+                        'pending',
+                        'verification',
+                        'verified',
+                        'completed',
+                        'failed',
+                        'checked',
+                        'cancelled',
+                      ].includes(row.key),
                   }"
                   :style="{
                     width: `${Math.max(8, Math.round((row.n / totalForBreakdown) * 100))}%`,

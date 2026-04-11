@@ -57,7 +57,7 @@ export function rowToCreatePayload(row: Record<string, unknown>): CreateTransact
     get(row, 'code', 'codigo') ||
     `TRX-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 
-  const status = get(row, 'status', 'estado') || 'pending'
+  const status = get(row, 'status', 'estado') || 'verification'
   const resultado_comision = num(
     row['resultado_comision'] ?? row['comision_result'] ?? row['comision']
   )

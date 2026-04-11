@@ -13,6 +13,16 @@ import {
   DeleteTransactionUseCase
 } from '../../application/use_cases'
 import { TransactionsApiAdapter } from '../../infrastructure/adapters'
+import type { TransactionsRepository } from '../../infrastructure/adapters/transactions_repository'
+
+let transactionsRepositorySingleton: TransactionsRepository | null = null
+
+function getTransactionsRepository(): TransactionsRepository {
+  if (!transactionsRepositorySingleton) {
+    transactionsRepositorySingleton = new TransactionsApiAdapter()
+  }
+  return transactionsRepositorySingleton
+}
 
 interface TransactionsState {
   transactions: Transaction[]
@@ -21,10 +31,6 @@ interface TransactionsState {
   isCreating: boolean
   isUpdating: boolean
   error: string | null
-}
-
-function getRepository() {
-  return new TransactionsApiAdapter()
 }
 
 export const useTransactionsStore = defineStore('transactions', {
@@ -42,7 +48,7 @@ export const useTransactionsStore = defineStore('transactions', {
       this.isLoading = true
       this.error = null
       try {
-        const repo = getRepository()
+        const repo = getTransactionsRepository()
         const useCase = new GetTransactionsUseCase(repo)
         this.transactions = await useCase.execute(params)
       } catch (e) {
@@ -56,7 +62,7 @@ export const useTransactionsStore = defineStore('transactions', {
       this.isImporting = true
       this.error = null
       try {
-        const repo = getRepository()
+        const repo = getTransactionsRepository()
         const useCase = new ImportTransactionsFromExcelUseCase(repo)
         await useCase.execute(file)
         await this.loadTransactions(filters)
@@ -78,7 +84,7 @@ export const useTransactionsStore = defineStore('transactions', {
       this.isCreating = true
       this.error = null
       try {
-        const repo = getRepository()
+        const repo = getTransactionsRepository()
         const useCase = new CreateTransactionUseCase(repo)
         const created = await useCase.execute(payload)
         this.transactions = [created, ...this.transactions]
@@ -95,7 +101,7 @@ export const useTransactionsStore = defineStore('transactions', {
       this.isUpdating = true
       this.error = null
       try {
-        const repo = getRepository()
+        const repo = getTransactionsRepository()
         const useCase = new UpdateTransactionUseCase(repo)
         const updated = await useCase.execute(id, payload)
         const idx = this.transactions.findIndex((t) => (t.id ?? '') === id)
@@ -112,7 +118,7 @@ export const useTransactionsStore = defineStore('transactions', {
     async deleteTransaction(id: string) {
       this.error = null
       try {
-        const repo = getRepository()
+        const repo = getTransactionsRepository()
         const useCase = new DeleteTransactionUseCase(repo)
         await useCase.execute(id)
         this.transactions = this.transactions.filter((t) => (t.id ?? '') !== id)
@@ -124,7 +130,7 @@ export const useTransactionsStore = defineStore('transactions', {
 
     async getTransactionById(id: string): Promise<Transaction | null> {
       try {
-        const repo = getRepository()
+        const repo = getTransactionsRepository()
         return await repo.getTransactionById(id)
       } catch {
         return null

@@ -47,6 +47,16 @@ const filteredOptions = computed(() => {
   )
 })
 
+/** Fila "placeholder" que emite '': solo si ninguna opción ya usa la misma etiqueta (evita "Todos" duplicado). */
+const showPlaceholderRow = computed(() => {
+  const ph = (props.placeholder ?? '').trim()
+  if (!ph) return false
+  const phLower = ph.toLowerCase()
+  return !props.options.some(
+    (o) => (o.label ?? '').trim().toLowerCase() === phLower
+  )
+})
+
 const selectedLabel = computed(() => {
   const val = props.modelValue ?? ''
   const opt = props.options.find((o) => o.value === val)
@@ -126,6 +136,7 @@ watch(
       </div>
       <div class="max-h-[200px] overflow-y-auto py-1">
         <button
+          v-if="showPlaceholderRow"
           type="button"
           :class="[
             'flex w-full items-center px-3 py-2 text-left text-sm transition',

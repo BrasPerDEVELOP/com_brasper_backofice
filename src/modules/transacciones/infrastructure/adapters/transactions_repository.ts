@@ -18,19 +18,22 @@ export interface CreateTransactionPayload {
   payment_voucher?: string | File | null
   /** UUID o null. No enviar "automatic" - el API espera UUID válido. */
   coupon_id?: string | null
-  /** Si true, el backend asigna status: "checked" automáticamente. */
+  /** En POST el servidor ignora y deja `false`; usar solo en PUT. */
   checked?: boolean
 }
 
 export interface UpdateTransactionPayload extends Partial<CreateTransactionPayload> {
-  /** Si true, el backend asigna status: "checked" automáticamente. */
+  /** PUT: el servidor recalcula `status` salvo `failed`. */
   checked?: boolean
 }
 
 export interface GetTransactionsParams {
   status?: string | null
   user_id?: string | null
+  /** @deprecated Filtro combinado; la API documenta origen/destino por separado. */
   bank_account_id?: string | null
+  bank_account_origin_id?: string | null
+  bank_account_destination_id?: string | null
   created_at_from?: string | null
   created_at_to?: string | null
 }
