@@ -57,9 +57,13 @@ const showPlaceholderRow = computed(() => {
   )
 })
 
+const selectedValueStr = computed(() =>
+  String(props.modelValue ?? '').trim(),
+)
+
 const selectedLabel = computed(() => {
-  const val = props.modelValue ?? ''
-  const opt = props.options.find((o) => o.value === val)
+  const val = selectedValueStr.value
+  const opt = props.options.find((o) => String(o.value) === val)
   return opt?.label ?? props.placeholder
 })
 
@@ -107,7 +111,9 @@ watch(
       :style="minWidth ? { minWidth } : undefined"
       @click="toggle"
     >
-      <span :class="props.modelValue ? 'text-[#374151]' : 'text-[#9ca3af]'">
+      <span
+        :class="selectedValueStr ? 'text-[#374151]' : 'text-[#9ca3af]'"
+      >
         {{ selectedLabel }}
       </span>
       <svg
@@ -140,7 +146,7 @@ watch(
           type="button"
           :class="[
             'flex w-full items-center px-3 py-2 text-left text-sm transition',
-            !(props.modelValue ?? '') ? 'bg-brasper-cyanLight/15 text-brasper-indigoStrong' : 'text-[#374151] hover:bg-[#f9fafb]'
+            !selectedValueStr ? 'bg-brasper-cyanLight/15 text-brasper-indigoStrong' : 'text-[#374151] hover:bg-[#f9fafb]'
           ]"
           @click.stop="select('')"
         >
@@ -152,7 +158,7 @@ watch(
           type="button"
           :class="[
             'flex w-full items-center px-3 py-2 text-left text-sm transition',
-            (props.modelValue ?? '') === item.value
+            selectedValueStr === String(item.value)
               ? 'bg-brasper-cyanLight/15 text-brasper-indigoStrong'
               : 'text-[#374151] hover:bg-[#f9fafb]'
           ]"

@@ -40,6 +40,40 @@ export async function fetchClientUsers(): Promise<UserOption[]> {
   return clients.sort((a, b) => a.name.localeCompare(b.name, 'es'))
 }
 
+/**
+ * Selector de usuario en transacciones (crear/editar): clientes + comercial + admin.
+ * Pide `user/name-list/` por rol y unifica por `id` (sin duplicados).
+ */
+const TRANSACTION_FORM_USER_ROLES = [
+  'cliente',
+  'commercial',
+  'comercial',
+  'sales',
+  'admin'
+] as const
+
+export async function fetchUsersForTransactionForm(): Promise<UserOption[]> {
+  const byId = new Map<string, UserOption>()
+  await Promise.all(
+    TRANSACTION_FORM_USER_ROLES.map(async (role) => {
+      const url = Domain.http('user/name-list/')
+      const response = await apiClient.get<unknown>(url, {
+        params: { role },
+        headers: { Accept: 'application/json' }
+      })
+      const raw = response.data
+      const arr = Array.isArray(raw) ? raw : extractArray(raw)
+      for (const item of arr) {
+        const u = parseUser(item)
+        if (u && !byId.has(u.id)) byId.set(u.id, u)
+      }
+    })
+  )
+  return Array.from(byId.values()).sort((a, b) =>
+    a.name.localeCompare(b.name, 'es')
+  )
+}
+
 function extractArray(raw: unknown): unknown[] {
   if (Array.isArray(raw)) return raw
   if (raw != null && typeof raw === 'object') {

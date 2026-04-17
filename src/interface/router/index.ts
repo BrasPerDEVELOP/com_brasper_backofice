@@ -65,6 +65,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@modules/tasas/presentation/bodies/tasas_view.vue')
       },
       {
+        path: 'home-banner',
+        name: 'home-banner',
+        component: () => import('@modules/home-banner/presentation/bodies/banner_view.vue'),
+        meta: { breadcrumb: 'Configuración > Banner Home' }
+      },
+      {
         path: 'perfil',
         name: 'perfil',
         component: () => import('@modules/auth/presentation/bodies/profile_view.vue'),
@@ -84,6 +90,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/comisiones', redirect: '/app/comisiones' },
   { path: '/cuentas', redirect: '/app/cuentas' },
   { path: '/tasas', redirect: '/app/tasas' },
+  { path: '/home-banner', redirect: '/app/home-banner' },
   { path: '/calculator', redirect: '/app/calculator' },
   { path: '/cupones', redirect: '/app/cupones' },
   { path: '/contabilidad', redirect: '/app/contabilidad' },

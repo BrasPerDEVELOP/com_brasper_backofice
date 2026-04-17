@@ -36,6 +36,13 @@ function formatMoney(value: unknown): string {
   return String(value);
 }
 
+function formatTransactionCodeShort(code: string | undefined): string {
+  if (!code?.trim()) return "—";
+  const digits = code.replace(/\D/g, "");
+  if (digits.length > 0) return digits.slice(-4).padStart(4, "0");
+  return code.trim().slice(-4);
+}
+
 function formatDate(value: string | undefined): string {
   if (!value) return "—";
   try {
@@ -85,7 +92,9 @@ export function useTransactionPreviewController() {
 
   function getClientLabel(id: string | undefined): string {
     if (!id?.trim()) return "—";
-    const u = cuentasStore.clientUsers.find((x) => x.id === id);
+    const u =
+      cuentasStore.transactionFormUsers.find((x) => x.id === id) ??
+      cuentasStore.clientUsers.find((x) => x.id === id);
     return u?.name ?? id;
   }
 
@@ -143,8 +152,8 @@ export function useTransactionPreviewController() {
       maybe(cuentasStore.bankAccounts.length === 0, () =>
         cuentasStore.loadBankAccounts(),
       ),
-      maybe(cuentasStore.clientUsers.length === 0, () =>
-        cuentasStore.loadClientUsers(),
+      maybe(cuentasStore.transactionFormUsers.length === 0, () =>
+        cuentasStore.loadTransactionFormUsers(),
       ),
       maybe(cuentasStore.banks.length === 0, () => cuentasStore.loadBanks()),
     ]);
@@ -168,7 +177,7 @@ export function useTransactionPreviewController() {
       items: [
         {
           label: "Código",
-          value: code || "—",
+          value: formatTransactionCodeShort(code),
           variant: "mono",
         },
         {

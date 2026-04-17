@@ -15,8 +15,43 @@ function parseOptionalAmount(v: unknown): number | undefined {
   return Number.isFinite(n) ? n : undefined
 }
 
-/** UUID/string o objeto anidado `{ id }` desde el API (evita String(obj) → "[object Object]"). */
+function appendFormValue(form: FormData, key: string, value: unknown): void {
+  if (value === undefined) return
+  if (value instanceof File) {
+    form.append(key, value)
+    return
+  }
+  if (typeof value === 'boolean') {
+    form.append(key, value ? 'true' : 'false')
+    return
+  }
+  if (typeof value === 'number') {
+    form.append(key, String(value))
+    return
+  }
+  if (typeof value === 'string') {
+    form.append(key, value)
+    return
+  }
+  form.append(key, String(value))
+}
+
+/** UUID/string o objeto anidado desde el API (evita String(obj) → "[object Object]"). */
 function coerceBankAccountId(value: unknown): string | undefined {
+  if (value == null || value === '') return undefined
+  if (typeof value === 'string' || typeof value === 'number') {
+    const s = String(value).trim()
+    return s ? s : undefined
+  }
+  if (typeof value === 'object' && value !== null) {
+    const rec = value as Record<string, unknown>
+    const id = rec.id ?? rec.uuid ?? rec.account_id ?? rec.bank_account_id
+    if (id != null && id !== '') return String(id).trim() || undefined
+  }
+  return undefined
+}
+
+function coerceUserId(value: unknown): string | undefined {
   if (value == null || value === '') return undefined
   if (typeof value === 'string' || typeof value === 'number') {
     const s = String(value).trim()
@@ -29,6 +64,49 @@ function coerceBankAccountId(value: unknown): string | undefined {
   return undefined
 }
 
+function extractOriginDestinationIds(o: Record<string, unknown>): {
+  origin: string | undefined
+  dest: string | undefined
+} {
+  const origin =
+    coerceBankAccountId(o.bank_account_origin_id) ??
+    coerceBankAccountId(o.bank_account_origin) ??
+    coerceBankAccountId(o.cuenta_origen_id) ??
+    coerceBankAccountId(o.cuenta_origen) ??
+    coerceBankAccountId(o.origin_bank_account_id) ??
+    coerceBankAccountId(o.from_account_id)
+  const dest =
+    coerceBankAccountId(o.bank_account_destination_id) ??
+    coerceBankAccountId(o.bank_account_destination) ??
+    coerceBankAccountId(o.cuenta_destino_id) ??
+    coerceBankAccountId(o.cuenta_destino) ??
+    coerceBankAccountId(o.destination_bank_account_id) ??
+    coerceBankAccountId(o.to_account_id)
+  return { origin, dest }
+}
+
+/**
+ * Combina el JSON crudo con el parse normalizado sin pisar campos válidos con `undefined`
+ * (p. ej. el detalle GET trae IDs en claves que el parse aún no mapea).
+ */
+function transactionFromApiRecord(item: Record<string, unknown>): Transaction {
+  const parsed = parseTransaction(item)
+  const merged: Record<string, unknown> = { ...item }
+  for (const [k, v] of Object.entries(parsed)) {
+    if (v !== undefined) merged[k] = v
+  }
+  const { origin, dest } = extractOriginDestinationIds(item)
+  const curO = merged.bank_account_origin_id
+  const curD = merged.bank_account_destination_id
+  if (curO == null || curO === '') {
+    if (origin) merged.bank_account_origin_id = origin
+  }
+  if (curD == null || curD === '') {
+    if (dest) merged.bank_account_destination_id = dest
+  }
+  return merged as Transaction
+}
+
 function parseTransaction(item: unknown): Transaction {
   if (item == null || typeof item !== 'object') return {}
   const o = item as Record<string, unknown>
@@ -37,14 +115,12 @@ function parseTransaction(item: unknown): Transaction {
     parseOptionalAmount(o.commission_result)
   const totalSend =
     parseOptionalAmount(o.total_a_enviar) ?? parseOptionalAmount(o.total_to_send)
-  const originFromFlat =
-    coerceBankAccountId(o.bank_account_origin_id) ??
-    coerceBankAccountId(o.bank_account_origin) ??
-    coerceBankAccountId(o.cuenta_origen_id)
-  const destFromFlat =
-    coerceBankAccountId(o.bank_account_destination_id) ??
-    coerceBankAccountId(o.bank_account_destination) ??
-    coerceBankAccountId(o.cuenta_destino_id)
+  const taxAmount =
+    parseOptionalAmount(o.tax_amount) ??
+    parseOptionalAmount(o.tipo_cambio) ??
+    parseOptionalAmount(o.rate)
+  const { origin: originFromFlat, dest: destFromFlat } =
+    extractOriginDestinationIds(o)
   const legacySingle = coerceBankAccountId(o.bank_account_id)
 
   const comisionFinalInterna =
@@ -88,12 +164,28 @@ function parseTransaction(item: unknown): Transaction {
     if (Number.isFinite(n)) diasAtraso = Math.trunc(n)
   }
 
+  const couponRaw = o.coupon_id
+  const coupon_id =
+    couponRaw == null || couponRaw === ''
+      ? undefined
+      : String(couponRaw)
+  const checkedImgRaw = o.checked_image
+  const checked_image =
+    checkedImgRaw == null || checkedImgRaw === ''
+      ? undefined
+      : String(checkedImgRaw)
+
   return {
     id: o.id != null ? String(o.id) : undefined,
     bank_account_id: legacySingle,
     bank_account_origin_id: originFromFlat,
     bank_account_destination_id: destFromFlat,
-    user_id: o.user_id != null ? String(o.user_id) : undefined,
+    user_id: coerceUserId(o.user_id) ?? coerceUserId(o.user),
+    agent_id:
+      coerceUserId(o.agent_id) ??
+      coerceUserId(o.agent) ??
+      coerceUserId(o.user_id) ??
+      coerceUserId(o.user),
     tax_rate_id: o.tax_rate_id != null ? String(o.tax_rate_id) : undefined,
     commission_id: o.commission_id != null ? String(o.commission_id) : undefined,
     status: o.status != null ? String(o.status) : undefined,
@@ -105,10 +197,13 @@ function parseTransaction(item: unknown): Transaction {
     commission_result: parseOptionalAmount(o.commission_result) ?? resultado,
     total_a_enviar: totalSend,
     total_to_send: parseOptionalAmount(o.total_to_send) ?? totalSend,
+    tax_amount: taxAmount,
+    coupon_id,
     send_date: o.send_date != null ? String(o.send_date) : undefined,
     payment_date: o.payment_date != null ? String(o.payment_date) : undefined,
     send_voucher: o.send_voucher != null ? String(o.send_voucher) : undefined,
     payment_voucher: o.payment_voucher != null ? String(o.payment_voucher) : undefined,
+    checked_image,
     created_at: o.created_at != null ? String(o.created_at) : undefined,
     created_by: o.created_by != null ? String(o.created_by) : undefined,
     updated_at: o.updated_at != null ? String(o.updated_at) : undefined,
@@ -125,11 +220,15 @@ function parseTransaction(item: unknown): Transaction {
 function parseTransactions(data: unknown): Transaction[] {
   if (!Array.isArray(data)) {
     if (data != null && typeof data === 'object' && Array.isArray((data as { data?: unknown }).data)) {
-      return ((data as { data: unknown[] }).data).map(parseTransaction)
+      return ((data as { data: unknown[] }).data).map((row) =>
+        transactionFromApiRecord(row as Record<string, unknown>),
+      )
     }
     return []
   }
-  return data.map(parseTransaction)
+  return data.map((row) =>
+    transactionFromApiRecord(row as Record<string, unknown>),
+  )
 }
 
 export class TransactionsApiAdapter implements TransactionsRepository {
@@ -173,7 +272,7 @@ export class TransactionsApiAdapter implements TransactionsRepository {
       const raw = response.data
       const obj = raw != null && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
       const item = (obj.data ?? obj) as Record<string, unknown>
-      return { ...item, ...parseTransaction(item) } as Transaction
+      return transactionFromApiRecord(item)
     } catch {
       return null
     }
@@ -185,6 +284,9 @@ export class TransactionsApiAdapter implements TransactionsRepository {
     formData.append('bank_account_origin', payload.bank_account_origin)
     formData.append('bank_account_destination', payload.bank_account_destination)
     formData.append('user_id', payload.user_id)
+    if (payload.agent_id != null && payload.agent_id !== '') {
+      formData.append('agent_id', payload.agent_id)
+    }
     formData.append('tax_rate_id', payload.tax_rate_id)
     formData.append('commission_id', payload.commission_id)
     formData.append('origin_amount', String(payload.origin_amount))
@@ -198,6 +300,9 @@ export class TransactionsApiAdapter implements TransactionsRepository {
     if (payload.total_a_enviar != null) {
       formData.append('total_a_enviar', String(payload.total_a_enviar))
       formData.append('total_to_send', String(payload.total_a_enviar))
+    }
+    if (payload.tax_amount != null) {
+      formData.append('tax_amount', String(payload.tax_amount))
     }
     if (payload.send_voucher instanceof File)
       formData.append('send_voucher', payload.send_voucher)
@@ -214,7 +319,7 @@ export class TransactionsApiAdapter implements TransactionsRepository {
     const raw = response.data
     const obj = raw != null && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
     const item = (obj.data ?? obj) as Record<string, unknown>
-    return parseTransaction(item)
+    return transactionFromApiRecord(item)
   }
 
   async updateTransaction(id: string, payload: UpdateTransactionPayload): Promise<Transaction> {
@@ -242,12 +347,22 @@ export class TransactionsApiAdapter implements TransactionsRepository {
     ) {
       delete body.status
     }
+    const hasFileUpload = Object.values(body).some((value) => value instanceof File)
+    const requestPayload = hasFileUpload
+      ? (() => {
+          const form = new FormData()
+          for (const [key, value] of Object.entries(body)) {
+            appendFormValue(form, key, value)
+          }
+          return form
+        })()
+      : body
 
-    const response = await apiClient.put<unknown>(url, body)
+    const response = await apiClient.put<unknown>(url, requestPayload)
     const raw = response.data
     const obj = raw != null && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
     const item = (obj.data ?? obj) as Record<string, unknown>
-    return parseTransaction(item)
+    return transactionFromApiRecord(item)
   }
 
   async deleteTransaction(id: string): Promise<void> {

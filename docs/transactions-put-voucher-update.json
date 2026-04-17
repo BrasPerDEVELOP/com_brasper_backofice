@@ -1,0 +1,61 @@
+{
+  "title": "Flujo PUT /transactions/ - Actualizacion parcial de vouchers",
+  "description": "Contrato vigente entre frontend y backend para actualizar send_voucher y payment_voucher en el endpoint PUT /transactions/.",
+  "status": "vigente",
+  "endpoint": {
+    "method": "PUT",
+    "url": "{{baseUrl}}/transactions/",
+    "baseUrl_example": "http://127.0.0.1:8000",
+    "nota": "El backend espera el id en el body, no en la URL."
+  },
+  "contrato_backend_actual": {
+    "resumen": "El PUT permite actualizar vouchers de forma parcial.",
+    "reglas": [
+      "Si mandas solo send_voucher como archivo, actualiza solo ese.",
+      "Si mandas solo payment_voucher como archivo, actualiza solo ese.",
+      "Si omites send_voucher o payment_voucher, el backend conserva el valor existente.",
+      "Si quieres borrar uno, debes indicarlo explicitamente con remove_send_voucher=true o remove_payment_voucher=true.",
+      "La unica regla que sigue exigiendo ambos vouchers es la logica de negocio para pasar la transaccion a completed."
+    ]
+  },
+  "logica_frontend_actual": {
+    "archivo_vista": "src/modules/transacciones/presentation/bodies/transacciones_view.vue",
+    "archivo_adapter": "src/modules/transacciones/infrastructure/adapters/transactions_api_adapter.ts",
+    "decision": [
+      "En modo edicion, si un voucher sigue siendo el string/path cargado desde backend y no fue reemplazado, el frontend lo omite del payload.",
+      "En modo edicion, si un voucher fue reemplazado por un File, el frontend envia solo ese archivo nuevo.",
+      "En modo creacion, los vouchers se siguen enviando normalmente como parte del FormData cuando existen."
+    ]
+  },
+  "payloads_de_referencia": {
+    "actualizar_solo_send_voucher": {
+      "content_type": "multipart/form-data",
+      "body": {
+        "id": "58dd4bb5-c948-4d62-9bbb-91775a9a477d",
+        "send_voucher": "(File nuevo)"
+      },
+      "resultado_esperado": "El backend actualiza send_voucher y conserva payment_voucher."
+    },
+    "actualizar_solo_payment_voucher": {
+      "content_type": "multipart/form-data",
+      "body": {
+        "id": "58dd4bb5-c948-4d62-9bbb-91775a9a477d",
+        "payment_voucher": "(File nuevo)"
+      },
+      "resultado_esperado": "El backend actualiza payment_voucher y conserva send_voucher."
+    },
+    "borrado_explicito": {
+      "content_type": "multipart/form-data o application/json",
+      "body": {
+        "id": "58dd4bb5-c948-4d62-9bbb-91775a9a477d",
+        "remove_payment_voucher": true
+      },
+      "resultado_esperado": "El backend elimina payment_voucher de forma explicita."
+    }
+  },
+  "nota_de_negocio": {
+    "regla_vigente": "La transaccion hoy solo pasa a completed si existen send_voucher y payment_voucher.",
+    "ubicacion_backend_reportada": "app/modules/transactions/application/use_cases/transaction_use_cases.py",
+    "observacion": "Esa regla es independiente de la actualizacion parcial de vouchers. Si se desea permitir completed con un solo voucher, debe cambiarse esa logica de negocio."
+  }
+}

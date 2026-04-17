@@ -8,10 +8,13 @@ const props = withDefaults(
     max?: string
     disabled?: boolean
     class?: string
+    /** Fecha y hora (input nativo `datetime-local`, minutos). */
+    withTime?: boolean
   }>(),
   {
     size: 'md',
-    class: ''
+    class: '',
+    withTime: false
   }
 )
 
@@ -26,6 +29,7 @@ defineEmits<{
       'relative flex items-center rounded-lg border border-[#e5e7eb] bg-white transition',
       'focus-within:border-brasper-indigoStrong focus-within:ring-1 focus-within:ring-brasper-indigoStrong',
       size === 'sm' ? 'min-h-[36px]' : 'min-h-[40px]',
+      withTime ? 'min-w-[min(100%,18rem)]' : '',
       props.class
     ]"
   >
@@ -41,7 +45,7 @@ defineEmits<{
     </div>
     <input
       :value="modelValue"
-      type="date"
+      :type="withTime ? 'datetime-local' : 'date'"
       :min="min"
       :max="max"
       :disabled="disabled"
@@ -70,18 +74,21 @@ defineEmits<{
 </template>
 
 <style scoped>
-/* Mejora la apariencia del date picker nativo en navegadores compatibles */
-input[type='date'] {
+/* Mejora la apariencia del date / datetime picker nativo */
+input[type='date'],
+input[type='datetime-local'] {
   color-scheme: light;
 }
 
-input[type='date']::-webkit-calendar-picker-indicator {
+input[type='date']::-webkit-calendar-picker-indicator,
+input[type='datetime-local']::-webkit-calendar-picker-indicator {
   cursor: pointer;
   opacity: 0.6;
   padding: 4px;
 }
 
-input[type='date']::-webkit-calendar-picker-indicator:hover {
+input[type='date']::-webkit-calendar-picker-indicator:hover,
+input[type='datetime-local']::-webkit-calendar-picker-indicator:hover {
   opacity: 1;
 }
 </style>

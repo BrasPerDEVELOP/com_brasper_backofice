@@ -1,26 +1,34 @@
-/** Transacción (API GET/POST) — alineado con TransactionReadDTO / flujo checklist. */
+/**
+ * Transacción (API) — alineado con el modelo ORM / respuesta PUT+GET.
+ * IDs planos + `user` anidado opcional en JSON; alias legacy en import/cálculos.
+ */
 export interface Transaction {
   id?: string
   bank_account_id?: string
   bank_account_origin_id?: string
   bank_account_destination_id?: string
   user_id?: string
+  agent_id?: string
   tax_rate_id?: string
   commission_id?: string
   status?: string
   origin_amount?: number
   destination_amount?: number
   code?: string
-  /** API inglés / alias en respuesta */
+  /** API (inglés) */
   commission_result?: number
   total_to_send?: number
-  /** Alias frecuente en payloads y formularios */
+  tax_amount?: number
+  /** Alias en payloads y formularios */
   resultado_comision?: number
   total_a_enviar?: number
+  coupon_id?: string | null
   send_date?: string
   payment_date?: string
   send_voucher?: string
   payment_voucher?: string
+  /** Imagen checklist (path/URL), nullable en API */
+  checked_image?: string | null
   checked?: boolean
   created_at?: string
   created_by?: string

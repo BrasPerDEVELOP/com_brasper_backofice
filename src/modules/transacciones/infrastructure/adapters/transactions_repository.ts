@@ -4,6 +4,7 @@ export interface CreateTransactionPayload {
   bank_account_origin: string
   bank_account_destination: string
   user_id: string
+  agent_id?: string
   tax_rate_id: string
   commission_id: string
   status?: string
@@ -11,6 +12,8 @@ export interface CreateTransactionPayload {
   destination_amount: number
   resultado_comision?: number | null
   total_a_enviar?: number | null
+  /** Tipo de cambio del step 1 (`CalculatorResult.rate`). */
+  tax_amount?: number | null
   code: string
   send_date?: string
   payment_date?: string

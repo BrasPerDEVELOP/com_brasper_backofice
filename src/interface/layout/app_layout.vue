@@ -49,6 +49,7 @@ const navItems = [
   { to: "/app/cuentas", label: "Cuentas", icon: "bank" },
   { to: "/app/comisiones", label: "Comisiones", icon: "folder" },
   { to: "/app/tasas", label: "Tasas", icon: "exchange" },
+  { to: "/app/home-banner", label: "Banner Home", icon: "image" },
 ];
 
 const bottomNavItems = [

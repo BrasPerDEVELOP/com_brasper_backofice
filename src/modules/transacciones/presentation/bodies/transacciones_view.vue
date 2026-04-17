@@ -29,6 +29,7 @@ import AppDateInput from "@/interface/components/AppDateInput.vue";
 import CalculatorConversionCard from "@modules/calculator/presentation/components/CalculatorConversionCard.vue";
 import { Domain } from "@/interface/infrastructure/services";
 import { useTransactionPreviewController } from "../controllers/use_transaction_preview_controller";
+import { fetchUsers } from "@modules/auth/infrastructure/adapters/users_management_api_adapter";
 
 const transactionsStore = useTransactionsStore();
 const cuentasStore = useCuentasBancariasStore();
@@ -49,6 +50,7 @@ const importSimpleError = ref("");
 const showPreviewModal = ref(false);
 const previewTransaction = ref<Transaction | null>(null);
 const previewLoading = ref(false);
+const editModalLoading = ref(false);
 const searchQuery = ref("");
 const openMenuId = ref<string | null>(null);
 const menuTriggerEl = ref<HTMLElement | null>(null);
@@ -74,9 +76,23 @@ const statusOptions = computed(() => [
 ]);
 
 const ALL_VALUE = "";
+const EDITABLE_USER_ROLES = ["admin", "commercial", "comercial", "sales"] as const;
+const AGENT_USER_ROLES = ["admin", "commercial", "comercial"] as const;
+const editableUsers = ref<
+  { id: string; name: string; email: string; role?: string }[]
+>([]);
+const editableUsersLoaded = ref(false);
+const agentUsers = ref<
+  { id: string; name: string; email: string; role?: string }[]
+>([]);
+const agentUsersLoaded = ref(false);
+
 const userFilterOptions = computed(() => [
   { value: ALL_VALUE, label: "Todos" },
-  ...cuentasStore.clientUsers.map((u) => ({ value: u.id, label: u.name })),
+  ...cuentasStore.transactionFormUsers.map((u) => ({
+    value: u.id,
+    label: u.name,
+  })),
 ]);
 
 const bankAccountFilterOptions = computed(() => [
@@ -114,6 +130,7 @@ const form = reactive<{
   bank_account_origin_id: string;
   bank_account_destination_id: string;
   user_id: string;
+  agent_id: string;
   tax_rate_id: string;
   commission_id: string;
   status: string;
@@ -122,6 +139,7 @@ const form = reactive<{
   destination_amount: number;
   resultado_comision: number | null;
   total_a_enviar: number | null;
+  tax_amount: number | null;
   code: string;
   send_date: string;
   payment_date: string;
@@ -131,6 +149,7 @@ const form = reactive<{
   bank_account_origin_id: "",
   bank_account_destination_id: "",
   user_id: "",
+  agent_id: "",
   tax_rate_id: "",
   commission_id: "",
   status: "verification",
@@ -139,6 +158,7 @@ const form = reactive<{
   destination_amount: 0,
   resultado_comision: null,
   total_a_enviar: null,
+  tax_amount: null,
   code: "",
   send_date: "",
   payment_date: "",
@@ -147,6 +167,9 @@ const form = reactive<{
 });
 
 const editingId = ref<string | null>(null);
+const editSourceTransaction = ref<Transaction | null>(null);
+const isEditingMode = computed(() => Boolean(editingId.value));
+const isHydratingTransactionForm = ref(false);
 
 const CREATE_FLOW_STEPS = [
   {
@@ -238,17 +261,29 @@ function mergeMissingSelectedAccount(
 ): { value: string; label: string }[] {
   const id = selectedId?.trim();
   if (!id) return options;
-  if (options.some((o) => o.value === id)) return options;
+  if (options.some((o) => String(o.value) === id)) return options;
   const acc = cuentasStore.bankAccounts.find((a) => String(a.id) === id);
   if (!acc) return options;
   return [...options, bankAccountToOption(acc)];
+}
+
+/** IDs desde API (string, número u objeto `{ id }`) → string para v-model y dropdowns. */
+function normalizeSelectId(v: unknown): string {
+  if (v == null || v === "") return "";
+  if (typeof v === "object" && v !== null && "id" in v) {
+    const id = (v as { id: unknown }).id;
+    return id != null && id !== "" ? String(id).trim() : "";
+  }
+  return String(v).trim();
 }
 
 const originAccountOptions = computed(() => {
   const userId = form.user_id?.trim();
   const base = cuentasStore.bankAccounts
     .filter((a) => (a.account_flow ?? "").toLowerCase() === "origin")
-    .filter((a) => !userId || a.user_id === userId)
+    .filter(
+      (a) => !userId || String(a.user_id ?? "").trim() === userId,
+    )
     .map(bankAccountToOption);
   return mergeMissingSelectedAccount(base, form.bank_account_origin_id);
 });
@@ -257,14 +292,97 @@ const destinationAccountOptions = computed(() => {
   const userId = form.user_id?.trim();
   const base = cuentasStore.bankAccounts
     .filter((a) => (a.account_flow ?? "").toLowerCase() === "destination")
-    .filter((a) => !userId || a.user_id === userId)
+    .filter(
+      (a) => !userId || String(a.user_id ?? "").trim() === userId,
+    )
     .map(bankAccountToOption);
   return mergeMissingSelectedAccount(base, form.bank_account_destination_id);
 });
 
-const clientOptions = computed(() =>
-  cuentasStore.clientUsers.map((u) => ({ value: u.id, label: u.name })),
-);
+function mergeMissingTransactionUser(
+  options: { value: string; label: string }[],
+  selectedId: string,
+): { value: string; label: string }[] {
+  const id = selectedId?.trim();
+  if (!id) return options;
+  if (options.some((o) => String(o.value) === id)) return options;
+  const u = cuentasStore.transactionFormUsers.find((x) => String(x.id) === id);
+  if (!u) return options;
+  return [...options, { value: u.id, label: u.name }];
+}
+
+function mergeMissingEditableUser(
+  options: { value: string; label: string }[],
+  selectedId: string,
+): { value: string; label: string }[] {
+  const id = selectedId?.trim();
+  if (!id) return options;
+  if (options.some((o) => String(o.value) === id)) return options;
+
+  const existing =
+    editableUsers.value.find((u) => String(u.id) === id) ??
+    cuentasStore.transactionFormUsers.find((u) => String(u.id) === id) ??
+    cuentasStore.clientUsers.find((u) => String(u.id) === id);
+
+  if (existing) {
+    return [...options, { value: existing.id, label: existing.name }];
+  }
+
+  return [...options, { value: id, label: id }];
+}
+
+function mergeMissingAgentUser(
+  options: { value: string; label: string }[],
+  selectedId: string,
+): { value: string; label: string }[] {
+  const id = selectedId?.trim();
+  if (!id) return options;
+  if (options.some((o) => String(o.value) === id)) return options;
+
+  const existing =
+    agentUsers.value.find((u) => String(u.id) === id) ??
+    editableUsers.value.find((u) => String(u.id) === id) ??
+    cuentasStore.transactionFormUsers.find((u) => String(u.id) === id) ??
+    cuentasStore.clientUsers.find((u) => String(u.id) === id);
+
+  if (existing) {
+    return [...options, { value: existing.id, label: existing.name }];
+  }
+
+  return [...options, { value: id, label: id }];
+}
+
+const clientOptions = computed(() => {
+  const base = cuentasStore.transactionFormUsers.map((u) => ({
+    value: u.id,
+    label: u.name,
+  }));
+  return mergeMissingTransactionUser(base, form.user_id);
+});
+
+const agentClientOptions = computed(() => {
+  const base = agentUsers.value.map((u) => ({
+    value: u.id,
+    label: u.name,
+  }));
+  return mergeMissingAgentUser(base, form.agent_id);
+});
+
+const editableUserOptions = computed(() => {
+  const base = editableUsers.value.map((u) => ({
+    value: u.id,
+    label: u.name,
+  }));
+  return mergeMissingEditableUser(base, form.user_id);
+});
+
+const editableAgentOptions = computed(() => {
+  const base = agentUsers.value.map((u) => ({
+    value: u.id,
+    label: u.name,
+  }));
+  return mergeMissingAgentUser(base, form.agent_id);
+});
 
 const taxRateOptions = computed(() =>
   tasasStore.taxRates.map((r) => ({
@@ -384,6 +502,7 @@ function resetForm() {
   form.bank_account_origin_id = "";
   form.bank_account_destination_id = "";
   form.user_id = "";
+  form.agent_id = "";
   form.tax_rate_id = "";
   form.commission_id = "";
   form.status = "verification";
@@ -392,12 +511,14 @@ function resetForm() {
   form.destination_amount = 0;
   form.resultado_comision = null;
   form.total_a_enviar = null;
+  form.tax_amount = null;
   form.code = "";
   form.send_date = "";
   form.payment_date = "";
   form.send_voucher = null;
   form.payment_voucher = null;
   editingId.value = null;
+  editSourceTransaction.value = null;
 }
 
 function syncFromCalculator() {
@@ -409,9 +530,11 @@ function syncFromCalculator() {
   if (res) {
     form.resultado_comision = res.commission;
     form.total_a_enviar = res.totalToSend;
+    form.tax_amount = res.rate;
   } else {
     form.resultado_comision = null;
     form.total_a_enviar = null;
+    form.tax_amount = null;
   }
 }
 
@@ -428,59 +551,177 @@ function openCreateModal() {
 async function loadFormOptions() {
   await Promise.all([
     cuentasStore.loadBankAccounts(),
-    cuentasStore.loadClientUsers(),
+    cuentasStore.loadTransactionFormUsers(),
     cuentasStore.loadBanks(),
     tasasStore.loadTaxRates(),
     comisionesStore.loadCommissions(),
   ]);
 }
 
+async function loadEditableUsers() {
+  if (editableUsersLoaded.value) return;
+  const byId = new Map<
+    string,
+    { id: string; name: string; email: string; role?: string }
+  >();
+
+  await Promise.all(
+    EDITABLE_USER_ROLES.map(async (role) => {
+      try {
+        const users = await fetchUsers({ role });
+        for (const user of users) {
+          if (!byId.has(user.id)) {
+            byId.set(user.id, user);
+          }
+        }
+      } catch {
+        /* si un alias no existe en backend, seguimos con los demás */
+      }
+    }),
+  );
+
+  editableUsers.value = Array.from(byId.values()).sort((a, b) =>
+    a.name.localeCompare(b.name, "es"),
+  );
+  editableUsersLoaded.value = true;
+}
+
+async function loadAgentUsers() {
+  if (agentUsersLoaded.value) return;
+  const byId = new Map<
+    string,
+    { id: string; name: string; email: string; role?: string }
+  >();
+
+  await Promise.all(
+    AGENT_USER_ROLES.map(async (role) => {
+      try {
+        const users = await fetchUsers({ role });
+        for (const user of users) {
+          if (!byId.has(user.id)) {
+            byId.set(user.id, user);
+          }
+        }
+      } catch {
+        /* si un alias no existe en backend, seguimos con los demás */
+      }
+    }),
+  );
+
+  agentUsers.value = Array.from(byId.values()).sort((a, b) =>
+    a.name.localeCompare(b.name, "es"),
+  );
+  agentUsersLoaded.value = true;
+}
+
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  fallback: T,
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((resolve) => {
+        timeoutId = setTimeout(() => resolve(fallback), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
+async function hydrateEditForm(row: Transaction) {
+  const resolvedUserId = normalizeSelectId(row.user_id);
+  const resolvedAgentId = normalizeSelectId(row.agent_id ?? row.user_id);
+  if (resolvedUserId) {
+    void cuentasStore.ensureTransactionFormUser(resolvedUserId);
+  }
+  if (resolvedAgentId && resolvedAgentId !== resolvedUserId) {
+    void cuentasStore.ensureTransactionFormUser(resolvedAgentId);
+  }
+  isHydratingTransactionForm.value = true;
+  try {
+    form.user_id = resolvedUserId;
+    form.agent_id = resolvedAgentId;
+    form.bank_account_origin_id = normalizeSelectId(
+      row.bank_account_origin_id ??
+        (row as Record<string, unknown>).bank_account_origin,
+    );
+    form.bank_account_destination_id =
+      normalizeSelectId(
+        row.bank_account_destination_id ??
+          (row as Record<string, unknown>).bank_account_destination,
+      ) || normalizeSelectId(row.bank_account_id);
+    form.tax_rate_id = row.tax_rate_id ?? "";
+    form.commission_id = row.commission_id ?? "";
+    form.status = (row.status ?? "verification").toLowerCase();
+    form.checked =
+      row.checked === true || (row.status ?? "").toLowerCase() === "checked";
+    form.origin_amount = Number(row.origin_amount) || 0;
+    form.destination_amount = Number(row.destination_amount) || 0;
+    {
+      const rec = row as Record<string, unknown>;
+      const rc = rec.resultado_comision ?? rec.commission_result;
+      const ts = rec.total_a_enviar ?? rec.total_to_send;
+      const ta = rec.tax_amount ?? rec.tipo_cambio ?? rec.rate;
+      form.resultado_comision =
+        rc != null && rc !== "" ? Number(rc) || null : null;
+      form.total_a_enviar = ts != null && ts !== "" ? Number(ts) || null : null;
+      form.tax_amount = ta != null && ta !== "" ? Number(ta) || null : null;
+    }
+    form.code = row.code ?? "";
+    form.send_date = apiDateTimeToFormValue(row.send_date);
+    form.payment_date = apiDateTimeToFormValue(row.payment_date);
+    form.send_voucher = null;
+    form.payment_voucher = null;
+    editSourceTransaction.value = row;
+    await nextTick();
+  } finally {
+    isHydratingTransactionForm.value = false;
+  }
+}
+
 async function openEditModal(t: Transaction) {
   if (!t.id) return;
+  const transactionId = t.id;
   transactionsStore.error = null;
-  editingId.value = t.id;
-  createStepIndex.value = 1;
-  await loadFormOptions();
-  let row: Transaction = t;
-  try {
-    const fresh = await transactionsStore.getTransactionById(t.id);
-    if (fresh) row = { ...t, ...fresh };
-  } catch {
-    /* usar fila de la tabla */
-  }
-  form.bank_account_origin_id = (row.bank_account_origin_id ?? "").trim();
-  form.bank_account_destination_id = (
-    row.bank_account_destination_id ??
-    row.bank_account_id ??
-    ""
-  ).trim();
-  form.user_id = row.user_id ?? "";
-  form.tax_rate_id = row.tax_rate_id ?? "";
-  form.commission_id = row.commission_id ?? "";
-  form.status = (row.status ?? "verification").toLowerCase();
-  form.checked =
-    row.checked === true || (row.status ?? "").toLowerCase() === "checked";
-  form.origin_amount = Number(row.origin_amount) || 0;
-  form.destination_amount = Number(row.destination_amount) || 0;
-  {
-    const rec = row as Record<string, unknown>;
-    const rc = rec.resultado_comision ?? rec.commission_result;
-    const ts = rec.total_a_enviar ?? rec.total_to_send;
-    form.resultado_comision =
-      rc != null && rc !== "" ? Number(rc) || null : null;
-    form.total_a_enviar = ts != null && ts !== "" ? Number(ts) || null : null;
-  }
-  form.code = row.code ?? "";
-  form.send_date = row.send_date ? row.send_date.slice(0, 10) : "";
-  form.payment_date = row.payment_date ? row.payment_date.slice(0, 10) : "";
-  form.send_voucher = row.send_voucher ?? null;
-  form.payment_voucher = row.payment_voucher ?? null;
+  resetForm();
+  editingId.value = transactionId;
+  createStepIndex.value = 0;
   showCreateModal.value = true;
-  calculatorStore.setDemoMode(false);
+  editModalLoading.value = true;
+  try {
+    await hydrateEditForm(t);
+    editModalLoading.value = false;
+    calculatorStore.setDemoMode(false);
+    void loadFormOptions();
+    void loadEditableUsers();
+    void (async () => {
+      try {
+        const fresh = await withTimeout(
+          transactionsStore.getTransactionById(transactionId),
+          2500,
+          null,
+        );
+        if (fresh) {
+          await hydrateEditForm({ ...t, ...fresh });
+        }
+      } catch {
+        /* conservar fallback inicial */
+      }
+    })();
+  } catch {
+    transactionsStore.error =
+      "No se pudo preparar el formulario de edición. Intenta nuevamente.";
+  } finally {
+    editModalLoading.value = false;
+  }
 }
 
 async function submitForm() {
-  syncFromCalculator();
+  if (!editingId.value) syncFromCalculator();
   if (
     !form.bank_account_origin_id ||
     !form.bank_account_destination_id ||
@@ -492,12 +733,24 @@ async function submitForm() {
   }
   if (!form.tax_rate_id || !form.commission_id) {
     transactionsStore.error =
-      "Tasa y comisión son obligatorios (usa la calculadora primero)";
+      editingId.value
+        ? "La transacción debe conservar tasa y comisión válidas para guardar"
+        : "Tasa y comisión son obligatorios (usa la calculadora primero)";
     return;
   }
   try {
-    const sendVoucher = form.send_voucher;
-    const paymentVoucher = form.payment_voucher;
+    const sendVoucher =
+      form.send_voucher instanceof File
+        ? form.send_voucher
+        : editingId.value
+          ? undefined
+          : form.send_voucher ?? undefined;
+    const paymentVoucher =
+      form.payment_voucher instanceof File
+        ? form.payment_voucher
+        : editingId.value
+          ? undefined
+          : form.payment_voucher ?? undefined;
 
     const code =
       form.code?.trim() ||
@@ -506,6 +759,7 @@ async function submitForm() {
       bank_account_origin: form.bank_account_origin_id,
       bank_account_destination: form.bank_account_destination_id,
       user_id: form.user_id,
+      agent_id: form.agent_id || form.user_id,
       tax_rate_id: form.tax_rate_id,
       commission_id: form.commission_id,
       origin_amount: roundMoneyAmount(form.origin_amount),
@@ -518,16 +772,20 @@ async function submitForm() {
         form.total_a_enviar != null
           ? roundMoneyAmount(form.total_a_enviar)
           : undefined,
+      tax_amount:
+        form.tax_amount != null && Number.isFinite(form.tax_amount)
+          ? Number(form.tax_amount)
+          : undefined,
       code,
-      send_voucher: sendVoucher ?? undefined,
-      payment_voucher: paymentVoucher ?? undefined,
+      send_voucher: sendVoucher,
+      payment_voucher: paymentVoucher,
     };
     if (editingId.value) {
       /** PUT: el backend recalcula `status` y asigna `payment_date` al pasar a finalizada. */
       await transactionsStore.updateTransaction(editingId.value, {
         ...commonAmounts,
-        send_date: form.send_date || undefined,
-        payment_date: form.payment_date || undefined,
+        send_date: formDateTimeToApi(form.send_date),
+        payment_date: formDateTimeToApi(form.payment_date),
         checked: form.checked,
         status: form.status,
       });
@@ -605,6 +863,132 @@ const previewSections = computed(() => {
   const t = previewTransaction.value;
   if (!t) return [];
   return buildPreviewSections(t);
+});
+
+const editPreviewTransaction = computed<Transaction | null>(() => {
+  if (!isEditingMode.value) return null;
+  const base = (editSourceTransaction.value ?? {}) as Transaction;
+  return {
+    ...base,
+    user_id: form.user_id || base.user_id,
+    agent_id: form.agent_id || base.agent_id || base.user_id,
+    bank_account_origin_id:
+      form.bank_account_origin_id || base.bank_account_origin_id,
+    bank_account_destination_id:
+      form.bank_account_destination_id || base.bank_account_destination_id,
+    tax_rate_id: form.tax_rate_id || base.tax_rate_id,
+    commission_id: form.commission_id || base.commission_id,
+    status: form.status || base.status,
+    checked: form.checked,
+    origin_amount: Number(form.origin_amount) || 0,
+    destination_amount: Number(form.destination_amount) || 0,
+    resultado_comision: form.resultado_comision ?? undefined,
+    total_a_enviar: form.total_a_enviar ?? undefined,
+    tax_amount: form.tax_amount ?? undefined,
+    code: form.code || base.code,
+    send_date: form.send_date
+      ? (formDateTimeToApi(form.send_date) ?? form.send_date)
+      : base.send_date,
+    payment_date: form.payment_date
+      ? (formDateTimeToApi(form.payment_date) ?? form.payment_date)
+      : base.payment_date,
+  };
+});
+
+const editPreviewSections = computed(() => {
+  const t = editPreviewTransaction.value;
+  if (!t) return [];
+  return buildPreviewSections(t)
+    .map((section) => {
+      if (section.id !== "extra") return section;
+      return {
+        ...section,
+        items: section.items.filter(
+          (item) => item.label.trim().toLowerCase() !== "user",
+        ),
+      };
+    })
+    .filter(
+      (section) =>
+        section.id !== "resumen" &&
+        section.id !== "registro" &&
+        section.id !== "extra" &&
+        section.items.length > 0,
+    );
+});
+
+const editModalSummary = computed(() => {
+  const t = editPreviewTransaction.value;
+  if (!t) return null;
+  return {
+    code: formatTransactionCodeShort(t.code),
+    status: getStatusLabel(t.status),
+    checked: isTransactionChecked(t) ? "Sí" : "No",
+  };
+});
+
+function getTaxRatePreviewLabel(id: string | undefined): string {
+  if (!id?.trim()) return "—";
+  const rate = tasasStore.taxRates.find((item) => item.id === id);
+  return rate ? `${rate.coin_a}-${rate.coin_b} (${rate.tax})` : id;
+}
+
+function getCommissionPreviewLabel(id: string | undefined): string {
+  if (!id?.trim()) return "—";
+  const commission = comisionesStore.commissions.find((item) => item.id === id);
+  return commission
+    ? `${commission.coin_a}-${commission.coin_b} (${commission.percentage}%)`
+    : id;
+}
+
+const editHeroParticipants = computed(() => {
+  const t = editPreviewTransaction.value;
+  if (!t) return [];
+  return [
+    { label: "Cliente", value: getClientLabel(t.user_id) },
+    {
+      label: "Cuenta origen",
+      value: getBankCurrencyTableLabel(t.bank_account_origin_id),
+    },
+    {
+      label: "Cuenta destino",
+      value: getBankCurrencyTableLabel(t.bank_account_destination_id),
+    },
+  ];
+});
+
+const editHeroConditions = computed(() => {
+  const t = editPreviewTransaction.value;
+  if (!t) return [];
+  return [
+    {
+      label: "Tasa",
+      value: getTaxRatePreviewLabel(t.tax_rate_id),
+    },
+    {
+      label: "Comisión",
+      value: getCommissionPreviewLabel(t.commission_id),
+    },
+  ];
+});
+
+const editHeroAmounts = computed(() => {
+  const t = editPreviewTransaction.value;
+  if (!t) return [];
+  return [
+    { label: "Monto origen", value: formatValue(t.origin_amount) },
+    { label: "Monto destino", value: formatValue(t.destination_amount) },
+    {
+      label: "Resultado comisión",
+      value: formatValue(t.resultado_comision ?? t.commission_result),
+    },
+  ];
+});
+
+const editHeroTotal = computed(() => {
+  const t = editPreviewTransaction.value;
+  if (!t) return "0.00";
+  return formatValue(t.total_a_enviar ?? t.total_to_send ?? 0);
 });
 
 async function openPreviewModal(t: Transaction | null) {
@@ -688,14 +1072,52 @@ function formatValue(value: unknown): string {
   return String(value);
 }
 
-function formatDate(value: string | undefined): string {
+function formatTransactionCodeShort(code: string | undefined): string {
+  if (!code?.trim()) return "—";
+  const digits = code.replace(/\D/g, "");
+  if (digits.length > 0) return digits.slice(-4).padStart(4, "0");
+  return code.trim().slice(-4);
+}
+
+/** Fecha/hora para tabla (ISO del API → hora local legible). */
+function formatDateTime(value: string | undefined): string {
   if (!value) return "-";
   try {
     const d = new Date(value);
-    return d.toLocaleDateString("es");
+    if (Number.isNaN(d.getTime())) return value;
+    return d.toLocaleString("es-PE", {
+      day: "numeric",
+      month: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
   } catch {
     return value;
   }
+}
+
+/** ISO o solo fecha `YYYY-MM-DD` → valor `datetime-local` (hora local del navegador). */
+function apiDateTimeToFormValue(raw: string | undefined | null): string {
+  if (!raw?.trim()) return "";
+  const s = raw.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    return `${s}T00:00`;
+  }
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** `datetime-local` → ISO UTC para PUT/POST. */
+function formDateTimeToApi(local: string): string | undefined {
+  if (!local?.trim()) return undefined;
+  const d = new Date(local.trim());
+  if (Number.isNaN(d.getTime())) return undefined;
+  return d.toISOString();
 }
 
 /** URL absoluta para comprobantes en tabla (path API o URL completa). */
@@ -703,7 +1125,13 @@ function voucherMediaHref(path: unknown): string {
   if (path == null || typeof path !== "string") return "";
   const s = path.trim();
   if (!s) return "";
-  return Domain.mediaUrl(s);
+  if (s.startsWith("http://") || s.startsWith("https://")) return s;
+  if (s.startsWith("/") || s.startsWith("media/") || s.includes("/")) {
+    return Domain.mediaUrl(s);
+  }
+  // Los vouchers pueden venir solo con nombre de archivo; no deben caer en
+  // `profile_images`, sino resolverse directamente bajo `/media/`.
+  return Domain.mediaUrl(`media/${s}`);
 }
 
 function getStatusLabel(status: string | undefined): string {
@@ -750,21 +1178,81 @@ function getBankCurrencyTableLabel(id: string | undefined): string {
 
 function getClientLabel(id: string | undefined): string {
   if (!id) return "-";
-  const u = cuentasStore.clientUsers.find((u) => u.id === id);
+  const u =
+    cuentasStore.transactionFormUsers.find((u) => u.id === id) ??
+    cuentasStore.clientUsers.find((u) => u.id === id);
   return u?.name ?? id;
 }
 
 function getVoucherLabel(v: unknown): string {
-  return v != null &&
+  if (
+    v != null &&
     typeof v === "object" &&
     "name" in v &&
     typeof (v as File).name === "string"
-    ? (v as File).name
-    : "Archivo seleccionado";
+  ) {
+    return (v as File).name;
+  }
+  if (typeof v === "string" && v.trim()) {
+    const clean = v.trim().split("?")[0]?.split("#")[0] ?? "";
+    return clean.split("/").filter(Boolean).pop() ?? "Imagen actual";
+  }
+  return "Archivo seleccionado";
+}
+
+function isFileValue(v: unknown): v is File {
+  return (
+    typeof File !== "undefined" &&
+    v instanceof File &&
+    typeof v.name === "string"
+  );
+}
+
+function isImageFile(file: File): boolean {
+  return file.type.startsWith("image/");
+}
+
+function isImagePath(path: string): boolean {
+  const clean = path.trim().split("?")[0]?.split("#")[0]?.toLowerCase() ?? "";
+  return [".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".svg"].some((ext) =>
+    clean.endsWith(ext),
+  );
 }
 
 const sendVoucherPreviewSrc = ref<string | null>(null);
 const paymentVoucherPreviewSrc = ref<string | null>(null);
+
+const persistedSendVoucherPreviewSrc = computed(() => {
+  const v = editSourceTransaction.value?.send_voucher;
+  return typeof v === "string" && v.trim() && isImagePath(v)
+    ? voucherMediaHref(v.trim())
+    : null;
+});
+
+const persistedPaymentVoucherPreviewSrc = computed(() => {
+  const v = editSourceTransaction.value?.payment_voucher;
+  return typeof v === "string" && v.trim() && isImagePath(v)
+    ? voucherMediaHref(v.trim())
+    : null;
+});
+
+const activeSendVoucherPreviewSrc = computed(
+  () => sendVoucherPreviewSrc.value ?? persistedSendVoucherPreviewSrc.value,
+);
+
+const activePaymentVoucherPreviewSrc = computed(
+  () => paymentVoucherPreviewSrc.value ?? persistedPaymentVoucherPreviewSrc.value,
+);
+
+function onVoucherFileSelect(
+  field: "send_voucher" | "payment_voucher",
+  event: Event,
+) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0] ?? null;
+  form[field] = file;
+  input.value = "";
+}
 
 function revokeIfBlob(url: string | null) {
   if (url?.startsWith("blob:")) URL.revokeObjectURL(url);
@@ -773,9 +1261,9 @@ function revokeIfBlob(url: string | null) {
 function updateVoucherPreview(target: Ref<string | null>, v: unknown) {
   revokeIfBlob(target.value);
   target.value = null;
-  if (v instanceof File) target.value = URL.createObjectURL(v);
-  else if (typeof v === "string" && v.trim())
-    target.value = Domain.mediaUrl(v.trim());
+  if (v instanceof File && isImageFile(v)) target.value = URL.createObjectURL(v);
+  else if (typeof v === "string" && v.trim() && isImagePath(v))
+    target.value = voucherMediaHref(v.trim());
 }
 
 watch(
@@ -850,9 +1338,13 @@ function loadTransactions() {
 
 watch(
   () => form.user_id,
-  () => {
+  (nextUserId, prevUserId) => {
+    if (isHydratingTransactionForm.value) return;
     form.bank_account_origin_id = "";
     form.bank_account_destination_id = "";
+    if (!form.agent_id || form.agent_id === (prevUserId ?? "")) {
+      form.agent_id = nextUserId ?? "";
+    }
   },
 );
 
@@ -871,7 +1363,7 @@ watch(
 onMounted(() => {
   Promise.all([
     cuentasStore.loadBankAccounts(),
-    cuentasStore.loadClientUsers(),
+    cuentasStore.loadTransactionFormUsers(),
     cuentasStore.loadBanks(),
   ]).then(() => loadTransactions());
 });
@@ -1103,7 +1595,7 @@ onMounted(() => {
             <th
               class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark"
             >
-              Fecha envío
+              Envío (fecha/hora)
             </th>
             <th
               class="whitespace-nowrap px-2 py-3 text-center text-xs font-semibold leading-tight text-brasper-indigoDark"
@@ -1169,7 +1661,7 @@ onMounted(() => {
               </button>
             </td>
             <td class="px-4 py-3 font-medium text-[#374151]">
-              {{ t.code ?? "-" }}
+              {{ formatTransactionCodeShort(t.code) }}
             </td>
             <td class="max-w-[160px] truncate px-4 py-3 text-[#374151]">
               {{ getClientLabel(t.user_id) }}
@@ -1200,8 +1692,8 @@ onMounted(() => {
                 {{ getStatusLabel(t.status) }}
               </span>
             </td>
-            <td class="px-4 py-3 text-[#374151]">
-              {{ formatDate(t.send_date) }}
+            <td class="whitespace-nowrap px-4 py-3 text-[#374151]">
+              {{ formatDateTime(t.send_date) }}
             </td>
             <td class="px-2 py-2 align-middle text-center">
               <template v-if="voucherMediaHref(t.send_voucher)">
@@ -1218,8 +1710,7 @@ onMounted(() => {
                     class="h-11 w-11 rounded border border-[#e5e7eb] bg-[#f3f4f6] object-cover"
                     loading="lazy"
                     @error="
-                      ($event.target as HTMLImageElement).style.display =
-                        'none'
+                      ($event.target as HTMLImageElement).classList.add('hidden')
                     "
                   />
                   <span
@@ -1246,8 +1737,7 @@ onMounted(() => {
                     class="h-11 w-11 rounded border border-[#e5e7eb] bg-[#f3f4f6] object-cover"
                     loading="lazy"
                     @error="
-                      ($event.target as HTMLImageElement).style.display =
-                        'none'
+                      ($event.target as HTMLImageElement).classList.add('hidden')
                     "
                   />
                   <span
@@ -1449,10 +1939,10 @@ onMounted(() => {
                         >
                           {{ item.value }}
                         </span>
-                        <span
-                          v-else-if="item.variant === 'mono'"
-                          class="break-all font-mono text-xs text-[#374151]"
-                        >
+                          <span
+                            v-else-if="item.variant === 'mono'"
+                            class="break-all text-xs text-[#374151]"
+                          >
                           {{ item.value }}
                         </span>
                         <span v-else class="text-[#111827]">
@@ -1492,9 +1982,7 @@ onMounted(() => {
                           >Envío</span
                         >
                         <a
-                          :href="
-                            Domain.mediaUrl(previewTransaction.send_voucher)
-                          "
+                          :href="voucherMediaHref(previewTransaction.send_voucher)"
                           target="_blank"
                           rel="noopener noreferrer"
                           class="text-xs font-medium text-brasper-indigoStrong hover:underline"
@@ -1503,22 +1991,19 @@ onMounted(() => {
                         </a>
                       </div>
                       <a
-                        :href="
-                          Domain.mediaUrl(previewTransaction.send_voucher)
-                        "
+                        :href="voucherMediaHref(previewTransaction.send_voucher)"
                         target="_blank"
                         rel="noopener noreferrer"
                         class="block bg-[#f3f4f6]"
                       >
                         <img
-                          :src="
-                            Domain.mediaUrl(previewTransaction.send_voucher)
-                          "
+                          :src="voucherMediaHref(previewTransaction.send_voucher)"
                           alt="Comprobante envío"
                           class="mx-auto max-h-56 w-full object-contain"
                           @error="
-                            ($event.target as HTMLImageElement).style.display =
-                              'none'
+                            ($event.target as HTMLImageElement).classList.add(
+                              'hidden',
+                            )
                           "
                         />
                       </a>
@@ -1535,7 +2020,7 @@ onMounted(() => {
                         >
                         <a
                           :href="
-                            Domain.mediaUrl(previewTransaction.payment_voucher)
+                            voucherMediaHref(previewTransaction.payment_voucher)
                           "
                           target="_blank"
                           rel="noopener noreferrer"
@@ -1546,7 +2031,7 @@ onMounted(() => {
                       </div>
                       <a
                         :href="
-                          Domain.mediaUrl(previewTransaction.payment_voucher)
+                          voucherMediaHref(previewTransaction.payment_voucher)
                         "
                         target="_blank"
                         rel="noopener noreferrer"
@@ -1554,13 +2039,14 @@ onMounted(() => {
                       >
                         <img
                           :src="
-                            Domain.mediaUrl(previewTransaction.payment_voucher)
+                            voucherMediaHref(previewTransaction.payment_voucher)
                           "
                           alt="Comprobante pago"
                           class="mx-auto max-h-56 w-full object-contain"
                           @error="
-                            ($event.target as HTMLImageElement).style.display =
-                              'none'
+                            ($event.target as HTMLImageElement).classList.add(
+                              'hidden',
+                            )
                           "
                         />
                       </a>
@@ -1670,23 +2156,78 @@ onMounted(() => {
         @click.self="showCreateModal = false"
       >
         <div
-          class="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-[#e5e7eb] bg-white shadow-xl"
+          class="flex max-h-[90vh] w-full flex-col overflow-hidden rounded-2xl border border-[#e5e7eb] bg-white shadow-xl"
+          :class="isEditingMode ? 'max-w-7xl' : 'max-w-3xl'"
         >
-          <div
-            class="flex items-center justify-between border-b border-[#e5e7eb] px-6 py-4"
+          <button
+            v-if="isEditingMode"
+            type="button"
+            class="absolute right-7 top-7 z-10 rounded-full border border-[#e5e7eb] bg-white/95 p-2 text-[#6b7280] shadow-sm transition hover:bg-white hover:text-[#374151]"
+            aria-label="Cerrar"
+            @click="showCreateModal = false"
           >
-            <div>
-              <h2 class="text-lg font-semibold text-[#1f2937]">
+            <svg
+              class="h-5 w-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+          <div
+            v-if="!isEditingMode"
+            class="flex items-start justify-between gap-4 border-b border-[#e8edf7] bg-[#fafcff] px-6 py-5"
+          >
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-3">
+                <div
+                  v-if="isEditingMode"
+                  class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brasper-indigoStrong/8 text-brasper-indigoStrong"
+                >
+                  <svg
+                    class="h-5 w-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                    />
+                  </svg>
+                </div>
+                <div class="min-w-0">
+                  <h2 class="text-xl font-semibold tracking-[-0.01em] text-[#1f2937]">
                 {{ editingId ? "Editar transacción" : "Nueva transacción" }}
-              </h2>
-              <p class="mt-0.5 text-xs text-[#6b7280]">
+                  </h2>
+                  <p
+                    v-if="!isEditingMode"
+                    class="mt-0.5 text-xs font-medium text-[#6b7280]"
+                  >
                 Paso {{ createStepIndex + 1 }} de {{ CREATE_FLOW_STEPS.length }}
                 · {{ CREATE_FLOW_STEPS[createStepIndex]?.title ?? "" }}
-              </p>
+                  </p>
+                  <p
+                    v-else
+                    class="mt-0.5 text-sm leading-relaxed text-[#6b7280]"
+                  >
+                Formulario de edición con datos resueltos desde el endpoint
+                  </p>
+                </div>
+              </div>
             </div>
             <button
               type="button"
-              class="rounded-lg p-2 text-[#6b7280] hover:bg-[#f3f4f6]"
+              class="rounded-xl border border-transparent p-2 text-[#6b7280] transition hover:border-[#e5e7eb] hover:bg-white"
               aria-label="Cerrar"
               @click="showCreateModal = false"
             >
@@ -1708,6 +2249,7 @@ onMounted(() => {
 
           <!-- Stepper -->
           <nav
+            v-if="!isEditingMode"
             class="border-b border-[#e5e7eb] bg-[#fafbfc] px-4 py-4 sm:px-6"
             aria-label="Pasos de creación"
           >
@@ -1790,9 +2332,386 @@ onMounted(() => {
           </nav>
 
           <!-- Contenido -->
-          <div class="flex-1 overflow-y-auto p-6">
+          <div
+            class="flex-1 overflow-y-auto"
+            :class="isEditingMode ? '' : 'p-6'"
+          >
+            <form
+              v-if="isEditingMode"
+              class="flex min-h-0 flex-1"
+              @submit.prevent="submitForm"
+            >
+              <div
+                v-if="editModalLoading"
+                class="flex min-h-[22rem] w-full flex-col items-center justify-center gap-3 px-8 py-12 text-center"
+              >
+                <span
+                  class="inline-block h-6 w-6 animate-spin rounded-full border-2 border-brasper-indigoStrong border-t-transparent"
+                />
+                <div>
+                  <h3 class="text-sm font-semibold text-[#1f2937]">
+                    Cargando transacción
+                  </h3>
+                  <p class="mt-1 text-sm text-[#6b7280]">
+                    Estamos preparando el formulario y los catálogos para
+                    editar.
+                  </p>
+                </div>
+              </div>
+
+              <template v-else>
+                <div
+                  class="grid min-h-0 w-full gap-5 bg-[#f6f8fc] p-5 xl:grid-cols-[420px_minmax(0,1fr)]"
+                >
+                  <div
+                    class="hidden min-h-0 flex-col gap-4 text-[#1f2937] xl:flex"
+                  >
+                    <div class="grid grid-cols-3 gap-3 rounded-2xl border border-[#e6ebf4] bg-white p-4">
+                      <div class="min-w-0">
+                        <span class="block text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7b88a1]">
+                          Código
+                        </span>
+                        <span class="mt-2 block truncate text-[13px] font-semibold text-[#1f2937]">
+                          {{ editModalSummary?.code }}
+                        </span>
+                      </div>
+                      <div class="min-w-0">
+                        <span class="block text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7b88a1]">
+                          Estado
+                        </span>
+                        <span
+                          class="mt-2 inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-800"
+                        >
+                          {{ editModalSummary?.status }}
+                        </span>
+                      </div>
+                      <div class="min-w-0">
+                        <span class="block text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7b88a1]">
+                          Verificada
+                        </span>
+                        <span class="mt-2 block text-sm font-semibold text-[#1f2937]">
+                          {{ editModalSummary?.checked }}
+                        </span>
+                      </div>
+                    </div>
+
+                     <div class="grid grid-cols-3 gap-3 rounded-2xl border border-[#e6ebf4] bg-white p-4">
+                      
+                    </div>
+
+                    <div class="space-y-4">
+                      <section class="rounded-2xl border border-[#e6ebf4] bg-white p-4">
+                        <div class="flex items-center gap-2">
+                          <span class="h-2 w-2 rounded-full bg-violet-300"></span>
+                          <h3 class="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#50607c]">
+                            Participantes
+                          </h3>
+                        </div>
+                        <dl class="mt-4 space-y-3.5">
+                          <div
+                            v-for="item in editHeroParticipants"
+                            :key="item.label"
+                            class="flex items-start justify-between gap-4"
+                          >
+                            <dt class="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#7b88a1]">
+                              {{ item.label }}
+                            </dt>
+                            <dd class="max-w-[13rem] text-right text-sm font-semibold leading-relaxed text-[#1f2937]">
+                              {{ item.value }}
+                            </dd>
+                          </div>
+                        </dl>
+                      </section>
+
+                      <section class="rounded-2xl border border-[#e6ebf4] bg-white p-4">
+                        <div class="flex items-center gap-2">
+                          <span class="h-2 w-2 rounded-full bg-cyan-300"></span>
+                          <h3 class="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#50607c]">
+                            Condiciones comerciales
+                          </h3>
+                        </div>
+                        <dl class="mt-4 space-y-3.5">
+                          <div
+                            v-for="item in editHeroConditions"
+                            :key="item.label"
+                            class="flex items-start justify-between gap-4"
+                          >
+                            <dt class="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#7b88a1]">
+                              {{ item.label }}
+                            </dt>
+                            <dd class="max-w-[13rem] text-right text-sm font-semibold leading-relaxed text-[#1f2937]">
+                              {{ item.value }}
+                            </dd>
+                          </div>
+                        </dl>
+                      </section>
+
+                      <section class="rounded-2xl border border-[#e6ebf4] bg-white p-4">
+                        <div class="flex items-center gap-2">
+                          <span class="h-2 w-2 rounded-full bg-emerald-300"></span>
+                          <h3 class="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#50607c]">
+                            Importes globales
+                          </h3>
+                        </div>
+                        <div class="mt-4 rounded-3xl border border-[#e8eef8] bg-[#fbfdff] p-4">
+                          <dl class="space-y-3">
+                            <div
+                              v-for="item in editHeroAmounts"
+                              :key="item.label"
+                              class="flex items-center justify-between gap-4"
+                            >
+                              <dt class="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#7b88a1]">
+                                {{ item.label }}
+                              </dt>
+                              <dd class="text-right text-[1.35rem] font-semibold tracking-[0.01em] text-[#1f2937]">
+                                {{ item.value }}
+                              </dd>
+                            </div>
+                          </dl>
+                          <div class="mt-5 border-t border-[#e8eef8] pt-4">
+                            <div class="flex items-end justify-between gap-4">
+                              <span class="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#7b88a1]">
+                                Total a enviar
+                              </span>
+                              <span class="text-[2.1rem] font-bold tracking-[0.01em] text-[#1f2937]">
+                                {{ editHeroTotal }}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </section>
+                    </div>
+                  </div>
+
+                  <section class="flex min-h-0 flex-col">
+                    <div class="flex-1 overflow-y-auto px-5 pb-5">
+                      <div class="space-y-5">
+                        <section class="rounded-2xl border border-[#edf1f6] bg-[#fcfdff] p-5">
+                          <div class="mb-4 flex items-center justify-between gap-3">
+                            <div>
+                              <h3 class="text-sm font-semibold text-[#1f2937]">Datos</h3>
+                              <p class="mt-1 text-xs text-[#6b7280]">
+                                Usuario, cuentas y fechas.
+                              </p>
+                            </div>
+                          </div>
+                          <div class="grid gap-4 sm:grid-cols-2">
+                            <div class="space-y-1.5">
+                              <label class="block text-sm font-medium text-[#374151]"
+                                >Usuario *</label
+                              >
+                              <AppDropdown
+                                v-model="form.user_id"
+                                :options="editableUserOptions"
+                                placeholder="Seleccionar usuario"
+                                :searchable="editableUserOptions.length > 10"
+                              />
+                            </div>
+                            <div class="space-y-1.5">
+                              <label class="block text-sm font-medium text-[#374151]"
+                                >Agente</label
+                              >
+                              <AppDropdown
+                                v-model="form.agent_id"
+                                :options="editableAgentOptions"
+                                placeholder="Seleccionar agente"
+                                :searchable="editableAgentOptions.length > 10"
+                              />
+                            </div>
+                            <div class="space-y-1.5">
+                              <label class="block text-sm font-medium text-[#374151]"
+                                >Cuenta origen *</label
+                              >
+                              <AppDropdown
+                                v-model="form.bank_account_origin_id"
+                                :options="originAccountOptions"
+                                placeholder="Cuenta de origen"
+                                :searchable="originAccountOptions.length > 5"
+                              />
+                            </div>
+                            <div class="space-y-1.5">
+                              <label class="block text-sm font-medium text-[#374151]"
+                                >Cuenta destino *</label
+                              >
+                              <AppDropdown
+                                v-model="form.bank_account_destination_id"
+                                :options="destinationAccountOptions"
+                                placeholder="Cuenta destino"
+                                :searchable="destinationAccountOptions.length > 5"
+                              />
+                            </div>
+                            <div class="space-y-1.5">
+                              <label class="block text-sm font-medium text-[#374151]"
+                                >Fecha y hora envío</label
+                              >
+                              <AppDateInput v-model="form.send_date" with-time />
+                            </div>
+                            <div class="space-y-1.5">
+                              <label class="block text-sm font-medium text-[#374151]"
+                                >Fecha y hora pago</label
+                              >
+                              <AppDateInput v-model="form.payment_date" with-time />
+                            </div>
+                          </div>
+                        </section>
+
+                        <section class="rounded-2xl border border-amber-200/60 bg-amber-50/45 p-5">
+                      
+                          <div class="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                            <div class="space-y-1.5">
+                              <label class="block text-sm font-medium text-[#374151]"
+                                >Estado</label
+                              >
+                              <AppDropdown
+                                v-model="form.status"
+                                :options="statusFormOptions"
+                                placeholder="Estado"
+                                :searchable="false"
+                              />
+                            </div>
+                            <label
+                              class="flex cursor-pointer items-center gap-3 rounded-xl border border-amber-200/90 bg-white px-4 py-3"
+                            >
+                              <input
+                                v-model="form.checked"
+                                type="checkbox"
+                                class="h-4 w-4 rounded border-[#d1d5db] text-brasper-indigoStrong focus:ring-brasper-indigoStrong"
+                              />
+                              <span class="text-sm font-medium text-[#374151]">
+                                Verificada
+                              </span>
+                            </label>
+                          </div>
+                        </section>
+
+                        <section class="rounded-2xl border border-[#edf1f6] bg-[#fcfdff] p-5">
+                          <div class="mb-4">
+                            <h3 class="text-sm font-semibold text-[#1f2937]">Archivos</h3>
+                            <p class="mt-1 text-xs text-[#6b7280]">
+                              Adjunta o reemplaza comprobantes.
+                            </p>
+                          </div>
+                          <div class="grid gap-4 md:grid-cols-2">
+                            <div class="rounded-2xl border border-[#e8eef8] bg-white p-4">
+                              <div class="mb-3 flex items-start justify-between gap-3">
+                                <div>
+                                  <h4 class="text-sm font-semibold text-[#232b4d]">
+                                    Envío
+                                  </h4>
+                                  <p class="mt-0.5 text-xs text-[#6b7280]">Opcional</p>
+                                </div>
+                              </div>
+                              <label
+                                class="inline-flex cursor-pointer items-center justify-center rounded-xl border border-[#d5def0] bg-[#f8faff] px-4 py-2.5 text-sm font-semibold text-brasper-indigoStrong transition hover:border-brasper-indigoStrong/40 hover:bg-white"
+                              >
+                                <input
+                                  type="file"
+                                  class="sr-only"
+                                  @change="onVoucherFileSelect('send_voucher', $event)"
+                                />
+                                Seleccionar archivo
+                              </label>
+                              <img
+                                v-if="activeSendVoucherPreviewSrc"
+                                :src="activeSendVoucherPreviewSrc"
+                                alt="Vista previa comprobante de envío"
+                                class="mt-3 max-h-24 w-full rounded-lg border border-[#e5e7eb] object-contain"
+                              />
+                              <p
+                                v-if="form.send_voucher || editSourceTransaction?.send_voucher"
+                                class="mt-3 truncate text-xs font-medium text-[#374151]"
+                                :title="
+                                  getVoucherLabel(form.send_voucher ?? editSourceTransaction?.send_voucher)
+                                "
+                              >
+                                {{
+                                  getVoucherLabel(
+                                    form.send_voucher ??
+                                      editSourceTransaction?.send_voucher,
+                                  )
+                                }}
+                              </p>
+                            </div>
+
+                            <div class="rounded-2xl border border-[#e8eef8] bg-white p-4">
+                              <div class="mb-3 flex items-start justify-between gap-3">
+                                <div>
+                                  <h4 class="text-sm font-semibold text-[#232b4d]">
+                                    Pago
+                                  </h4>
+                                  <p class="mt-0.5 text-xs text-[#6b7280]">Opcional</p>
+                                </div>
+                              </div>
+                              <label
+                                class="inline-flex cursor-pointer items-center justify-center rounded-xl border border-[#d5def0] bg-[#f8faff] px-4 py-2.5 text-sm font-semibold text-brasper-indigoStrong transition hover:border-brasper-indigoStrong/40 hover:bg-white"
+                              >
+                                <input
+                                  type="file"
+                                  class="sr-only"
+                                  @change="onVoucherFileSelect('payment_voucher', $event)"
+                                />
+                                Seleccionar archivo
+                              </label>
+                              <img
+                                v-if="activePaymentVoucherPreviewSrc"
+                                :src="activePaymentVoucherPreviewSrc"
+                                alt="Vista previa comprobante de pago"
+                                class="mt-3 max-h-24 w-full rounded-lg border border-[#e5e7eb] object-contain"
+                              />
+                              <p
+                                v-if="form.payment_voucher || editSourceTransaction?.payment_voucher"
+                                class="mt-3 truncate text-xs font-medium text-[#374151]"
+                                :title="
+                                  getVoucherLabel(form.payment_voucher ?? editSourceTransaction?.payment_voucher)
+                                "
+                              >
+                                {{
+                                  getVoucherLabel(
+                                    form.payment_voucher ??
+                                      editSourceTransaction?.payment_voucher,
+                                  )
+                                }}
+                              </p>
+                            </div>
+                          </div>
+                        </section>
+                      </div>
+                    </div>
+
+                    <div
+                      class="border-t border-[#e5e7eb] bg-white px-4 py-4"
+                    >
+                      <div class="flex flex-wrap items-center justify-end gap-3">
+                        <button
+                          type="button"
+                          class="rounded-xl border border-[#e5e7eb] bg-white px-5 py-2.5 text-sm font-medium text-[#6b7280] transition hover:bg-[#f9fafb]"
+                          @click="showCreateModal = false"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          class="rounded-xl bg-brasper-indigoStrong px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brasper-indigoDark disabled:opacity-60"
+                          :disabled="
+                            transactionsStore.isCreating || transactionsStore.isUpdating
+                          "
+                          @click="submitForm"
+                        >
+                          {{
+                            transactionsStore.isCreating || transactionsStore.isUpdating
+                              ? "Guardando..."
+                              : "Guardar cambios"
+                          }}
+                        </button>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+              </template>
+            </form>
+
             <div
-              v-if="createStepIndex === 0"
+              v-else-if="createStepIndex === 0"
               class="min-w-0 space-y-5"
             >
               <p
@@ -1850,7 +2769,7 @@ onMounted(() => {
                   </div>
                 </div>
                 <div class="grid gap-5 sm:grid-cols-2">
-                  <div class="space-y-1.5 sm:col-span-2">
+                  <div class="space-y-1.5">
                     <label class="block text-sm font-medium text-[#374151]"
                       >Cliente *</label
                     >
@@ -1859,6 +2778,17 @@ onMounted(() => {
                       :options="clientOptions"
                       placeholder="Seleccionar cliente"
                       :searchable="clientOptions.length > 10"
+                    />
+                  </div>
+                  <div class="space-y-1.5">
+                    <label class="block text-sm font-medium text-[#374151]"
+                      >Agente</label
+                    >
+                    <AppDropdown
+                      v-model="form.agent_id"
+                      :options="agentClientOptions"
+                      placeholder="Seleccionar agente"
+                      :searchable="agentClientOptions.length > 10"
                     />
                   </div>
                   <div class="space-y-1.5">
@@ -2000,27 +2930,27 @@ onMounted(() => {
                       Fechas
                     </h3>
                     <p class="text-xs text-[#6b7280]">
-                      Envío y pago (ajuste si el API lo permite)
+                      Fecha y hora locales; al guardar se envían al API en ISO (UTC).
                     </p>
                   </div>
                 </div>
                 <div class="grid gap-5 sm:grid-cols-2">
                   <div class="space-y-1.5">
                     <label class="block text-sm font-medium text-[#374151]"
-                      >Fecha envío</label
+                      >Fecha y hora envío</label
                     >
-                    <AppDateInput v-model="form.send_date" />
+                    <AppDateInput v-model="form.send_date" with-time />
                     <p class="text-[11px] text-[#6b7280]">
-                      Suele venir del alta; puedes ajustarla si el API lo permite.
+                      Hora local; el servidor recibe instante en ISO (UTC).
                     </p>
                   </div>
                   <div class="space-y-1.5">
                     <label class="block text-sm font-medium text-[#374151]"
-                      >Fecha pago</label
+                      >Fecha y hora pago</label
                     >
-                    <AppDateInput v-model="form.payment_date" />
+                    <AppDateInput v-model="form.payment_date" with-time />
                     <p class="text-[11px] text-[#6b7280]">
-                      En finalización, el backend puede asignarla en UTC al cerrar.
+                      Opcional; al finalizar el backend puede fijarla en UTC.
                     </p>
                   </div>
                 </div>
@@ -2077,9 +3007,7 @@ onMounted(() => {
               @submit.prevent="submitForm"
             >
               <p class="text-sm leading-relaxed text-[#6b7280]">
-                Sube capturas o comprobantes en imagen. Son opcionales; si
-                cargas ambos, al guardar se puede marcar la operación como
-                finalizada según tu flujo.
+                Adjunta comprobantes o archivos de respaldo. Son opcionales.
               </p>
 
               <div
@@ -2134,44 +3062,19 @@ onMounted(() => {
                         Envío
                       </h3>
                       <p class="mt-0.5 text-xs text-[#6b7280]">
-                        Comprobante del envío al destinatario (send_voucher)
+                        Archivo de envío
                       </p>
                     </div>
                   </div>
                   <label
-                    class="group relative flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#cfdbef] bg-[#fbfdff] px-4 py-10 transition hover:border-brasper-indigoStrong/40 hover:bg-white"
+                    class="inline-flex cursor-pointer items-center justify-center rounded-lg border border-[#cfdbef] bg-[#fbfdff] px-4 py-2.5 text-sm font-semibold text-brasper-indigoStrong transition hover:border-brasper-indigoStrong/40 hover:bg-white"
                   >
                     <input
                       type="file"
-                      accept="image/*"
                       class="sr-only"
-                      @change="
-                        form.send_voucher =
-                          ($event.target as HTMLInputElement).files?.[0] ?? null
-                      "
+                      @change="onVoucherFileSelect('send_voucher', $event)"
                     />
-                    <svg
-                      class="mb-2 h-10 w-10 text-[#93c5fd]"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      aria-hidden="true"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="1.5"
-                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                      />
-                    </svg>
-                    <span
-                      class="text-sm font-semibold text-brasper-indigoStrong"
-                    >
-                      Elegir imagen
-                    </span>
-                    <span class="mt-1 text-center text-xs text-[#6b7280]">
-                      PNG o JPG · arrastra o haz clic
-                    </span>
+                    Seleccionar archivo
                   </label>
                   <img
                     v-if="sendVoucherPreviewSrc"
@@ -2215,44 +3118,19 @@ onMounted(() => {
                         Pago
                       </h3>
                       <p class="mt-0.5 text-xs text-[#6b7280]">
-                        Comprobante del pago recibido (payment_voucher)
+                        Archivo de pago
                       </p>
                     </div>
                   </div>
                   <label
-                    class="group relative flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#cfdbef] bg-[#fbfdff] px-4 py-10 transition hover:border-brasper-indigoStrong/40 hover:bg-white"
+                    class="inline-flex cursor-pointer items-center justify-center rounded-lg border border-[#cfdbef] bg-[#fbfdff] px-4 py-2.5 text-sm font-semibold text-brasper-indigoStrong transition hover:border-brasper-indigoStrong/40 hover:bg-white"
                   >
                     <input
                       type="file"
-                      accept="image/*"
                       class="sr-only"
-                      @change="
-                        form.payment_voucher =
-                          ($event.target as HTMLInputElement).files?.[0] ?? null
-                      "
+                      @change="onVoucherFileSelect('payment_voucher', $event)"
                     />
-                    <svg
-                      class="mb-2 h-10 w-10 text-[#6ee7b7]"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      aria-hidden="true"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="1.5"
-                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                      />
-                    </svg>
-                    <span
-                      class="text-sm font-semibold text-brasper-indigoStrong"
-                    >
-                      Elegir imagen
-                    </span>
-                    <span class="mt-1 text-center text-xs text-[#6b7280]">
-                      PNG o JPG · arrastra o haz clic
-                    </span>
+                    Seleccionar archivo
                   </label>
                   <img
                     v-if="paymentVoucherPreviewSrc"
@@ -2282,18 +3160,20 @@ onMounted(() => {
 
           <!-- Footer -->
           <div
-            class="flex flex-wrap items-center justify-between gap-3 border-t border-[#e5e7eb] px-6 py-4"
+            v-if="!isEditingMode"
+            class="flex flex-wrap items-center gap-3 border-t border-[#e5e7eb] px-6 py-4"
+            :class="isEditingMode ? 'justify-end bg-white' : 'justify-between'"
           >
             <button
               type="button"
-              class="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2.5 text-sm font-medium text-[#6b7280] hover:bg-[#f9fafb]"
+              class="rounded-xl border border-[#e5e7eb] bg-white px-5 py-2.5 text-sm font-medium text-[#6b7280] transition hover:bg-[#f9fafb]"
               @click="showCreateModal = false"
             >
               Cancelar
             </button>
             <div class="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
               <button
-                v-if="createStepIndex > 0"
+                v-if="!isEditingMode && createStepIndex > 0"
                 type="button"
                 class="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2.5 text-sm font-medium text-brasper-indigoStrong hover:bg-[#f9fafb]"
                 @click="goCreatePrev"
@@ -2301,7 +3181,7 @@ onMounted(() => {
                 Atrás
               </button>
               <button
-                v-if="!isLastCreateStep"
+                v-if="!isEditingMode && !isLastCreateStep"
                 type="button"
                 class="rounded-lg bg-brasper-indigoStrong px-5 py-2.5 text-sm font-semibold text-white hover:bg-brasper-indigoDark"
                 @click="goCreateNext"
@@ -2320,7 +3200,9 @@ onMounted(() => {
                 {{
                   transactionsStore.isCreating || transactionsStore.isUpdating
                     ? "Guardando..."
-                    : "Guardar"
+                    : editingId
+                      ? "Guardar cambios"
+                      : "Guardar"
                 }}
               </button>
             </div>
