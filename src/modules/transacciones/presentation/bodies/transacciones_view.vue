@@ -544,6 +544,7 @@ function openCreateModal() {
   createStepIndex.value = 0;
   showCreateModal.value = true;
   loadFormOptions();
+  void loadAgentUsers();
   calculatorStore.setDemoMode(false);
   calculatorStore.loadData();
 }
@@ -698,6 +699,7 @@ async function openEditModal(t: Transaction) {
     calculatorStore.setDemoMode(false);
     void loadFormOptions();
     void loadEditableUsers();
+    void loadAgentUsers();
     void (async () => {
       try {
         const fresh = await withTimeout(
@@ -893,28 +895,6 @@ const editPreviewTransaction = computed<Transaction | null>(() => {
       ? (formDateTimeToApi(form.payment_date) ?? form.payment_date)
       : base.payment_date,
   };
-});
-
-const editPreviewSections = computed(() => {
-  const t = editPreviewTransaction.value;
-  if (!t) return [];
-  return buildPreviewSections(t)
-    .map((section) => {
-      if (section.id !== "extra") return section;
-      return {
-        ...section,
-        items: section.items.filter(
-          (item) => item.label.trim().toLowerCase() !== "user",
-        ),
-      };
-    })
-    .filter(
-      (section) =>
-        section.id !== "resumen" &&
-        section.id !== "registro" &&
-        section.id !== "extra" &&
-        section.items.length > 0,
-    );
 });
 
 const editModalSummary = computed(() => {
@@ -1185,13 +1165,8 @@ function getClientLabel(id: string | undefined): string {
 }
 
 function getVoucherLabel(v: unknown): string {
-  if (
-    v != null &&
-    typeof v === "object" &&
-    "name" in v &&
-    typeof (v as File).name === "string"
-  ) {
-    return (v as File).name;
+  if (isFileValue(v)) {
+    return v.name;
   }
   if (typeof v === "string" && v.trim()) {
     const clean = v.trim().split("?")[0]?.split("#")[0] ?? "";
