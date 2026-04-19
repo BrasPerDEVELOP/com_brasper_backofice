@@ -206,6 +206,11 @@ function goCreateNext() {
   const i = createStepIndex.value;
   if (i === 0) {
     syncFromCalculator();
+    const calculatorError = getCalculatorBlockingError();
+    if (calculatorError) {
+      transactionsStore.error = calculatorError;
+      return;
+    }
     if (
       !form.tax_rate_id?.trim() ||
       !form.commission_id?.trim() ||
@@ -519,16 +524,64 @@ function resetForm() {
   form.payment_voucher = null;
   editingId.value = null;
   editSourceTransaction.value = null;
+  calculatorStore.resetCalculatorMode();
+  calculatorStore.resetAmounts();
+  calculatorStore.updateSelectedIds();
+}
+
+function getCalculatorBlockingError(): string | null {
+  const res = calculatorStore.result;
+  if (!res) return "Completa la cotización: montos y tasa/comisión antes de continuar.";
+  if (
+    calculatorStore.calculationMode === "special" &&
+    !res.specialDiscountValid
+  ) {
+    return (
+      res.specialDiscountInvalidReason ??
+      "El descuento especial calculado no es válido para esta cotización."
+    );
+  }
+  return null;
+}
+
+function syncCalculatorFromForm() {
+  calculatorStore.resetCalculatorMode();
+  const rate = calculatorStore.taxRates.find(
+    (item) => item.id === form.tax_rate_id,
+  );
+  if (rate) {
+    calculatorStore.setCurrencyFrom(rate.from);
+    calculatorStore.setCurrencyTo(rate.to);
+  }
+
+  const originAmount = Number(form.origin_amount) || 0;
+  const destinationAmount = Number(form.destination_amount) || 0;
+
+  if (originAmount > 0) {
+    calculatorStore.setAmountSend(originAmount);
+    calculatorStore.recalcFromSend();
+    return;
+  }
+
+  if (destinationAmount > 0) {
+    calculatorStore.setAmountReceive(destinationAmount);
+    calculatorStore.recalcFromReceive();
+    return;
+  }
+
+  calculatorStore.resetAmounts();
+  calculatorStore.updateSelectedIds();
 }
 
 function syncFromCalculator() {
-  form.origin_amount = calculatorStore.amountSend || 0;
-  form.destination_amount = calculatorStore.amountReceive || 0;
+  const res = calculatorStore.result;
+  form.origin_amount = res?.amountSend ?? calculatorStore.amountSend ?? 0;
+  form.destination_amount =
+    res?.amountReceive ?? calculatorStore.amountReceive ?? 0;
   form.tax_rate_id = calculatorStore.selectedTaxRateId ?? "";
   form.commission_id = calculatorStore.selectedCommissionId ?? "";
-  const res = calculatorStore.result;
   if (res) {
-    form.resultado_comision = res.commission;
+    form.resultado_comision = res.finalCommission;
     form.total_a_enviar = res.totalToSend;
     form.tax_amount = res.rate;
   } else {
@@ -546,7 +599,7 @@ function openCreateModal() {
   loadFormOptions();
   void loadAgentUsers();
   calculatorStore.setDemoMode(false);
-  calculatorStore.loadData();
+  void calculatorStore.loadData();
 }
 
 async function loadFormOptions() {
@@ -697,6 +750,8 @@ async function openEditModal(t: Transaction) {
     await hydrateEditForm(t);
     editModalLoading.value = false;
     calculatorStore.setDemoMode(false);
+    await calculatorStore.loadData();
+    syncCalculatorFromForm();
     void loadFormOptions();
     void loadEditableUsers();
     void loadAgentUsers();
@@ -709,6 +764,7 @@ async function openEditModal(t: Transaction) {
         );
         if (fresh) {
           await hydrateEditForm({ ...t, ...fresh });
+          syncCalculatorFromForm();
         }
       } catch {
         /* conservar fallback inicial */
@@ -723,7 +779,12 @@ async function openEditModal(t: Transaction) {
 }
 
 async function submitForm() {
-  if (!editingId.value) syncFromCalculator();
+  syncFromCalculator();
+  const calculatorError = getCalculatorBlockingError();
+  if (calculatorError) {
+    transactionsStore.error = calculatorError;
+    return;
+  }
   if (
     !form.bank_account_origin_id ||
     !form.bank_account_destination_id ||
@@ -2697,6 +2758,7 @@ onMounted(() => {
               <CalculatorConversionCard
                 variant="production"
                 :show-send-cta="false"
+                :show-calculation-mode-toggle="true"
               />
             </div>
 

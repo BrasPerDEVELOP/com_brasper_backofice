@@ -107,10 +107,6 @@ export const useAuthStore = defineStore('auth', {
         if (token) localStorage.setItem(TOKEN_KEY, token)
         if (user) {
           localStorage.setItem(USER_KEY, JSON.stringify(user))
-          // Log para depuración (solo en desarrollo)
-          if (import.meta.env.DEV) {
-            console.log('Usuario guardado:', { id: user.id, email: user.email, role: user.role })
-          }
         }
       } catch (error) {
         this.error = error instanceof Error ? error.message : 'Error al iniciar sesión'
