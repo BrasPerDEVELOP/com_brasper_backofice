@@ -8,6 +8,7 @@ import {
   CURRENCY_FLAG_SRC_BY_CODE,
   normalizeTwoDecimals,
   formatCurrency,
+  formatNumber,
   formatRate
 } from '../utils/calculator_format'
 import { buildCalculatorWhatsappMessage } from '../utils/build_calculator_whatsapp_message'
@@ -166,6 +167,7 @@ export function useCalculatorPage(variant: CalculatorPageVariant) {
     currencyFromFlagSrc,
     currencyToFlagSrc,
     formatCurrency,
+    formatNumber,
     formatRate,
     onAmountSendInput,
     onAmountReceiveInput,

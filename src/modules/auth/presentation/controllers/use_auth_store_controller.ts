@@ -137,9 +137,6 @@ export const useAuthStore = defineStore('auth', {
         const { user, token } = await loginUseCase.execute(username, password)
 
         this.setSession(user, token)
-        if (import.meta.env.DEV) {
-          console.log('Usuario guardado:', { id: user.id, email: user.email, role: user.role })
-        }
       } catch (error) {
         this.error = error instanceof Error ? error.message : 'Error al iniciar sesión'
         throw error

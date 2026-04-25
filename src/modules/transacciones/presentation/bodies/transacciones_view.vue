@@ -208,6 +208,11 @@ function goCreateNext() {
   const i = createStepIndex.value;
   if (i === 0) {
     syncFromCalculator();
+    const calculatorError = getCalculatorBlockingError();
+    if (calculatorError) {
+      transactionsStore.error = calculatorError;
+      return;
+    }
     if (
       !form.tax_rate_id?.trim() ||
       !form.commission_id?.trim() ||
@@ -522,16 +527,64 @@ function resetForm() {
   form.checked_image = null;
   editingId.value = null;
   editSourceTransaction.value = null;
+  calculatorStore.resetCalculatorMode();
+  calculatorStore.resetAmounts();
+  calculatorStore.updateSelectedIds();
+}
+
+function getCalculatorBlockingError(): string | null {
+  const res = calculatorStore.result;
+  if (!res) return "Completa la cotización: montos y tasa/comisión antes de continuar.";
+  if (
+    calculatorStore.calculationMode === "special" &&
+    !res.specialDiscountValid
+  ) {
+    return (
+      res.specialDiscountInvalidReason ??
+      "El descuento especial calculado no es válido para esta cotización."
+    );
+  }
+  return null;
+}
+
+function syncCalculatorFromForm() {
+  calculatorStore.resetCalculatorMode();
+  const rate = calculatorStore.taxRates.find(
+    (item) => item.id === form.tax_rate_id,
+  );
+  if (rate) {
+    calculatorStore.setCurrencyFrom(rate.from);
+    calculatorStore.setCurrencyTo(rate.to);
+  }
+
+  const originAmount = Number(form.origin_amount) || 0;
+  const destinationAmount = Number(form.destination_amount) || 0;
+
+  if (originAmount > 0) {
+    calculatorStore.setAmountSend(originAmount);
+    calculatorStore.recalcFromSend();
+    return;
+  }
+
+  if (destinationAmount > 0) {
+    calculatorStore.setAmountReceive(destinationAmount);
+    calculatorStore.recalcFromReceive();
+    return;
+  }
+
+  calculatorStore.resetAmounts();
+  calculatorStore.updateSelectedIds();
 }
 
 function syncFromCalculator() {
-  form.origin_amount = calculatorStore.amountSend || 0;
-  form.destination_amount = calculatorStore.amountReceive || 0;
+  const res = calculatorStore.result;
+  form.origin_amount = res?.amountSend ?? calculatorStore.amountSend ?? 0;
+  form.destination_amount =
+    res?.amountReceive ?? calculatorStore.amountReceive ?? 0;
   form.tax_rate_id = calculatorStore.selectedTaxRateId ?? "";
   form.commission_id = calculatorStore.selectedCommissionId ?? "";
-  const res = calculatorStore.result;
   if (res) {
-    form.resultado_comision = res.commission;
+    form.resultado_comision = res.finalCommission;
     form.total_a_enviar = res.totalToSend;
     form.tax_amount = res.rate;
   } else {
@@ -547,8 +600,9 @@ function openCreateModal() {
   createStepIndex.value = 0;
   showCreateModal.value = true;
   loadFormOptions();
+  void loadAgentUsers();
   calculatorStore.setDemoMode(false);
-  calculatorStore.loadData();
+  void calculatorStore.loadData();
 }
 
 async function loadFormOptions() {
@@ -700,8 +754,11 @@ async function openEditModal(t: Transaction) {
     await hydrateEditForm(t);
     editModalLoading.value = false;
     calculatorStore.setDemoMode(false);
+    await calculatorStore.loadData();
+    syncCalculatorFromForm();
     void loadFormOptions();
     void loadEditableUsers();
+    void loadAgentUsers();
     void (async () => {
       try {
         const fresh = await withTimeout(
@@ -711,6 +768,7 @@ async function openEditModal(t: Transaction) {
         );
         if (fresh) {
           await hydrateEditForm({ ...t, ...fresh });
+          syncCalculatorFromForm();
         }
       } catch {
         /* conservar fallback inicial */
@@ -725,7 +783,12 @@ async function openEditModal(t: Transaction) {
 }
 
 async function submitForm() {
-  if (!editingId.value) syncFromCalculator();
+  syncFromCalculator();
+  const calculatorError = getCalculatorBlockingError();
+  if (calculatorError) {
+    transactionsStore.error = calculatorError;
+    return;
+  }
   if (
     !form.bank_account_origin_id ||
     !form.bank_account_destination_id ||
@@ -918,28 +981,6 @@ const editPreviewTransaction = computed<Transaction | null>(() => {
       ? (formDateTimeToApi(form.payment_date) ?? form.payment_date)
       : base.payment_date,
   };
-});
-
-const editPreviewSections = computed(() => {
-  const t = editPreviewTransaction.value;
-  if (!t) return [];
-  return buildPreviewSections(t)
-    .map((section) => {
-      if (section.id !== "extra") return section;
-      return {
-        ...section,
-        items: section.items.filter(
-          (item) => item.label.trim().toLowerCase() !== "user",
-        ),
-      };
-    })
-    .filter(
-      (section) =>
-        section.id !== "resumen" &&
-        section.id !== "registro" &&
-        section.id !== "extra" &&
-        section.items.length > 0,
-    );
 });
 
 const editModalSummary = computed(() => {
@@ -1210,13 +1251,8 @@ function getClientLabel(id: string | undefined): string {
 }
 
 function getVoucherLabel(v: unknown): string {
-  if (
-    v != null &&
-    typeof v === "object" &&
-    "name" in v &&
-    typeof (v as File).name === "string"
-  ) {
-    return (v as File).name;
+  if (isFileValue(v)) {
+    return v.name;
   }
   if (typeof v === "string" && v.trim()) {
     const clean = v.trim().split("?")[0]?.split("#")[0] ?? "";
@@ -2824,6 +2860,7 @@ onMounted(() => {
               <CalculatorConversionCard
                 variant="production"
                 :show-send-cta="false"
+                :show-calculation-mode-toggle="true"
               />
             </div>
 

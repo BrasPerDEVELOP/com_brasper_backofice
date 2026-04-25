@@ -79,12 +79,94 @@ function rateForPair(
   return row?.rate ?? 0
 }
 
+function buildNormalResult(
+  gross: number,
+  rate: number,
+  commissionDef: CommissionRange | null,
+  amountReceiveOverride?: number
+): CalculatorResult {
+  const p = commissionDef ? commissionDef.percentage / 100 : 0
+  const baseCommission = gross * p
+  const totalToSend = gross - baseCommission
+  const amountReceive = amountReceiveOverride ?? totalToSend * rate
+  return {
+    amountSend: gross,
+    amountReceive,
+    rate,
+    commission: baseCommission,
+    commissionRate: p * 100,
+    totalToSend,
+    couponDiscount: 0,
+    calculationMode: 'normal',
+    baseCommission,
+    specialDiscountPercentage: 0,
+    specialDiscountAmount: 0,
+    finalCommission: baseCommission,
+    specialTargetReceive: amountReceive,
+    specialDiscountValid: true,
+    specialDiscountInvalidReason: null
+  }
+}
+
+function buildSpecialResult(
+  gross: number,
+  targetReceive: number,
+  rate: number,
+  commissionDef: CommissionRange | null
+): CalculatorResult {
+  const p = commissionDef ? commissionDef.percentage / 100 : 0
+  const baseCommission = gross * p
+  const targetNetOrigin = rate > 0 ? targetReceive / rate : 0
+  const finalCommission = gross - targetNetOrigin
+  const specialDiscountAmount = baseCommission - finalCommission
+  const specialDiscountPercentage =
+    baseCommission > 0 ? (specialDiscountAmount / baseCommission) * 100 : 0
+
+  let specialDiscountValid = true
+  let specialDiscountInvalidReason: string | null = null
+
+  if (baseCommission <= 0) {
+    specialDiscountValid = finalCommission === 0
+    if (!specialDiscountValid) {
+      specialDiscountInvalidReason =
+        'La comision base es 0%; no se puede aplicar un descuento especial para sostener este monto.'
+    }
+  } else if (specialDiscountPercentage < 0) {
+    specialDiscountValid = false
+    specialDiscountInvalidReason =
+      'El monto a enviar supera el rango valido: requeriria aumentar la comision en lugar de descontarla.'
+  } else if (specialDiscountPercentage > 100) {
+    specialDiscountValid = false
+    specialDiscountInvalidReason =
+      'El monto a enviar es insuficiente para sostener el monto a recibir aun con 100% de descuento.'
+  }
+
+  return {
+    amountSend: gross,
+    amountReceive: targetReceive,
+    rate,
+    commission: finalCommission,
+    commissionRate: p * 100,
+    totalToSend: gross - finalCommission,
+    couponDiscount: specialDiscountAmount,
+    calculationMode: 'special',
+    baseCommission,
+    specialDiscountPercentage,
+    specialDiscountAmount,
+    finalCommission,
+    specialTargetReceive: targetReceive,
+    specialDiscountValid,
+    specialDiscountInvalidReason
+  }
+}
+
 interface CalculatorState {
   /** Si true, modo demo: URLs con sufijo -trial (coin/tax-rate-trial, coin/currencies-trial, etc.) sin /demo en la ruta. */
   demoMode: boolean
   currencies: CurrencyReadDTO[]
   currencyFrom: CurrencyCode
   currencyTo: CurrencyCode
+  calculationMode: 'normal' | 'special'
   amountSend: number
   amountReceive: number
   taxRates: ExchangeRate[]
@@ -107,6 +189,7 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
     currencies: [],
     currencyFrom: DEFAULT_FROM,
     currencyTo: DEFAULT_TO,
+    calculationMode: 'normal',
     amountSend: 0,
     amountReceive: 0,
     taxRates: [],
@@ -145,7 +228,7 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
       let gross = 0
       if (state.amountSend > 0) {
         gross = state.amountSend
-      } else if (state.amountReceive > 0 && rate > 0) {
+      } else if (state.amountReceive > 0 && rate > 0 && state.calculationMode === 'normal') {
         gross = resolveGrossFromReceive(state.amountReceive, rate, pairCommissions)
       } else {
         return pairCommissions[0] ?? null
@@ -160,6 +243,17 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
       return c ? c.percentage : 0
     },
 
+    isSpecialMode(state): boolean {
+      return state.calculationMode === 'special'
+    },
+
+    specialDiscountError(): string | null {
+      if (!this.isSpecialMode) return null
+      const res = this.result
+      if (!res || res.specialDiscountValid) return null
+      return res.specialDiscountInvalidReason
+    },
+
     /**
      * Enviás `amountSend` (bruto origen): comisión sobre bruto, convierte el neto a destino.
      * O indicás `amountReceive`: se infiere el bruto con neto = recibe/tasa y bruto = neto/(1-p).
@@ -169,40 +263,36 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
       if (!rate || rate <= 0) return null
       const pairCommissions = this.commissionsForPair
 
+      if (state.calculationMode === 'special') {
+        if (state.amountReceive > 0 && state.amountSend > 0) {
+          const gross = state.amountSend
+          const commissionDef = pickCommissionBracket(gross, pairCommissions)
+          return buildSpecialResult(gross, state.amountReceive, rate, commissionDef)
+        }
+
+        if (state.amountSend > 0) {
+          const gross = state.amountSend
+          const commissionDef = pickCommissionBracket(gross, pairCommissions)
+          const normalResult = buildNormalResult(gross, rate, commissionDef)
+          return {
+            ...normalResult,
+            calculationMode: 'special',
+            specialTargetReceive: normalResult.amountReceive
+          }
+        }
+      }
+
       if (state.amountSend > 0) {
         const gross = state.amountSend
         const commissionDef = pickCommissionBracket(gross, pairCommissions)
-        const p = commissionDef ? commissionDef.percentage / 100 : 0
-        const commission = gross * p
-        const totalToSend = gross - commission
-        const amountReceive = totalToSend * rate
-        return {
-          amountSend: gross,
-          amountReceive,
-          rate,
-          commission,
-          commissionRate: p * 100,
-          totalToSend,
-          couponDiscount: 0
-        }
+        return buildNormalResult(gross, rate, commissionDef)
       }
 
       if (state.amountReceive > 0) {
         const receive = state.amountReceive
         const gross = resolveGrossFromReceive(receive, rate, pairCommissions)
         const commissionDef = pickCommissionBracket(gross, pairCommissions)
-        const p = commissionDef ? commissionDef.percentage / 100 : 0
-        const commission = gross * p
-        const totalToSend = gross - commission
-        return {
-          amountSend: gross,
-          amountReceive: receive,
-          rate,
-          commission,
-          commissionRate: p * 100,
-          totalToSend,
-          couponDiscount: 0
-        }
+        return buildNormalResult(gross, rate, commissionDef, receive)
       }
 
       return null
@@ -267,37 +357,69 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
       this.updateSelectedIds()
     },
 
+    setCalculationMode(mode: 'normal' | 'special') {
+      if (this.calculationMode === mode) return
+      const previous = this.result
+      this.calculationMode = mode
+
+      if (mode === 'special') {
+        if (this.amountReceive <= 0 && previous) this.amountReceive = previous.amountReceive
+        if (this.amountSend <= 0 && previous) this.amountSend = previous.amountSend
+      } else {
+        const res = this.result
+        if (this.amountSend > 0 && res) {
+          this.amountReceive = res.amountReceive
+        } else if (this.amountReceive > 0 && res) {
+          this.amountSend = res.amountSend
+        }
+      }
+
+      this.updateSelectedIds()
+    },
+
     setAmountSend(value: number) {
       this.amountSend = value
-      this.amountReceive = 0
-      const res = this.result
-      if (res) this.amountReceive = res.amountReceive
+      if (this.calculationMode === 'normal') {
+        this.amountReceive = 0
+        const res = this.result
+        if (res) this.amountReceive = res.amountReceive
+      }
       this.updateSelectedIds()
     },
 
     setAmountReceive(value: number) {
       this.amountReceive = value
-      this.amountSend = 0
-      const res = this.result
-      if (res) this.amountSend = res.amountSend
+      if (this.calculationMode === 'normal') {
+        this.amountSend = 0
+        const res = this.result
+        if (res) this.amountSend = res.amountSend
+      }
       this.updateSelectedIds()
     },
 
     recalcFromSend() {
       const res = this.result
-      if (res && this.amountSend > 0) this.amountReceive = res.amountReceive
+      if (res && this.amountSend > 0 && this.calculationMode === 'normal') {
+        this.amountReceive = res.amountReceive
+      }
       this.updateSelectedIds()
     },
 
     recalcFromReceive() {
       const res = this.result
-      if (res && this.amountReceive > 0) this.amountSend = res.amountSend
+      if (res && this.amountReceive > 0 && this.calculationMode === 'normal') {
+        this.amountSend = res.amountSend
+      }
       this.updateSelectedIds()
     },
 
     resetAmounts() {
       this.amountSend = 0
       this.amountReceive = 0
+    },
+
+    resetCalculatorMode() {
+      this.calculationMode = 'normal'
     }
   }
 }

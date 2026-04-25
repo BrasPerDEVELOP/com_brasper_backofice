@@ -213,14 +213,14 @@ function comisionFinalInterna(t: Transaction): number | undefined {
     t.comision_final_interna ??
     t.resultado_comision ??
     t.commission_result;
-  if (v == null || v === "") return undefined;
+  if (v == null) return undefined;
   const n = Number(v);
   return Number.isFinite(n) ? n : undefined;
 }
 
 function impuestoFinalInterno(t: Transaction): number | undefined {
   const v = t.impuesto_final_interno;
-  if (v == null || v === "") return undefined;
+  if (v == null) return undefined;
   const n = Number(v);
   return Number.isFinite(n) ? n : undefined;
 }
@@ -234,7 +234,7 @@ function ventaFinalMonto(t: Transaction): number | undefined {
   const i = impuestoFinalInterno(t);
   if (c != null && i != null) return Math.round((c + i) * 100) / 100;
   const tot = t.total_a_enviar ?? t.total_to_send;
-  if (tot != null && tot !== "") {
+  if (tot != null) {
     const n = Number(tot);
     if (Number.isFinite(n)) return n;
   }

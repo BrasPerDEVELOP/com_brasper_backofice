@@ -24,6 +24,36 @@
 
     <template v-else>
       <div class="mt-3 space-y-3.5">
+        <div
+          v-if="showCalculationModeToggle"
+          class="grid grid-cols-2 gap-2 rounded-xl bg-[#f3f6fb] p-1"
+        >
+          <button
+            type="button"
+            class="rounded-lg px-3 py-2 text-sm font-semibold transition"
+            :class="
+              calculatorStore.calculationMode === 'normal'
+                ? 'bg-white text-brasper-indigoStrong shadow-sm'
+                : 'text-[#6b7280] hover:text-brasper-indigoStrong'
+            "
+            @click="calculatorStore.setCalculationMode('normal')"
+          >
+            Calculadora normal
+          </button>
+          <button
+            type="button"
+            class="rounded-lg px-3 py-2 text-sm font-semibold transition"
+            :class="
+              calculatorStore.calculationMode === 'special'
+                ? 'bg-white text-brasper-indigoStrong shadow-sm'
+                : 'text-[#6b7280] hover:text-brasper-indigoStrong'
+            "
+            @click="calculatorStore.setCalculationMode('special')"
+          >
+            Calculadora especial
+          </button>
+        </div>
+
         <div class="overflow-visible rounded-xl border border-gray-300 px-3 py-1.5 text-xl shadow-md">
           <label class="block pl-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Tu envias</label>
           <div class="flex gap-0">
@@ -95,10 +125,62 @@
         </div>
 
         <div v-if="calculatorStore.result" class="space-y-2 border-t border-gray-200 pt-4">
+          <div
+            v-if="
+              showCalculationModeToggle &&
+              calculatorStore.result.calculationMode === 'special' &&
+              calculatorStore.specialDiscountError
+            "
+            class="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700"
+          >
+            {{ calculatorStore.specialDiscountError }}
+          </div>
+          <div
+            v-if="
+              showCalculationModeToggle &&
+              calculatorStore.result.calculationMode === 'special'
+            "
+            class="flex justify-between text-sm"
+          >
+            <span class="text-gray-600">Recibir objetivo</span>
+            <span class="font-semibold text-gray-900">
+              {{ formatCurrency(calculatorStore.result.specialTargetReceive, calculatorStore.currencyTo) }}
+            </span>
+          </div>
+          <div
+            v-if="
+              showCalculationModeToggle &&
+              calculatorStore.result.calculationMode === 'special'
+            "
+            class="flex justify-between text-sm"
+          >
+            <span class="text-gray-600">Comision base</span>
+            <span class="font-semibold text-gray-900">
+              {{ formatCurrency(calculatorStore.result.baseCommission, calculatorStore.currencyFrom) }}
+            </span>
+          </div>
+          <div
+            v-if="
+              showCalculationModeToggle &&
+              calculatorStore.result.calculationMode === 'special'
+            "
+            class="flex justify-between text-sm"
+          >
+            <span class="text-gray-600">Descuento especial</span>
+            <span class="font-semibold text-brasper-indigoStrong">
+              {{ formatNumber(calculatorStore.result.specialDiscountPercentage) }}%
+              ({{ formatCurrency(calculatorStore.result.specialDiscountAmount, calculatorStore.currencyFrom) }})
+            </span>
+          </div>
           <div class="flex justify-between text-sm">
             <span class="text-gray-600">Comision</span>
             <span class="font-semibold text-brasper-indigoStrong">
-              {{ formatCurrency(calculatorStore.result.commission, calculatorStore.currencyFrom) }}
+              {{
+                formatCurrency(
+                  calculatorStore.result.finalCommission,
+                  calculatorStore.currencyFrom
+                )
+              }}
             </span>
           </div>
           <div class="flex justify-between text-sm">
@@ -156,8 +238,10 @@ const props = withDefaults(
     variant?: CalculatorPageVariant
     /** Si es false, oculta el CTA de WhatsApp y el copy de garantía (p. ej. embed en backoffice). */
     showSendCta?: boolean
+    /** Si es true, permite alternar entre calculadora normal y especial. */
+    showCalculationModeToggle?: boolean
   }>(),
-  { variant: 'production', showSendCta: true }
+  { variant: 'production', showSendCta: true, showCalculationModeToggle: false }
 )
 
 const {
@@ -173,6 +257,7 @@ const {
   currencyFromFlagSrc,
   currencyToFlagSrc,
   formatCurrency,
+  formatNumber,
   formatRate,
   onAmountSendInput,
   onAmountReceiveInput,
