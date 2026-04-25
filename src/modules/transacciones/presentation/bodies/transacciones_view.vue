@@ -145,6 +145,7 @@ const form = reactive<{
   payment_date: string;
   send_voucher: string | File | null;
   payment_voucher: string | File | null;
+  checked_image: string | File | null;
 }>({
   bank_account_origin_id: "",
   bank_account_destination_id: "",
@@ -164,6 +165,7 @@ const form = reactive<{
   payment_date: "",
   send_voucher: null,
   payment_voucher: null,
+  checked_image: null,
 });
 
 const editingId = ref<string | null>(null);
@@ -517,6 +519,7 @@ function resetForm() {
   form.payment_date = "";
   form.send_voucher = null;
   form.payment_voucher = null;
+  form.checked_image = null;
   editingId.value = null;
   editSourceTransaction.value = null;
 }
@@ -676,6 +679,7 @@ async function hydrateEditForm(row: Transaction) {
     form.payment_date = apiDateTimeToFormValue(row.payment_date);
     form.send_voucher = null;
     form.payment_voucher = null;
+    form.checked_image = null;
     editSourceTransaction.value = row;
     await nextTick();
   } finally {
@@ -739,18 +743,38 @@ async function submitForm() {
     return;
   }
   try {
+    const hasEditedFileUpload =
+      Boolean(editingId.value) &&
+      [form.send_voucher, form.payment_voucher, form.checked_image].some(
+        (value) => value instanceof File,
+      );
+    const persistedSendVoucher = editSourceTransaction.value?.send_voucher;
+    const persistedPaymentVoucher = editSourceTransaction.value?.payment_voucher;
+    const persistedCheckedImage = editSourceTransaction.value?.checked_image;
     const sendVoucher =
       form.send_voucher instanceof File
         ? form.send_voucher
         : editingId.value
-          ? undefined
+          ? hasEditedFileUpload
+            ? persistedSendVoucher ?? undefined
+            : undefined
           : form.send_voucher ?? undefined;
     const paymentVoucher =
       form.payment_voucher instanceof File
         ? form.payment_voucher
         : editingId.value
-          ? undefined
+          ? hasEditedFileUpload
+            ? persistedPaymentVoucher ?? undefined
+            : undefined
           : form.payment_voucher ?? undefined;
+    const checkedImage =
+      form.checked_image instanceof File
+        ? form.checked_image
+        : editingId.value
+          ? hasEditedFileUpload
+            ? persistedCheckedImage ?? undefined
+            : undefined
+          : form.checked_image ?? undefined;
 
     const code =
       form.code?.trim() ||
@@ -779,6 +803,7 @@ async function submitForm() {
       code,
       send_voucher: sendVoucher,
       payment_voucher: paymentVoucher,
+      checked_image: checkedImage,
     };
     if (editingId.value) {
       /** PUT: el backend recalcula `status` y asigna `payment_date` al pasar a finalizada. */
@@ -1221,6 +1246,7 @@ function isImagePath(path: string): boolean {
 
 const sendVoucherPreviewSrc = ref<string | null>(null);
 const paymentVoucherPreviewSrc = ref<string | null>(null);
+const checkedImagePreviewSrc = ref<string | null>(null);
 
 const persistedSendVoucherPreviewSrc = computed(() => {
   const v = editSourceTransaction.value?.send_voucher;
@@ -1236,6 +1262,13 @@ const persistedPaymentVoucherPreviewSrc = computed(() => {
     : null;
 });
 
+const persistedCheckedImagePreviewSrc = computed(() => {
+  const v = editSourceTransaction.value?.checked_image;
+  return typeof v === "string" && v.trim() && isImagePath(v)
+    ? voucherMediaHref(v.trim())
+    : null;
+});
+
 const activeSendVoucherPreviewSrc = computed(
   () => sendVoucherPreviewSrc.value ?? persistedSendVoucherPreviewSrc.value,
 );
@@ -1244,13 +1277,34 @@ const activePaymentVoucherPreviewSrc = computed(
   () => paymentVoucherPreviewSrc.value ?? persistedPaymentVoucherPreviewSrc.value,
 );
 
+const activeCheckedImagePreviewSrc = computed(
+  () => checkedImagePreviewSrc.value ?? persistedCheckedImagePreviewSrc.value,
+);
+
+function nowLocalDateTimeValue(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function onVoucherFileSelect(
-  field: "send_voucher" | "payment_voucher",
+  field: "send_voucher" | "payment_voucher" | "checked_image",
   event: Event,
 ) {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0] ?? null;
   form[field] = file;
+  if (field === "checked_image" && file) {
+    form.checked = true;
+  }
+  if (field === "payment_voucher" && file) {
+    if (!form.payment_date?.trim()) {
+      form.payment_date = nowLocalDateTimeValue();
+    }
+    if (!["failed", "cancelled"].includes((form.status ?? "").toLowerCase())) {
+      form.status = "completed";
+    }
+  }
   input.value = "";
 }
 
@@ -1274,10 +1328,15 @@ watch(
   () => form.payment_voucher,
   (v) => updateVoucherPreview(paymentVoucherPreviewSrc, v),
 );
+watch(
+  () => form.checked_image,
+  (v) => updateVoucherPreview(checkedImagePreviewSrc, v),
+);
 
 onBeforeUnmount(() => {
   revokeIfBlob(sendVoucherPreviewSrc.value);
   revokeIfBlob(paymentVoucherPreviewSrc.value);
+  revokeIfBlob(checkedImagePreviewSrc.value);
 });
 
 async function submitImport() {
@@ -2591,7 +2650,7 @@ onMounted(() => {
                               Adjunta o reemplaza comprobantes.
                             </p>
                           </div>
-                          <div class="grid gap-4 md:grid-cols-2">
+                          <div class="grid gap-4 md:grid-cols-3">
                             <div class="rounded-2xl border border-[#e8eef8] bg-white p-4">
                               <div class="mb-3 flex items-start justify-between gap-3">
                                 <div>
@@ -2669,6 +2728,49 @@ onMounted(() => {
                                   getVoucherLabel(
                                     form.payment_voucher ??
                                       editSourceTransaction?.payment_voucher,
+                                  )
+                                }}
+                              </p>
+                            </div>
+
+                            <div class="rounded-2xl border border-[#e8eef8] bg-white p-4">
+                              <div class="mb-3 flex items-start justify-between gap-3">
+                                <div>
+                                  <h4 class="text-sm font-semibold text-[#232b4d]">
+                                    Verificación
+                                  </h4>
+                                  <p class="mt-0.5 text-xs text-[#6b7280]">
+                                    Marca la operación
+                                  </p>
+                                </div>
+                              </div>
+                              <label
+                                class="inline-flex cursor-pointer items-center justify-center rounded-xl border border-[#d5def0] bg-[#f8faff] px-4 py-2.5 text-sm font-semibold text-brasper-indigoStrong transition hover:border-brasper-indigoStrong/40 hover:bg-white"
+                              >
+                                <input
+                                  type="file"
+                                  class="sr-only"
+                                  @change="onVoucherFileSelect('checked_image', $event)"
+                                />
+                                Seleccionar archivo
+                              </label>
+                              <img
+                                v-if="activeCheckedImagePreviewSrc"
+                                :src="activeCheckedImagePreviewSrc"
+                                alt="Vista previa imagen de verificación"
+                                class="mt-3 max-h-24 w-full rounded-lg border border-[#e5e7eb] object-contain"
+                              />
+                              <p
+                                v-if="form.checked_image || editSourceTransaction?.checked_image"
+                                class="mt-3 truncate text-xs font-medium text-[#374151]"
+                                :title="
+                                  getVoucherLabel(form.checked_image ?? editSourceTransaction?.checked_image)
+                                "
+                              >
+                                {{
+                                  getVoucherLabel(
+                                    form.checked_image ??
+                                      editSourceTransaction?.checked_image,
                                   )
                                 }}
                               </p>
@@ -3034,7 +3136,7 @@ onMounted(() => {
                 </span>
               </div>
 
-              <div class="grid gap-5 md:grid-cols-2">
+              <div class="grid gap-5 md:grid-cols-3">
                 <div
                   class="flex flex-col rounded-xl border border-[#d8e5fb] bg-white p-5 shadow-sm shadow-brasper-indigoStrong/5"
                 >
@@ -3144,6 +3246,62 @@ onMounted(() => {
                     :title="getVoucherLabel(form.payment_voucher)"
                   >
                     {{ getVoucherLabel(form.payment_voucher) }}
+                  </p>
+                </div>
+
+                <div
+                  class="flex flex-col rounded-xl border border-[#d8e5fb] bg-white p-5 shadow-sm shadow-brasper-indigoStrong/5"
+                >
+                  <div class="mb-4 flex items-start gap-3">
+                    <span
+                      class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-800"
+                    >
+                      <svg
+                        class="h-5 w-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M9 12l2 2 4-4m5-2a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
+                      </svg>
+                    </span>
+                    <div class="min-w-0">
+                      <h3 class="text-base font-semibold text-[#232b4d]">
+                        Verificación
+                      </h3>
+                      <p class="mt-0.5 text-xs text-[#6b7280]">
+                        Imagen de checklist
+                      </p>
+                    </div>
+                  </div>
+                  <label
+                    class="inline-flex cursor-pointer items-center justify-center rounded-lg border border-[#cfdbef] bg-[#fbfdff] px-4 py-2.5 text-sm font-semibold text-brasper-indigoStrong transition hover:border-brasper-indigoStrong/40 hover:bg-white"
+                  >
+                    <input
+                      type="file"
+                      class="sr-only"
+                      @change="onVoucherFileSelect('checked_image', $event)"
+                    />
+                    Seleccionar archivo
+                  </label>
+                  <img
+                    v-if="checkedImagePreviewSrc"
+                    :src="checkedImagePreviewSrc"
+                    alt="Vista previa imagen de verificación"
+                    class="mt-4 max-h-44 w-full rounded-lg border border-[#e5e7eb] object-contain"
+                  />
+                  <p
+                    v-if="form.checked_image"
+                    class="mt-3 truncate text-xs font-medium text-[#374151]"
+                    :title="getVoucherLabel(form.checked_image)"
+                  >
+                    {{ getVoucherLabel(form.checked_image) }}
                   </p>
                 </div>
               </div>

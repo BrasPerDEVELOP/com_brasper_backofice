@@ -19,6 +19,7 @@ export interface CreateTransactionPayload {
   payment_date?: string
   send_voucher?: string | File | null
   payment_voucher?: string | File | null
+  checked_image?: string | File | null
   /** UUID o null. No enviar "automatic" - el API espera UUID válido. */
   coupon_id?: string | null
   /** En POST el servidor ignora y deja `false`; usar solo en PUT. */

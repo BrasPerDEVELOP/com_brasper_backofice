@@ -312,6 +312,10 @@ export class TransactionsApiAdapter implements TransactionsRepository {
       formData.append('payment_voucher', payload.payment_voucher)
     else if (typeof payload.payment_voucher === 'string' && payload.payment_voucher)
       formData.append('payment_voucher', payload.payment_voucher)
+    if (payload.checked_image instanceof File)
+      formData.append('checked_image', payload.checked_image)
+    else if (typeof payload.checked_image === 'string' && payload.checked_image)
+      formData.append('checked_image', payload.checked_image)
     if (payload.coupon_id != null && String(payload.coupon_id).trim())
       formData.append('coupon_id', String(payload.coupon_id).trim())
 
@@ -337,13 +341,13 @@ export class TransactionsApiAdapter implements TransactionsRepository {
       body.total_to_send = body.total_a_enviar
     }
     /**
-     * El servidor recalcula `status` salvo `failed`.
-     * No enviar otros estados manualmente (verification / verified / completed).
+     * El servidor recalcula `status`, pero permitimos enviar estados terminales
+     * explícitos desde UI cuando el flujo operativo ya los determinó.
      */
     if (
       body.status !== undefined &&
       typeof body.status === 'string' &&
-      body.status.toLowerCase().trim() !== 'failed'
+      !['failed', 'completed'].includes(body.status.toLowerCase().trim())
     ) {
       delete body.status
     }
