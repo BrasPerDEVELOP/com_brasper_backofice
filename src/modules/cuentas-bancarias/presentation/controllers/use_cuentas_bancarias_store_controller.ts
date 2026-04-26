@@ -128,7 +128,9 @@ export const useCuentasBancariasStore = defineStore('cuentasBancarias', {
       }
     },
 
-    async createBankAccount(payload: Omit<CreateBankAccountPayload, 'user_id'> & { user_id?: string }) {
+    async createBankAccount(
+      payload: Omit<CreateBankAccountPayload, 'user_id'> & { user_id?: string }
+    ): Promise<BankAccount> {
       this.isCreating = true
       this.error = null
       try {
@@ -141,8 +143,9 @@ export const useCuentasBancariasStore = defineStore('cuentasBancarias', {
           user_id: userId
         }
         const repo = getRepository()
-        await repo.createBankAccount(fullPayload)
-        await this.loadBankAccounts({ userId })
+        const created = await repo.createBankAccount(fullPayload)
+        await this.loadBankAccounts()
+        return created
       } catch (e) {
         this.error = e instanceof Error ? e.message : 'Error al crear cuenta bancaria'
         throw e

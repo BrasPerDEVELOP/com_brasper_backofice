@@ -26,6 +26,9 @@ import {
 } from "../../domain/models";
 import AppDropdown from "@/interface/components/AppDropdown.vue";
 import AppDateInput from "@/interface/components/AppDateInput.vue";
+import UsuarioCreateFormModal from "@/interface/components/UsuarioCreateFormModal.vue";
+import CuentaBancariaCreateFormModal from "@/interface/components/CuentaBancariaCreateFormModal.vue";
+import type { UserListItem } from "@modules/auth/infrastructure/adapters/users_management_api_adapter";
 import CalculatorConversionCard from "@modules/calculator/presentation/components/CalculatorConversionCard.vue";
 import { Domain } from "@/interface/infrastructure/services";
 import { useTransactionPreviewController } from "../controllers/use_transaction_preview_controller";
@@ -48,6 +51,11 @@ const fileInputSimple = ref<HTMLInputElement | null>(null);
 const importingSimple = ref(false);
 const importSimpleError = ref("");
 const showPreviewModal = ref(false);
+const showTransactionClientModal = ref(false);
+const showBankAccountCreateModal = ref(false);
+const bankAccountCreateFlow = ref<"origin" | "destination">("origin");
+const TRANSACTION_BANK_MODAL_COUNTRY = "pe" as const;
+const transactionBankModalHolder = ref<"natural" | "juridica">("natural");
 const previewTransaction = ref<Transaction | null>(null);
 const previewLoading = ref(false);
 const editModalLoading = ref(false);
@@ -77,7 +85,8 @@ const statusOptions = computed(() => [
 
 const ALL_VALUE = "";
 const EDITABLE_USER_ROLES = ["admin", "commercial", "comercial", "sales"] as const;
-const AGENT_USER_ROLES = ["admin", "commercial", "comercial"] as const;
+/** Selector Agente: solo ventas (`sales`) y admin (API GET /user/?role=). */
+const AGENT_USER_ROLES = ["admin", "sales"] as const;
 const editableUsers = ref<
   { id: string; name: string; email: string; role?: string }[]
 >([]);
@@ -245,6 +254,36 @@ function goCreatePrev() {
   if (createStepIndex.value > 0) {
     createStepIndex.value--;
     if (transactionsStore.error) transactionsStore.error = null;
+  }
+}
+
+function openTransactionClientModal() {
+  transactionsStore.error = null;
+  showTransactionClientModal.value = true;
+}
+
+function onTransactionClientCreated(user: UserListItem) {
+  form.user_id = user.id;
+  void cuentasStore.loadTransactionFormUsers(true);
+  void cuentasStore.loadClientUsers(true);
+}
+
+function openBankAccountModalFromTransaction(flow: "origin" | "destination") {
+  if (!form.user_id?.trim()) {
+    transactionsStore.error =
+      "Selecciona un cliente antes de crear una cuenta bancaria.";
+    return;
+  }
+  transactionsStore.error = null;
+  bankAccountCreateFlow.value = flow;
+  showBankAccountCreateModal.value = true;
+}
+
+function onTransactionBankAccountCreated(account: BankAccount) {
+  if (bankAccountCreateFlow.value === "origin") {
+    form.bank_account_origin_id = account.id;
+  } else {
+    form.bank_account_destination_id = account.id;
   }
 }
 
@@ -2595,12 +2634,42 @@ onMounted(() => {
                               <label class="block text-sm font-medium text-[#374151]"
                                 >Usuario *</label
                               >
-                              <AppDropdown
-                                v-model="form.user_id"
-                                :options="editableUserOptions"
-                                placeholder="Seleccionar usuario"
-                                :searchable="editableUserOptions.length > 10"
-                              />
+                              <div class="flex gap-2">
+                                <AppDropdown
+                                  v-model="form.user_id"
+                                  :options="editableUserOptions"
+                                  placeholder="Seleccionar usuario"
+                                  :searchable="editableUserOptions.length > 10"
+                                  class="min-w-0 flex-1"
+                                />
+                                <button
+                                  type="button"
+                                  class="flex shrink-0 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white p-2.5 text-[#6b7280] transition hover:border-[#d1d5db] hover:bg-[#f9fafb] hover:text-[#374151]"
+                                  title="Nuevo cliente"
+                                  @click="openTransactionClientModal"
+                                >
+                                  <svg
+                                    class="h-5 w-5"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                    aria-hidden="true"
+                                  >
+                                    <path
+                                      stroke-linecap="round"
+                                      stroke-linejoin="round"
+                                      stroke-width="2"
+                                      d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                                    />
+                                    <path
+                                      stroke-linecap="round"
+                                      stroke-linejoin="round"
+                                      stroke-width="2"
+                                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                                    />
+                                  </svg>
+                                </button>
+                              </div>
                             </div>
                             <div class="space-y-1.5">
                               <label class="block text-sm font-medium text-[#374151]"
@@ -2617,23 +2686,83 @@ onMounted(() => {
                               <label class="block text-sm font-medium text-[#374151]"
                                 >Cuenta origen *</label
                               >
-                              <AppDropdown
-                                v-model="form.bank_account_origin_id"
-                                :options="originAccountOptions"
-                                placeholder="Cuenta de origen"
-                                :searchable="originAccountOptions.length > 5"
-                              />
+                              <div class="flex gap-2">
+                                <AppDropdown
+                                  v-model="form.bank_account_origin_id"
+                                  :options="originAccountOptions"
+                                  placeholder="Cuenta de origen"
+                                  :searchable="originAccountOptions.length > 5"
+                                  class="min-w-0 flex-1"
+                                />
+                                <button
+                                  type="button"
+                                  class="flex shrink-0 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white p-2.5 text-[#6b7280] transition hover:border-[#d1d5db] hover:bg-[#f9fafb] hover:text-[#374151]"
+                                  title="Nueva cuenta bancaria (origen)"
+                                  @click="openBankAccountModalFromTransaction('origin')"
+                                >
+                                  <svg
+                                    class="h-5 w-5"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                    aria-hidden="true"
+                                  >
+                                    <path
+                                      stroke-linecap="round"
+                                      stroke-linejoin="round"
+                                      stroke-width="2"
+                                      d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                                    />
+                                    <path
+                                      stroke-linecap="round"
+                                      stroke-linejoin="round"
+                                      stroke-width="2"
+                                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                                    />
+                                  </svg>
+                                </button>
+                              </div>
                             </div>
                             <div class="space-y-1.5">
                               <label class="block text-sm font-medium text-[#374151]"
                                 >Cuenta destino *</label
                               >
-                              <AppDropdown
-                                v-model="form.bank_account_destination_id"
-                                :options="destinationAccountOptions"
-                                placeholder="Cuenta destino"
-                                :searchable="destinationAccountOptions.length > 5"
-                              />
+                              <div class="flex gap-2">
+                                <AppDropdown
+                                  v-model="form.bank_account_destination_id"
+                                  :options="destinationAccountOptions"
+                                  placeholder="Cuenta destino"
+                                  :searchable="destinationAccountOptions.length > 5"
+                                  class="min-w-0 flex-1"
+                                />
+                                <button
+                                  type="button"
+                                  class="flex shrink-0 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white p-2.5 text-[#6b7280] transition hover:border-[#d1d5db] hover:bg-[#f9fafb] hover:text-[#374151]"
+                                  title="Nueva cuenta bancaria (destino)"
+                                  @click="openBankAccountModalFromTransaction('destination')"
+                                >
+                                  <svg
+                                    class="h-5 w-5"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                    aria-hidden="true"
+                                  >
+                                    <path
+                                      stroke-linecap="round"
+                                      stroke-linejoin="round"
+                                      stroke-width="2"
+                                      d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                                    />
+                                    <path
+                                      stroke-linecap="round"
+                                      stroke-linejoin="round"
+                                      stroke-width="2"
+                                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                                    />
+                                  </svg>
+                                </button>
+                              </div>
                             </div>
                             <div class="space-y-1.5">
                               <label class="block text-sm font-medium text-[#374151]"
@@ -2912,12 +3041,42 @@ onMounted(() => {
                     <label class="block text-sm font-medium text-[#374151]"
                       >Cliente *</label
                     >
-                    <AppDropdown
-                      v-model="form.user_id"
-                      :options="clientOptions"
-                      placeholder="Seleccionar cliente"
-                      :searchable="clientOptions.length > 10"
-                    />
+                    <div class="flex gap-2">
+                      <AppDropdown
+                        v-model="form.user_id"
+                        :options="clientOptions"
+                        placeholder="Seleccionar cliente"
+                        :searchable="clientOptions.length > 10"
+                        class="min-w-0 flex-1"
+                      />
+                      <button
+                        type="button"
+                        class="flex shrink-0 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white p-2.5 text-[#6b7280] transition hover:border-[#d1d5db] hover:bg-[#f9fafb] hover:text-[#374151]"
+                        title="Nuevo cliente"
+                        @click="openTransactionClientModal"
+                      >
+                        <svg
+                          class="h-5 w-5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                          />
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                          />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                   <div class="space-y-1.5">
                     <label class="block text-sm font-medium text-[#374151]"
@@ -2934,23 +3093,83 @@ onMounted(() => {
                     <label class="block text-sm font-medium text-[#374151]"
                       >Cuenta origen *</label
                     >
-                    <AppDropdown
-                      v-model="form.bank_account_origin_id"
-                      :options="originAccountOptions"
-                      placeholder="Cuenta de origen"
-                      :searchable="originAccountOptions.length > 5"
-                    />
+                    <div class="flex gap-2">
+                      <AppDropdown
+                        v-model="form.bank_account_origin_id"
+                        :options="originAccountOptions"
+                        placeholder="Cuenta de origen"
+                        :searchable="originAccountOptions.length > 5"
+                        class="min-w-0 flex-1"
+                      />
+                      <button
+                        type="button"
+                        class="flex shrink-0 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white p-2.5 text-[#6b7280] transition hover:border-[#d1d5db] hover:bg-[#f9fafb] hover:text-[#374151]"
+                        title="Nueva cuenta bancaria (origen)"
+                        @click="openBankAccountModalFromTransaction('origin')"
+                      >
+                        <svg
+                          class="h-5 w-5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                          />
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                          />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                   <div class="space-y-1.5">
                     <label class="block text-sm font-medium text-[#374151]"
                       >Cuenta destino *</label
                     >
-                    <AppDropdown
-                      v-model="form.bank_account_destination_id"
-                      :options="destinationAccountOptions"
-                      placeholder="Cuenta de destino"
-                      :searchable="destinationAccountOptions.length > 5"
-                    />
+                    <div class="flex gap-2">
+                      <AppDropdown
+                        v-model="form.bank_account_destination_id"
+                        :options="destinationAccountOptions"
+                        placeholder="Cuenta de destino"
+                        :searchable="destinationAccountOptions.length > 5"
+                        class="min-w-0 flex-1"
+                      />
+                      <button
+                        type="button"
+                        class="flex shrink-0 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white p-2.5 text-[#6b7280] transition hover:border-[#d1d5db] hover:bg-[#f9fafb] hover:text-[#374151]"
+                        title="Nueva cuenta bancaria (destino)"
+                        @click="openBankAccountModalFromTransaction('destination')"
+                      >
+                        <svg
+                          class="h-5 w-5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                          />
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                          />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </section>
@@ -3581,5 +3800,20 @@ onMounted(() => {
         </div>
       </div>
     </Teleport>
+
+    <UsuarioCreateFormModal
+      v-model="showTransactionClientModal"
+      :show-role-field="false"
+      default-role="client"
+      @created="onTransactionClientCreated"
+    />
+    <CuentaBancariaCreateFormModal
+      v-model="showBankAccountCreateModal"
+      :account-flow="bankAccountCreateFlow"
+      :bank-country="TRANSACTION_BANK_MODAL_COUNTRY"
+      :holder-type="transactionBankModalHolder"
+      :locked-user-id="form.user_id?.trim() || undefined"
+      @created="onTransactionBankAccountCreated"
+    />
   </div>
 </template>
