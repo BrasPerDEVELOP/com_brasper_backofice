@@ -1,4 +1,4 @@
-import type { Transaction } from "./models/Transaction";
+import type { Transaction } from "./models/transaction";
 
 /**
  * Estado de negocio normalizado (minúsculas, sin espacios) para comparar con API y filtros.

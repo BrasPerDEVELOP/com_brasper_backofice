@@ -1,4 +1,9 @@
-import { apiClient } from '@/interface/api/client'
+import {
+  apiClient,
+  getApiAuthHeaders,
+  triggerUnauthorized
+} from '@/interface/api/client'
+import { formatApiErrorBody } from '@/interface/api/format_api_error'
 import { Domain } from '@/interface/infrastructure/services'
 import { env } from '@/interface/config/env'
 import type {
@@ -15,10 +20,15 @@ function parseOptionalAmount(v: unknown): number | undefined {
   return Number.isFinite(n) ? n : undefined
 }
 
+function appendFileToForm(form: FormData, key: string, file: File): void {
+  const name = file.name?.trim() || 'upload'
+  form.append(key, file, name)
+}
+
 function appendFormValue(form: FormData, key: string, value: unknown): void {
   if (value === undefined) return
   if (value instanceof File) {
-    form.append(key, value)
+    appendFileToForm(form, key, value)
     return
   }
   if (typeof value === 'boolean') {
@@ -281,7 +291,9 @@ export class TransactionsApiAdapter implements TransactionsRepository {
   async createTransaction(payload: CreateTransactionPayload): Promise<Transaction> {
     const url = this.endpoint('')
     const formData = new FormData()
-    formData.append('bank_account_origin', payload.bank_account_origin)
+    if (payload.bank_account_origin?.trim()) {
+      formData.append('bank_account_origin', payload.bank_account_origin.trim())
+    }
     formData.append('bank_account_destination', payload.bank_account_destination)
     formData.append('user_id', payload.user_id)
     if (payload.agent_id != null && payload.agent_id !== '') {
@@ -305,22 +317,56 @@ export class TransactionsApiAdapter implements TransactionsRepository {
       formData.append('tax_amount', String(payload.tax_amount))
     }
     if (payload.send_voucher instanceof File)
-      formData.append('send_voucher', payload.send_voucher)
+      appendFileToForm(formData, 'send_voucher', payload.send_voucher)
     else if (typeof payload.send_voucher === 'string' && payload.send_voucher)
       formData.append('send_voucher', payload.send_voucher)
     if (payload.payment_voucher instanceof File)
-      formData.append('payment_voucher', payload.payment_voucher)
+      appendFileToForm(formData, 'payment_voucher', payload.payment_voucher)
     else if (typeof payload.payment_voucher === 'string' && payload.payment_voucher)
       formData.append('payment_voucher', payload.payment_voucher)
     if (payload.checked_image instanceof File)
-      formData.append('checked_image', payload.checked_image)
+      appendFileToForm(formData, 'checked_image', payload.checked_image)
     else if (typeof payload.checked_image === 'string' && payload.checked_image)
       formData.append('checked_image', payload.checked_image)
     if (payload.coupon_id != null && String(payload.coupon_id).trim())
       formData.append('coupon_id', String(payload.coupon_id).trim())
 
-    const response = await apiClient.post<unknown>(url, formData)
-    const raw = response.data
+    /**
+     * `fetch` + FormData evita que axios 1.x deje `Content-Type: application/json`
+     * y corrompa el multipart (400 del servidor al subir archivos).
+     */
+    const res = await fetch(url, {
+      method: 'POST',
+      body: formData,
+      headers: getApiAuthHeaders()
+    })
+
+    const ct = res.headers.get('content-type') ?? ''
+    let raw: unknown = null
+    if (ct.includes('application/json')) {
+      raw = await res.json().catch(() => null)
+    } else {
+      const text = await res.text().catch(() => '')
+      if (text) {
+        try {
+          raw = JSON.parse(text)
+        } catch {
+          raw = text
+        }
+      }
+    }
+
+    if (res.status === 401) {
+      triggerUnauthorized()
+      throw new Error('Sesión expirada o no autorizado')
+    }
+
+    if (!res.ok) {
+      const msg =
+        formatApiErrorBody(raw) ?? `Error al crear transacción (${res.status})`
+      throw new Error(msg)
+    }
+
     const obj = raw != null && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
     const item = (obj.data ?? obj) as Record<string, unknown>
     return transactionFromApiRecord(item)

@@ -1,4 +1,6 @@
 import { defineStore } from 'pinia'
+import axios from 'axios'
+import { formatApiErrorBody } from '@/interface/api/format_api_error'
 import type { Transaction } from '../../domain/models'
 import type {
   CreateTransactionPayload,
@@ -22,6 +24,16 @@ function getTransactionsRepository(): TransactionsRepository {
     transactionsRepositorySingleton = new TransactionsApiAdapter()
   }
   return transactionsRepositorySingleton
+}
+
+function errorMessageFromCatch(e: unknown, fallback: string): string {
+  if (axios.isAxiosError(e)) {
+    const fromBody = formatApiErrorBody(e.response?.data)
+    if (fromBody) return fromBody
+    if (e.message) return e.message
+  }
+  if (e instanceof Error) return e.message
+  return fallback
 }
 
 interface TransactionsState {
@@ -90,7 +102,7 @@ export const useTransactionsStore = defineStore('transactions', {
         this.transactions = [created, ...this.transactions]
         return created
       } catch (e) {
-        this.error = e instanceof Error ? e.message : 'Error al crear transacción'
+        this.error = errorMessageFromCatch(e, 'Error al crear transacción')
         throw e
       } finally {
         this.isCreating = false
@@ -108,7 +120,7 @@ export const useTransactionsStore = defineStore('transactions', {
         if (idx >= 0) this.transactions[idx] = updated
         return updated
       } catch (e) {
-        this.error = e instanceof Error ? e.message : 'Error al actualizar transacción'
+        this.error = errorMessageFromCatch(e, 'Error al actualizar transacción')
         throw e
       } finally {
         this.isUpdating = false

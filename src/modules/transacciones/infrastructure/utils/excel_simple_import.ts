@@ -40,7 +40,7 @@ export function rowToCreatePayload(row: Record<string, unknown>): CreateTransact
   const tax_rate_id = get(row, 'tax_rate_id', 'tasa', 'tax_rate')
   const commission_id = get(row, 'commission_id', 'comision', 'commission')
 
-  if (!bank_account_origin || !bank_account_destination || !user_id || !tax_rate_id || !commission_id) {
+  if (!bank_account_destination || !user_id || !tax_rate_id || !commission_id) {
     return null
   }
 
@@ -68,7 +68,7 @@ export function rowToCreatePayload(row: Record<string, unknown>): CreateTransact
   const payment_date = get(row, 'payment_date', 'fecha_pago', 'fecha pago')
 
   return {
-    bank_account_origin,
+    ...(bank_account_origin ? { bank_account_origin } : {}),
     bank_account_destination,
     user_id,
     tax_rate_id,

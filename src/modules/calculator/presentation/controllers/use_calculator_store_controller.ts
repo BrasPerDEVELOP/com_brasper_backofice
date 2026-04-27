@@ -96,7 +96,6 @@ function buildNormalResult(
     commission: baseCommission,
     commissionRate: p * 100,
     totalToSend,
-    couponDiscount: 0,
     calculationMode: 'normal',
     baseCommission,
     specialDiscountPercentage: 0,
@@ -126,7 +125,7 @@ function buildSpecialResult(
   let specialDiscountInvalidReason: string | null = null
 
   if (baseCommission <= 0) {
-    specialDiscountValid = finalCommission === 0
+    specialDiscountValid = Math.abs(finalCommission) < 1e-9
     if (!specialDiscountValid) {
       specialDiscountInvalidReason =
         'La comision base es 0%; no se puede aplicar un descuento especial para sostener este monto.'
@@ -148,7 +147,6 @@ function buildSpecialResult(
     commission: finalCommission,
     commissionRate: p * 100,
     totalToSend: gross - finalCommission,
-    couponDiscount: specialDiscountAmount,
     calculationMode: 'special',
     baseCommission,
     specialDiscountPercentage,

@@ -1,7 +1,8 @@
 import type { Transaction } from '../../domain/models'
 
 export interface CreateTransactionPayload {
-  bank_account_origin: string
+  /** Opcional: el flujo permite crear sin cuenta de origen asignada. */
+  bank_account_origin?: string
   bank_account_destination: string
   user_id: string
   agent_id?: string

@@ -6,8 +6,7 @@ import {
   type CreateUserPayload,
   type UserListItem
 } from '@/modules/auth/infrastructure/adapters/users_management_api_adapter'
-import { USER_ROLE_LABELS } from '@/modules/auth/domain/models/user_roles'
-import { PHONE_CODES } from '@/modules/auth/domain/models/phone_codes'
+import { USER_ROLE_LABELS, PHONE_CODES } from '@/modules/auth/domain/models'
 import AppDropdown from '@/interface/components/AppDropdown.vue'
 
 const props = withDefaults(

@@ -1,4 +1,4 @@
-import axios, { type AxiosInstance } from 'axios'
+import axios, { type AxiosInstance, AxiosHeaders } from 'axios'
 
 declare module 'axios' {
   interface AxiosRequestConfig {
@@ -40,6 +40,9 @@ export function setAuthCallbacks(
 
 const baseURL = Domain.buildBaseUrl()
 
+// Request: inyectar token (Bearer o Token según backend)
+const AUTH_PREFIX = (import.meta.env.VITE_AUTH_HEADER_PREFIX as string)?.trim() || 'Bearer'
+
 export const apiClient: AxiosInstance = axios.create({
   baseURL,
   headers: {
@@ -47,8 +50,16 @@ export const apiClient: AxiosInstance = axios.create({
   }
 })
 
-// Request: inyectar token (Bearer o Token según backend)
-const AUTH_PREFIX = (import.meta.env.VITE_AUTH_HEADER_PREFIX as string)?.trim() || 'Bearer'
+/** Para `fetch` + FormData: misma auth que axios, sin Content-Type (boundary del navegador). */
+export function getApiAuthHeaders(): HeadersInit {
+  const token = getToken()
+  if (!token) return {}
+  return { Authorization: `${AUTH_PREFIX} ${token}` }
+}
+
+export function triggerUnauthorized(): void {
+  onUnauthorized()
+}
 
 apiClient.interceptors.request.use(
   (config) => {
@@ -57,7 +68,9 @@ apiClient.interceptors.request.use(
       config.headers.Authorization = `${AUTH_PREFIX} ${token}`
     }
     if (config.data instanceof FormData) {
-      delete config.headers['Content-Type']
+      const headers = AxiosHeaders.from(config.headers ?? {})
+      headers.delete('Content-Type')
+      config.headers = headers
     }
     if (import.meta.env.DEV && config.url) {
       const method = (config.method ?? 'GET').toUpperCase()

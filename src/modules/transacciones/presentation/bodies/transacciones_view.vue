@@ -85,16 +85,10 @@ const statusOptions = computed(() => [
 
 const ALL_VALUE = "";
 const EDITABLE_USER_ROLES = ["admin", "commercial", "comercial", "sales"] as const;
-/** Selector Agente: solo ventas (`sales`) y admin (API GET /user/?role=). */
-const AGENT_USER_ROLES = ["admin", "sales"] as const;
 const editableUsers = ref<
   { id: string; name: string; email: string; role?: string }[]
 >([]);
 const editableUsersLoaded = ref(false);
-const agentUsers = ref<
-  { id: string; name: string; email: string; role?: string }[]
->([]);
-const agentUsersLoaded = ref(false);
 
 const userFilterOptions = computed(() => [
   { value: ALL_VALUE, label: "Todos" },
@@ -236,13 +230,9 @@ function goCreateNext() {
     return;
   }
   if (i === 1) {
-    if (
-      !form.user_id?.trim() ||
-      !form.bank_account_origin_id?.trim() ||
-      !form.bank_account_destination_id?.trim()
-    ) {
+    if (!form.user_id?.trim() || !form.bank_account_destination_id?.trim()) {
       transactionsStore.error =
-        "Indica cliente, cuenta origen y cuenta destino para continuar.";
+        "Indica cliente y cuenta destino para continuar.";
       return;
     }
     transactionsStore.error = null;
@@ -377,27 +367,6 @@ function mergeMissingEditableUser(
   return [...options, { value: id, label: id }];
 }
 
-function mergeMissingAgentUser(
-  options: { value: string; label: string }[],
-  selectedId: string,
-): { value: string; label: string }[] {
-  const id = selectedId?.trim();
-  if (!id) return options;
-  if (options.some((o) => String(o.value) === id)) return options;
-
-  const existing =
-    agentUsers.value.find((u) => String(u.id) === id) ??
-    editableUsers.value.find((u) => String(u.id) === id) ??
-    cuentasStore.transactionFormUsers.find((u) => String(u.id) === id) ??
-    cuentasStore.clientUsers.find((u) => String(u.id) === id);
-
-  if (existing) {
-    return [...options, { value: existing.id, label: existing.name }];
-  }
-
-  return [...options, { value: id, label: id }];
-}
-
 const clientOptions = computed(() => {
   const base = cuentasStore.transactionFormUsers.map((u) => ({
     value: u.id,
@@ -406,28 +375,12 @@ const clientOptions = computed(() => {
   return mergeMissingTransactionUser(base, form.user_id);
 });
 
-const agentClientOptions = computed(() => {
-  const base = agentUsers.value.map((u) => ({
-    value: u.id,
-    label: u.name,
-  }));
-  return mergeMissingAgentUser(base, form.agent_id);
-});
-
 const editableUserOptions = computed(() => {
   const base = editableUsers.value.map((u) => ({
     value: u.id,
     label: u.name,
   }));
   return mergeMissingEditableUser(base, form.user_id);
-});
-
-const editableAgentOptions = computed(() => {
-  const base = agentUsers.value.map((u) => ({
-    value: u.id,
-    label: u.name,
-  }));
-  return mergeMissingAgentUser(base, form.agent_id);
 });
 
 const taxRateOptions = computed(() =>
@@ -639,7 +592,6 @@ function openCreateModal() {
   createStepIndex.value = 0;
   showCreateModal.value = true;
   loadFormOptions();
-  void loadAgentUsers();
   calculatorStore.setDemoMode(false);
   void calculatorStore.loadData();
 }
@@ -680,34 +632,6 @@ async function loadEditableUsers() {
     a.name.localeCompare(b.name, "es"),
   );
   editableUsersLoaded.value = true;
-}
-
-async function loadAgentUsers() {
-  if (agentUsersLoaded.value) return;
-  const byId = new Map<
-    string,
-    { id: string; name: string; email: string; role?: string }
-  >();
-
-  await Promise.all(
-    AGENT_USER_ROLES.map(async (role) => {
-      try {
-        const users = await fetchUsers({ role });
-        for (const user of users) {
-          if (!byId.has(user.id)) {
-            byId.set(user.id, user);
-          }
-        }
-      } catch {
-        /* si un alias no existe en backend, seguimos con los demás */
-      }
-    }),
-  );
-
-  agentUsers.value = Array.from(byId.values()).sort((a, b) =>
-    a.name.localeCompare(b.name, "es"),
-  );
-  agentUsersLoaded.value = true;
 }
 
 async function withTimeout<T>(
@@ -797,7 +721,6 @@ async function openEditModal(t: Transaction) {
     syncCalculatorFromForm();
     void loadFormOptions();
     void loadEditableUsers();
-    void loadAgentUsers();
     void (async () => {
       try {
         const fresh = await withTimeout(
@@ -828,13 +751,9 @@ async function submitForm() {
     transactionsStore.error = calculatorError;
     return;
   }
-  if (
-    !form.bank_account_origin_id ||
-    !form.bank_account_destination_id ||
-    !form.user_id
-  ) {
+  if (!form.bank_account_destination_id || !form.user_id) {
     transactionsStore.error =
-      "Cuenta origen, cuenta destino y cliente son obligatorios";
+      "Cuenta destino y cliente son obligatorios";
     return;
   }
   if (!form.tax_rate_id || !form.commission_id) {
@@ -882,10 +801,16 @@ async function submitForm() {
       form.code?.trim() ||
       `TRX-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const commonAmounts = {
-      bank_account_origin: form.bank_account_origin_id,
+      ...(form.bank_account_origin_id?.trim()
+        ? { bank_account_origin: form.bank_account_origin_id.trim() }
+        : {}),
       bank_account_destination: form.bank_account_destination_id,
       user_id: form.user_id,
-      agent_id: form.agent_id || form.user_id,
+      agent_id:
+        form.agent_id?.trim() &&
+        form.agent_id.trim() !== form.user_id?.trim()
+          ? form.agent_id.trim()
+          : undefined,
       tax_rate_id: form.tax_rate_id,
       commission_id: form.commission_id,
       origin_amount: roundMoneyAmount(form.origin_amount),
@@ -1472,13 +1397,11 @@ function loadTransactions() {
 
 watch(
   () => form.user_id,
-  (nextUserId, prevUserId) => {
+  () => {
     if (isHydratingTransactionForm.value) return;
     form.bank_account_origin_id = "";
     form.bank_account_destination_id = "";
-    if (!form.agent_id || form.agent_id === (prevUserId ?? "")) {
-      form.agent_id = nextUserId ?? "";
-    }
+    form.agent_id = "";
   },
 );
 
@@ -2287,7 +2210,6 @@ onMounted(() => {
       <div
         v-if="showCreateModal"
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-        @click.self="showCreateModal = false"
       >
         <div
           class="flex max-h-[90vh] w-full flex-col overflow-hidden rounded-2xl border border-[#e5e7eb] bg-white shadow-xl"
@@ -2630,7 +2552,7 @@ onMounted(() => {
                             </div>
                           </div>
                           <div class="grid gap-4 sm:grid-cols-2">
-                            <div class="space-y-1.5">
+                            <div class="space-y-1.5 sm:col-span-2">
                               <label class="block text-sm font-medium text-[#374151]"
                                 >Usuario *</label
                               >
@@ -2673,18 +2595,7 @@ onMounted(() => {
                             </div>
                             <div class="space-y-1.5">
                               <label class="block text-sm font-medium text-[#374151]"
-                                >Agente</label
-                              >
-                              <AppDropdown
-                                v-model="form.agent_id"
-                                :options="editableAgentOptions"
-                                placeholder="Seleccionar agente"
-                                :searchable="editableAgentOptions.length > 10"
-                              />
-                            </div>
-                            <div class="space-y-1.5">
-                              <label class="block text-sm font-medium text-[#374151]"
-                                >Cuenta origen *</label
+                                >Cuenta origen</label
                               >
                               <div class="flex gap-2">
                                 <AppDropdown
@@ -3037,7 +2948,7 @@ onMounted(() => {
                   </div>
                 </div>
                 <div class="grid gap-5 sm:grid-cols-2">
-                  <div class="space-y-1.5">
+                  <div class="space-y-1.5 sm:col-span-2">
                     <label class="block text-sm font-medium text-[#374151]"
                       >Cliente *</label
                     >
@@ -3080,18 +2991,7 @@ onMounted(() => {
                   </div>
                   <div class="space-y-1.5">
                     <label class="block text-sm font-medium text-[#374151]"
-                      >Agente</label
-                    >
-                    <AppDropdown
-                      v-model="form.agent_id"
-                      :options="agentClientOptions"
-                      placeholder="Seleccionar agente"
-                      :searchable="agentClientOptions.length > 10"
-                    />
-                  </div>
-                  <div class="space-y-1.5">
-                    <label class="block text-sm font-medium text-[#374151]"
-                      >Cuenta origen *</label
+                      >Cuenta origen</label
                     >
                     <div class="flex gap-2">
                       <AppDropdown
@@ -3365,7 +3265,8 @@ onMounted(() => {
               @submit.prevent="submitForm"
             >
               <p class="text-sm leading-relaxed text-[#6b7280]">
-                Adjunta comprobantes o archivos de respaldo. Son opcionales.
+                Adjunta comprobantes (PDF o imagen). Son opcionales y se envían al
+                guardar con el resto del alta.
               </p>
 
               <div
@@ -3430,6 +3331,7 @@ onMounted(() => {
                     <input
                       type="file"
                       class="sr-only"
+                      accept="image/*,.pdf,application/pdf"
                       @change="onVoucherFileSelect('send_voucher', $event)"
                     />
                     Seleccionar archivo
@@ -3486,6 +3388,7 @@ onMounted(() => {
                     <input
                       type="file"
                       class="sr-only"
+                      accept="image/*,.pdf,application/pdf"
                       @change="onVoucherFileSelect('payment_voucher', $event)"
                     />
                     Seleccionar archivo
@@ -3542,6 +3445,7 @@ onMounted(() => {
                     <input
                       type="file"
                       class="sr-only"
+                      accept="image/*,.pdf,application/pdf"
                       @change="onVoucherFileSelect('checked_image', $event)"
                     />
                     Seleccionar archivo

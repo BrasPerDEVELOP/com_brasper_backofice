@@ -48,7 +48,6 @@ export function assertCreateTransactionPayload(
   p: CreateTransactionPayload,
 ): void {
   const missing: string[] = [];
-  if (!p.bank_account_origin?.trim()) missing.push("cuenta origen");
   if (!p.bank_account_destination?.trim()) missing.push("cuenta destino");
   if (!p.user_id?.trim()) missing.push("cliente");
   if (!p.tax_rate_id?.trim()) missing.push("tasa");

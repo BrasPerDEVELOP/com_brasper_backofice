@@ -8,7 +8,7 @@ import {
   type UserListItem
 } from '../../infrastructure/adapters/users_management_api_adapter'
 import { parseUsersFromExcel } from '../../infrastructure/utils/excel_users_parser'
-import { USER_ROLE_LABELS } from '../../domain/models/user_roles'
+import { USER_ROLE_LABELS } from '../../domain/models'
 import * as XLSX from 'xlsx'
 import AppDropdown from '@/interface/components/AppDropdown.vue'
 import UsuarioCreateFormModal from '@/interface/components/UsuarioCreateFormModal.vue'

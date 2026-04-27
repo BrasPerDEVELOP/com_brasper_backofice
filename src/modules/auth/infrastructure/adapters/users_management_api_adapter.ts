@@ -1,6 +1,6 @@
 import { apiClient } from '@/interface/api/client'
 import { Domain } from '@/interface/infrastructure/services'
-import { USER_ROLES } from '../../domain/models/user_roles'
+import { USER_ROLES } from '../../domain/models'
 
 export { USER_ROLES }
 export interface UserListItem {

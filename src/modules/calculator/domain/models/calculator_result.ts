@@ -5,7 +5,6 @@ export interface CalculatorResult {
   commission: number
   commissionRate: number
   totalToSend: number
-  couponDiscount: number
   calculationMode: 'normal' | 'special'
   baseCommission: number
   specialDiscountPercentage: number
