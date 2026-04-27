@@ -291,16 +291,67 @@ function bankAccountToOption(a: BankAccount) {
   return { value: a.id, label: `${bankName} - ${accNum} (${holder})` };
 }
 
+function normalizeCurrencyCode(value: unknown): string {
+  return value == null ? "" : String(value).trim().toUpperCase();
+}
+
+function getBankAccountCurrency(a: BankAccount): string {
+  const bank = cuentasStore.banks.find((b) => b.id === a.bank_id);
+  return normalizeCurrencyCode(bank?.currency);
+}
+
+const selectedAccountCurrencies = computed(() => {
+  const selectedRate = tasasStore.taxRates.find(
+    (item) => item.id === form.tax_rate_id,
+  );
+  return {
+    origin: normalizeCurrencyCode(
+      selectedRate?.coin_a ?? calculatorStore.currencyFrom,
+    ),
+    destination: normalizeCurrencyCode(
+      selectedRate?.coin_b ?? calculatorStore.currencyTo,
+    ),
+  };
+});
+
+function bankAccountMatchesCurrency(
+  account: BankAccount,
+  expectedCurrency: string,
+): boolean {
+  const currency = normalizeCurrencyCode(expectedCurrency);
+  if (!currency) return true;
+  return getBankAccountCurrency(account) === currency;
+}
+
 function mergeMissingSelectedAccount(
   options: { value: string; label: string }[],
   selectedId: string,
+  expectedCurrency = "",
 ): { value: string; label: string }[] {
   const id = selectedId?.trim();
   if (!id) return options;
   if (options.some((o) => String(o.value) === id)) return options;
   const acc = cuentasStore.bankAccounts.find((a) => String(a.id) === id);
   if (!acc) return options;
+  if (!bankAccountMatchesCurrency(acc, expectedCurrency)) return options;
   return [...options, bankAccountToOption(acc)];
+}
+
+function isBankAccountSelectable(
+  id: string,
+  flow: "origin" | "destination",
+  expectedCurrency: string,
+): boolean {
+  const accountId = id?.trim();
+  if (!accountId) return true;
+  const userId = form.user_id?.trim();
+  const account = cuentasStore.bankAccounts.find(
+    (a) => String(a.id) === accountId,
+  );
+  if (!account) return false;
+  if ((account.account_flow ?? "").toLowerCase() !== flow) return false;
+  if (userId && String(account.user_id ?? "").trim() !== userId) return false;
+  return bankAccountMatchesCurrency(account, expectedCurrency);
 }
 
 /** IDs desde API (string, número u objeto `{ id }`) → string para v-model y dropdowns. */
@@ -315,24 +366,36 @@ function normalizeSelectId(v: unknown): string {
 
 const originAccountOptions = computed(() => {
   const userId = form.user_id?.trim();
+  const currency = selectedAccountCurrencies.value.origin;
   const base = cuentasStore.bankAccounts
     .filter((a) => (a.account_flow ?? "").toLowerCase() === "origin")
+    .filter((a) => bankAccountMatchesCurrency(a, currency))
     .filter(
       (a) => !userId || String(a.user_id ?? "").trim() === userId,
     )
     .map(bankAccountToOption);
-  return mergeMissingSelectedAccount(base, form.bank_account_origin_id);
+  return mergeMissingSelectedAccount(
+    base,
+    form.bank_account_origin_id,
+    currency,
+  );
 });
 
 const destinationAccountOptions = computed(() => {
   const userId = form.user_id?.trim();
+  const currency = selectedAccountCurrencies.value.destination;
   const base = cuentasStore.bankAccounts
     .filter((a) => (a.account_flow ?? "").toLowerCase() === "destination")
+    .filter((a) => bankAccountMatchesCurrency(a, currency))
     .filter(
       (a) => !userId || String(a.user_id ?? "").trim() === userId,
     )
     .map(bankAccountToOption);
-  return mergeMissingSelectedAccount(base, form.bank_account_destination_id);
+  return mergeMissingSelectedAccount(
+    base,
+    form.bank_account_destination_id,
+    currency,
+  );
 });
 
 function mergeMissingTransactionUser(
@@ -1402,6 +1465,45 @@ watch(
     form.bank_account_origin_id = "";
     form.bank_account_destination_id = "";
     form.agent_id = "";
+  },
+);
+
+watch(
+  [
+    () => form.bank_account_origin_id,
+    () => form.bank_account_destination_id,
+    () => form.user_id,
+    () => selectedAccountCurrencies.value.origin,
+    () => selectedAccountCurrencies.value.destination,
+    () => cuentasStore.bankAccounts.length,
+    () => cuentasStore.banks.length,
+  ],
+  () => {
+    if (isHydratingTransactionForm.value) return;
+    if (cuentasStore.bankAccounts.length === 0 || cuentasStore.banks.length === 0)
+      return;
+
+    if (
+      form.bank_account_origin_id &&
+      !isBankAccountSelectable(
+        form.bank_account_origin_id,
+        "origin",
+        selectedAccountCurrencies.value.origin,
+      )
+    ) {
+      form.bank_account_origin_id = "";
+    }
+
+    if (
+      form.bank_account_destination_id &&
+      !isBankAccountSelectable(
+        form.bank_account_destination_id,
+        "destination",
+        selectedAccountCurrencies.value.destination,
+      )
+    ) {
+      form.bank_account_destination_id = "";
+    }
   },
 );
 

@@ -3,3 +3,5 @@ node_modules
 dist
 
 .env
+
+com_brasper_backofice.code-workspace
