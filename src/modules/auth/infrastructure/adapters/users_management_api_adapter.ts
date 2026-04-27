@@ -8,8 +8,12 @@ export interface UserListItem {
   name: string
   email: string
   role?: string
+  names?: string
+  lastnames?: string
   document_number?: string
   document_type?: string
+  phone?: number | null
+  code_phone?: string | null
 }
 
 function parseUser(item: unknown): UserListItem | null {
@@ -24,13 +28,25 @@ function parseUser(item: unknown): UserListItem | null {
   const role = o.role != null ? String(o.role) : undefined
   const document_number = o.document_number != null ? String(o.document_number) : undefined
   const document_type = o.document_type != null ? String(o.document_type) : undefined
+  const phoneVal = o.phone ?? o.telefono
+  const phone =
+    typeof phoneVal === 'number'
+      ? phoneVal
+      : typeof phoneVal === 'string' && phoneVal.trim()
+        ? Number(phoneVal)
+        : null
+  const codePhone = o.code_phone ?? o.codePhone ?? o.codigo_telefono
   return {
     id: String(id),
     name: fullName,
     email: email || '-',
     role,
+    names: names || undefined,
+    lastnames: lastnames || undefined,
     document_number,
-    document_type
+    document_type,
+    phone: Number.isFinite(phone) ? phone : null,
+    code_phone: codePhone != null ? String(codePhone) : null
   }
 }
 
@@ -84,10 +100,15 @@ export interface CreateUserPayload {
   code_phone?: string
 }
 
-/** Crea un nuevo usuario. POST /user/ (multipart/form-data) */
-export async function createUser(payload: CreateUserPayload): Promise<UserListItem> {
-  const url = Domain.http('user/')
-  const form = new FormData()
+export interface UpdateUserPayload extends Omit<CreateUserPayload, 'email'> {
+  id: string
+  email?: string
+}
+
+function appendUserFormFields(
+  form: FormData,
+  payload: CreateUserPayload | UpdateUserPayload
+) {
   if (payload.email?.trim()) form.append('email', payload.email.trim())
   if (payload.names?.trim()) form.append('names', payload.names.trim())
   if (payload.lastnames?.trim()) form.append('lastnames', payload.lastnames.trim())
@@ -102,6 +123,13 @@ export async function createUser(payload: CreateUserPayload): Promise<UserListIt
   if (phoneNum != null && Number.isFinite(phoneNum)) form.append('phone', String(phoneNum))
   if (payload.code_phone?.trim()) form.append('code_phone', payload.code_phone.trim())
   if (payload.profile_image instanceof File) form.append('profile_image', payload.profile_image)
+}
+
+/** Crea un nuevo usuario. POST /user/ (multipart/form-data) */
+export async function createUser(payload: CreateUserPayload): Promise<UserListItem> {
+  const url = Domain.http('user/')
+  const form = new FormData()
+  appendUserFormFields(form, payload)
 
   const response = await apiClient.post<unknown>(url, form)
   const raw = response.data
@@ -116,8 +144,42 @@ export async function createUser(payload: CreateUserPayload): Promise<UserListIt
   return user
 }
 
-/** Elimina un usuario por ID. DELETE /user/{id}/ */
+/** Actualiza un usuario. PUT /user/ (multipart/form-data con id). */
+export async function updateUser(payload: UpdateUserPayload): Promise<UserListItem> {
+  const url = Domain.http('user/')
+  const form = new FormData()
+  form.append('id', payload.id)
+  appendUserFormFields(form, payload)
+
+  const response = await apiClient.put<unknown>(url, form, {
+    skipAuthRedirect: true
+  })
+  const raw = response.data
+  const user = parseUser(
+    raw != null && typeof raw === 'object'
+      ? ((raw as Record<string, unknown>).user ?? (raw as Record<string, unknown>).data ?? raw)
+      : raw
+  )
+  if (!user) {
+    throw new Error('Respuesta de actualización de usuario inválida')
+  }
+  return user
+}
+
+/** Elimina un usuario por ID. Intenta el endpoint REST y cae al contrato con id en body. */
 export async function deleteUser(userId: string): Promise<void> {
-  const url = Domain.http(`user/${userId}/`)
-  await apiClient.delete(url)
+  const id = userId.trim()
+  if (!id) throw new Error('ID de usuario inválido')
+  try {
+    await apiClient.delete(Domain.http(`user/${id}/`))
+  } catch (firstError) {
+    try {
+      await apiClient.delete(Domain.http('user/'), {
+        data: { id },
+        skipAuthRedirect: true
+      })
+    } catch {
+      throw firstError
+    }
+  }
 }

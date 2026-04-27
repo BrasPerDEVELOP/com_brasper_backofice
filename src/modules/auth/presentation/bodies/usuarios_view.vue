@@ -19,6 +19,7 @@ const error = ref('')
 const successMessage = ref('')
 const showCreateModal = ref(false)
 const showImportModal = ref(false)
+const selectedUser = ref<UserListItem | null>(null)
 const importFile = ref<File | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const importing = ref(false)
@@ -108,11 +109,23 @@ async function loadUsers() {
 function openCreateModal() {
   error.value = ''
   successMessage.value = ''
+  selectedUser.value = null
   showCreateModal.value = true
 }
 
-async function onUserCreated() {
-  successMessage.value = 'Usuario creado correctamente'
+function openEditModal(user: UserListItem) {
+  error.value = ''
+  successMessage.value = ''
+  openMenuId.value = null
+  selectedUser.value = user
+  showCreateModal.value = true
+}
+
+async function onUserSaved() {
+  successMessage.value = selectedUser.value
+    ? 'Usuario actualizado correctamente'
+    : 'Usuario creado correctamente'
+  selectedUser.value = null
   await loadUsers()
 }
 
@@ -201,6 +214,10 @@ watch([searchQuery, roleSelectFilter, perPage], () => {
 })
 
 watch(roleSelectFilter, loadUsers)
+
+watch(showCreateModal, (open) => {
+  if (!open) selectedUser.value = null
+})
 
 function getDocumentType(u: UserListItem): string {
   return (u.document_type ?? '-').toUpperCase()
@@ -392,6 +409,7 @@ onMounted(() => {
               <button
                 type="button"
                 class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-[#374151] hover:bg-[#f9fafb]"
+                @click="openEditModal(u)"
               >
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -491,7 +509,8 @@ onMounted(() => {
     v-model="showCreateModal"
     :show-role-field="roleSelectFilter.toLowerCase() === 'todos'"
     :default-role="createModalDefaultRole"
-    @created="onUserCreated"
+    :user="selectedUser"
+    @created="onUserSaved"
   />
 
   <!-- Modal Importar Excel -->

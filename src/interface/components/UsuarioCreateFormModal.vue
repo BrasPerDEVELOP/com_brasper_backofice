@@ -2,8 +2,10 @@
 import { ref, computed, watch } from 'vue'
 import {
   createUser,
+  updateUser,
   USER_ROLES,
   type CreateUserPayload,
+  type UpdateUserPayload,
   type UserListItem
 } from '@/modules/auth/infrastructure/adapters/users_management_api_adapter'
 import { USER_ROLE_LABELS, PHONE_CODES } from '@/modules/auth/domain/models'
@@ -16,10 +18,12 @@ const props = withDefaults(
     defaultRole?: string
     /** Si true, muestra el selector de rol. Si false, usa defaultRole. */
     showRoleField?: boolean
+    user?: UserListItem | null
   }>(),
   {
     defaultRole: 'client',
-    showRoleField: false
+    showRoleField: false,
+    user: null
   }
 )
 
@@ -30,6 +34,7 @@ const emit = defineEmits<{
 
 const creating = ref(false)
 const error = ref('')
+const isEditing = computed(() => Boolean(props.user?.id))
 
 const form = ref<CreateUserPayload>({
   email: '',
@@ -73,15 +78,15 @@ function onProfileImageChange(e: Event) {
 function resetForm() {
   error.value = ''
   form.value = {
-    email: '',
-    names: '',
-    lastnames: '',
-    role: props.defaultRole,
-    document_number: '',
-    document_type: '',
+    email: props.user?.email && props.user.email !== '-' ? props.user.email : '',
+    names: props.user?.names ?? props.user?.name ?? '',
+    lastnames: props.user?.lastnames ?? '',
+    role: props.user?.role ?? props.defaultRole,
+    document_number: props.user?.document_number ?? '',
+    document_type: props.user?.document_type ?? '',
     profile_image: null,
-    phone: null,
-    code_phone: ''
+    phone: props.user?.phone ?? null,
+    code_phone: props.user?.code_phone ?? ''
   }
 }
 
@@ -90,18 +95,24 @@ function close() {
 }
 
 async function handleSubmit() {
-  if (!form.value.email?.trim()) {
+  if (!isEditing.value && !form.value.email?.trim()) {
     error.value = 'Email es obligatorio'
     return
   }
   creating.value = true
   error.value = ''
   try {
+    const role = props.showRoleField ? form.value.role : props.defaultRole
     const payload: CreateUserPayload = {
       ...form.value,
-      role: props.showRoleField ? form.value.role : props.defaultRole
+      role
     }
-    const user = await createUser(payload)
+    const user = isEditing.value
+      ? await updateUser({
+          ...(payload as Omit<UpdateUserPayload, 'id'>),
+          id: props.user?.id ?? ''
+        })
+      : await createUser(payload)
     emit('created', user)
     close()
   } catch (e) {
@@ -127,18 +138,22 @@ watch(
       @click.self="close"
     >
       <div class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-xl">
-        <h2 class="mb-6 text-lg font-semibold text-[#1f2937]">Nuevo usuario</h2>
+        <h2 class="mb-6 text-lg font-semibold text-[#1f2937]">
+          {{ isEditing ? 'Editar usuario' : 'Nuevo usuario' }}
+        </h2>
 
         <form class="space-y-6" @submit.prevent="handleSubmit">
           <div class="grid gap-4 sm:grid-cols-2">
             <div>
-              <label class="mb-1.5 block text-sm font-medium text-[#374151]">Email *</label>
+              <label class="mb-1.5 block text-sm font-medium text-[#374151]">
+                Email {{ isEditing ? '' : '*' }}
+              </label>
               <input
                 v-model="form.email"
                 type="email"
                 class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
                 placeholder="usuario@ejemplo.com"
-                required
+                :required="!isEditing"
               />
             </div>
             <div>
@@ -205,7 +220,9 @@ watch(
               />
             </div>
             <div class="sm:col-span-2">
-              <label class="mb-1.5 block text-sm font-medium text-[#374151]">Foto de perfil</label>
+              <label class="mb-1.5 block text-sm font-medium text-[#374151]">
+                Foto de perfil (opcional)
+              </label>
               <input
                 type="file"
                 accept="image/*"
@@ -232,7 +249,7 @@ watch(
               class="rounded-lg bg-brasper-indigoStrong px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brasper-indigoDark disabled:opacity-60"
               :disabled="creating"
             >
-              {{ creating ? 'Creando...' : 'Guardar' }}
+              {{ creating ? (isEditing ? 'Guardando...' : 'Creando...') : 'Guardar' }}
             </button>
           </div>
         </form>
