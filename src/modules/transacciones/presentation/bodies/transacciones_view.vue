@@ -84,7 +84,15 @@ const statusOptions = computed(() => [
 ]);
 
 const ALL_VALUE = "";
-const EDITABLE_USER_ROLES = ["admin", "commercial", "comercial", "sales"] as const;
+const EDITABLE_USER_ROLES = [
+  "admin",
+  "commercial",
+  "comercial",
+  "sales",
+  "advisor",
+  "asesor",
+  "ventas",
+] as const;
 const editableUsers = ref<
   { id: string; name: string; email: string; role?: string }[]
 >([]);
@@ -446,6 +454,38 @@ const editableUserOptions = computed(() => {
   return mergeMissingEditableUser(base, form.user_id);
 });
 
+function isSalesAdvisorRole(role?: string | null): boolean {
+  return [
+    "sales",
+    "ventas",
+    "commercial",
+    "comercial",
+    "advisor",
+    "asesor",
+  ].includes((role ?? "").trim().toLowerCase());
+}
+
+function getTransactionUserRoleLabel(role?: string | null): string {
+  const normalized = (role ?? "").trim().toLowerCase();
+  if (["sales", "ventas"].includes(normalized)) return "Ventas";
+  if (["commercial", "comercial", "advisor", "asesor"].includes(normalized))
+    return "Asesor";
+  if (["client", "cliente"].includes(normalized)) return "Cliente";
+  return "";
+}
+
+const salesAdvisorOptions = computed(() =>
+  editableUsers.value
+    .filter((u) => isSalesAdvisorRole(u.role))
+    .map((u) => {
+      const roleLabel = getTransactionUserRoleLabel(u.role);
+      return {
+        value: u.id,
+        label: roleLabel ? `${u.name} - ${roleLabel}` : u.name,
+      };
+    }),
+);
+
 const taxRateOptions = computed(() =>
   tasasStore.taxRates.map((r) => ({
     value: r.id,
@@ -655,6 +695,7 @@ function openCreateModal() {
   createStepIndex.value = 0;
   showCreateModal.value = true;
   loadFormOptions();
+  void loadEditableUsers();
   calculatorStore.setDemoMode(false);
   void calculatorStore.loadData();
 }
@@ -717,7 +758,7 @@ async function withTimeout<T>(
 
 async function hydrateEditForm(row: Transaction) {
   const resolvedUserId = normalizeSelectId(row.user_id);
-  const resolvedAgentId = normalizeSelectId(row.agent_id ?? row.user_id);
+  const resolvedAgentId = normalizeSelectId(row.agent_id);
   if (resolvedUserId) {
     void cuentasStore.ensureTransactionFormUser(resolvedUserId);
   }
@@ -2654,7 +2695,7 @@ onMounted(() => {
                             </div>
                           </div>
                           <div class="grid gap-4 sm:grid-cols-2">
-                            <div class="space-y-1.5 sm:col-span-2">
+                            <div class="space-y-1.5">
                               <label class="block text-sm font-medium text-[#374151]"
                                 >Usuario *</label
                               >
@@ -2694,6 +2735,18 @@ onMounted(() => {
                                   </svg>
                                 </button>
                               </div>
+                            </div>
+                            <div class="space-y-1.5">
+                              <label class="block text-sm font-medium text-[#374151]"
+                                >Ventas / asesor</label
+                              >
+                              <AppDropdown
+                                v-model="form.agent_id"
+                                :options="salesAdvisorOptions"
+                                placeholder="Seleccionar asesor"
+                                :searchable="salesAdvisorOptions.length > 10"
+                                class="min-w-0"
+                              />
                             </div>
                             <div class="space-y-1.5">
                               <label class="block text-sm font-medium text-[#374151]"
@@ -3050,7 +3103,7 @@ onMounted(() => {
                   </div>
                 </div>
                 <div class="grid gap-5 sm:grid-cols-2">
-                  <div class="space-y-1.5 sm:col-span-2">
+                  <div class="space-y-1.5">
                     <label class="block text-sm font-medium text-[#374151]"
                       >Cliente *</label
                     >
@@ -3090,6 +3143,18 @@ onMounted(() => {
                         </svg>
                       </button>
                     </div>
+                  </div>
+                  <div class="space-y-1.5">
+                    <label class="block text-sm font-medium text-[#374151]"
+                      >Ventas / asesor</label
+                    >
+                    <AppDropdown
+                      v-model="form.agent_id"
+                      :options="salesAdvisorOptions"
+                      placeholder="Seleccionar asesor"
+                      :searchable="salesAdvisorOptions.length > 10"
+                      class="min-w-0"
+                    />
                   </div>
                   <div class="space-y-1.5">
                     <label class="block text-sm font-medium text-[#374151]"
