@@ -1081,7 +1081,9 @@ const editHeroAmounts = computed(() => {
 const editHeroTotal = computed(() => {
   const t = editPreviewTransaction.value;
   if (!t) return "0.00";
-  return formatValue(t.total_a_enviar ?? t.total_to_send ?? 0);
+  return formatValue(
+    t.destination_amount ?? t.total_a_enviar ?? t.total_to_send ?? 0,
+  );
 });
 
 async function openPreviewModal(t: Transaction | null) {

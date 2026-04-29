@@ -242,11 +242,14 @@ export function useTransactionPreviewController() {
         label: "Resultado comisión",
         value: formatMoney(commissionRes),
       });
-    const totalSend = rec.total_a_enviar ?? rec.total_to_send ?? null;
-    if (totalSend != null && totalSend !== "")
+    const totalEnviarDisplay =
+      rec.destination_amount != null && rec.destination_amount !== ""
+        ? rec.destination_amount
+        : rec.total_a_enviar ?? rec.total_to_send ?? null;
+    if (totalEnviarDisplay != null && totalEnviarDisplay !== "")
       amountItems.push({
         label: "Total a enviar",
-        value: formatMoney(totalSend),
+        value: formatMoney(totalEnviarDisplay),
       });
 
     sections.push({
