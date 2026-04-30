@@ -304,7 +304,12 @@ export class TransactionsApiAdapter implements TransactionsRepository {
     formData.append('origin_amount', String(payload.origin_amount))
     formData.append('destination_amount', String(payload.destination_amount))
     formData.append('code', payload.code)
-    /** POST: el servidor fuerza `verification` y `checked: false`; no enviar status/fechas/checklist. */
+    if (payload.status?.trim()) {
+      formData.append('status', payload.status.trim())
+    }
+    if (payload.checked != null) {
+      formData.append('checked', payload.checked ? 'true' : 'false')
+    }
     if (payload.resultado_comision != null) {
       formData.append('resultado_comision', String(payload.resultado_comision))
       formData.append('commission_result', String(payload.resultado_comision))

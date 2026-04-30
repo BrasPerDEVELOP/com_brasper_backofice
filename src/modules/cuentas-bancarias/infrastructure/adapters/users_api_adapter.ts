@@ -8,6 +8,8 @@ export interface UserOption {
   role?: string
 }
 
+const CLIENT_ROLE_ALIASES = ['client', 'cliente'] as const
+
 function parseUser(item: unknown): UserOption | null {
   if (item == null || typeof item !== 'object') return null
   const o = item as Record<string, unknown>
@@ -28,16 +30,28 @@ function parseUser(item: unknown): UserOption | null {
 
 /** Usuarios con rol cliente, ordenados por nombre completo. */
 export async function fetchClientUsers(): Promise<UserOption[]> {
-  const url = Domain.http('user/name-list/')
-  const response = await apiClient.get<unknown>(url, {
-    params: { role: 'cliente' },
-    headers: { Accept: 'application/json' }
-  })
-  const raw = response.data
-  const arr = Array.isArray(raw) ? raw : extractArray(raw)
-  const users = arr.map(parseUser).filter((u): u is UserOption => u != null)
-  const clients = users.filter((u) => !u.role || u.role.toLowerCase() === 'cliente')
-  return clients.sort((a, b) => a.name.localeCompare(b.name, 'es'))
+  const byId = new Map<string, UserOption>()
+  await Promise.all(
+    CLIENT_ROLE_ALIASES.map(async (role) => {
+      const url = Domain.http('user/name-list/')
+      const response = await apiClient.get<unknown>(url, {
+        params: { role },
+        headers: { Accept: 'application/json' }
+      })
+      const raw = response.data
+      const arr = Array.isArray(raw) ? raw : extractArray(raw)
+      for (const item of arr) {
+        const u = parseUser(item)
+        if (!u) continue
+        const normalizedRole = u.role?.toLowerCase()
+        if (normalizedRole && !CLIENT_ROLE_ALIASES.includes(normalizedRole as typeof CLIENT_ROLE_ALIASES[number])) {
+          continue
+        }
+        if (!byId.has(u.id)) byId.set(u.id, u)
+      }
+    })
+  )
+  return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name, 'es'))
 }
 
 /**
@@ -45,6 +59,7 @@ export async function fetchClientUsers(): Promise<UserOption[]> {
  * Pide `user/name-list/` por rol y unifica por `id` (sin duplicados).
  */
 const TRANSACTION_FORM_USER_ROLES = [
+  'client',
   'cliente',
   'commercial',
   'comercial',
@@ -83,4 +98,3 @@ function extractArray(raw: unknown): unknown[] {
   }
   return []
 }
-

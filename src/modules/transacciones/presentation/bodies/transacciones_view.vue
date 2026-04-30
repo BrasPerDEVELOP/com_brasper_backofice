@@ -218,7 +218,7 @@ function goToCreateStep(index: number) {
 function goCreateNext() {
   const i = createStepIndex.value;
   if (i === 0) {
-    syncFromCalculator();
+    syncFromCalculatorIfSafe();
     const calculatorError = getCalculatorBlockingError();
     if (calculatorError) {
       transactionsStore.error = calculatorError;
@@ -328,7 +328,32 @@ function bankAccountMatchesCurrency(
 ): boolean {
   const currency = normalizeCurrencyCode(expectedCurrency);
   if (!currency) return true;
-  return getBankAccountCurrency(account) === currency;
+  const accountCurrency = getBankAccountCurrency(account);
+  if (!accountCurrency) return true;
+  return accountCurrency === currency;
+}
+
+function getBankAccountCountry(a: BankAccount): string {
+  return (a.bank_country ?? "").trim().toLowerCase();
+}
+
+function bankAccountMatchesFlow(
+  account: BankAccount,
+  flow: "origin" | "destination",
+): boolean {
+  const accountFlow = (account.account_flow ?? "").trim().toLowerCase();
+  if (!accountFlow) return true;
+  return accountFlow === flow;
+}
+
+function bankAccountMatchesSide(
+  account: BankAccount,
+  flow: "origin" | "destination",
+): boolean {
+  if (bankAccountMatchesFlow(account, flow)) return true;
+  const country = getBankAccountCountry(account);
+  if (!country) return true;
+  return flow === "origin" ? country === "pe" : country === "br";
 }
 
 function mergeMissingSelectedAccount(
@@ -357,7 +382,7 @@ function isBankAccountSelectable(
     (a) => String(a.id) === accountId,
   );
   if (!account) return false;
-  if ((account.account_flow ?? "").toLowerCase() !== flow) return false;
+  if (!bankAccountMatchesSide(account, flow)) return false;
   if (userId && String(account.user_id ?? "").trim() !== userId) return false;
   return bankAccountMatchesCurrency(account, expectedCurrency);
 }
@@ -376,7 +401,7 @@ const originAccountOptions = computed(() => {
   const userId = form.user_id?.trim();
   const currency = selectedAccountCurrencies.value.origin;
   const base = cuentasStore.bankAccounts
-    .filter((a) => (a.account_flow ?? "").toLowerCase() === "origin")
+    .filter((a) => bankAccountMatchesSide(a, "origin"))
     .filter((a) => bankAccountMatchesCurrency(a, currency))
     .filter(
       (a) => !userId || String(a.user_id ?? "").trim() === userId,
@@ -393,7 +418,7 @@ const destinationAccountOptions = computed(() => {
   const userId = form.user_id?.trim();
   const currency = selectedAccountCurrencies.value.destination;
   const base = cuentasStore.bankAccounts
-    .filter((a) => (a.account_flow ?? "").toLowerCase() === "destination")
+    .filter((a) => bankAccountMatchesSide(a, "destination"))
     .filter((a) => bankAccountMatchesCurrency(a, currency))
     .filter(
       (a) => !userId || String(a.user_id ?? "").trim() === userId,
@@ -439,10 +464,18 @@ function mergeMissingEditableUser(
 }
 
 const clientOptions = computed(() => {
-  const base = cuentasStore.transactionFormUsers.map((u) => ({
-    value: u.id,
-    label: u.name,
-  }));
+  const byId = new Map<string, { value: string; label: string }>();
+  for (const u of cuentasStore.clientUsers) {
+    byId.set(u.id, { value: u.id, label: u.name });
+  }
+  for (const u of cuentasStore.transactionFormUsers) {
+    const role = (u.role ?? "").toLowerCase();
+    if (role && !["client", "cliente"].includes(role)) continue;
+    byId.set(u.id, { value: u.id, label: u.name });
+  }
+  const base = Array.from(byId.values()).sort((a, b) =>
+    a.label.localeCompare(b.label, "es"),
+  );
   return mergeMissingTransactionUser(base, form.user_id);
 });
 
@@ -679,14 +712,49 @@ function syncFromCalculator() {
   form.tax_rate_id = calculatorStore.selectedTaxRateId ?? "";
   form.commission_id = calculatorStore.selectedCommissionId ?? "";
   if (res) {
-    form.resultado_comision = res.finalCommission;
-    form.total_a_enviar = res.totalToSend;
+    const isSpecialCalculation =
+      calculatorStore.calculationMode === "special" ||
+      res.calculationMode === "special";
+    const commissionResult =
+      isSpecialCalculation && Number.isFinite(res.finalCommission)
+        ? res.finalCommission
+        : res.commission;
+    const totalToSend =
+      isSpecialCalculation && Number.isFinite(res.totalToSend)
+        ? res.totalToSend
+        : res.amountSend - commissionResult;
+
+    form.resultado_comision = commissionResult;
+    form.total_a_enviar = totalToSend;
     form.tax_amount = res.rate;
   } else {
     form.resultado_comision = null;
     form.total_a_enviar = null;
     form.tax_amount = null;
   }
+}
+
+function hasSpecialCalculatorValuesToPreserve(): boolean {
+  if (!editingId.value || calculatorStore.calculationMode === "special") {
+    return false;
+  }
+
+  const res = calculatorStore.result;
+  if (!res || form.resultado_comision == null || form.total_a_enviar == null) {
+    return false;
+  }
+
+  const normalCommission = roundMoneyAmount(res.commission);
+  const normalTotal = roundMoneyAmount(res.amountSend - res.commission);
+  const savedCommission = roundMoneyAmount(form.resultado_comision);
+  const savedTotal = roundMoneyAmount(form.total_a_enviar);
+
+  return savedCommission !== normalCommission || savedTotal !== normalTotal;
+}
+
+function syncFromCalculatorIfSafe() {
+  if (hasSpecialCalculatorValuesToPreserve()) return;
+  syncFromCalculator();
 }
 
 function openCreateModal() {
@@ -703,6 +771,7 @@ function openCreateModal() {
 async function loadFormOptions() {
   await Promise.all([
     cuentasStore.loadBankAccounts(),
+    cuentasStore.loadClientUsers(),
     cuentasStore.loadTransactionFormUsers(),
     cuentasStore.loadBanks(),
     tasasStore.loadTaxRates(),
@@ -849,7 +918,8 @@ async function openEditModal(t: Transaction) {
 }
 
 async function submitForm() {
-  syncFromCalculator();
+  syncFromCalculatorIfSafe();
+  syncStatusFromVoucherFiles();
   const calculatorError = getCalculatorBlockingError();
   if (calculatorError) {
     transactionsStore.error = calculatorError;
@@ -932,9 +1002,11 @@ async function submitForm() {
           ? Number(form.tax_amount)
           : undefined,
       code,
+      status: form.status,
       send_voucher: sendVoucher,
       payment_voucher: paymentVoucher,
       checked_image: checkedImage,
+      checked: form.checked,
     };
     if (editingId.value) {
       /** PUT: el backend recalcula `status` y asigna `payment_date` al pasar a finalizada. */
@@ -942,8 +1014,6 @@ async function submitForm() {
         ...commonAmounts,
         send_date: formDateTimeToApi(form.send_date),
         payment_date: formDateTimeToApi(form.payment_date),
-        checked: form.checked,
-        status: form.status,
       });
     } else {
       /** POST: servidor fuerza `verification`, `checked: false` y `send_date` en el alta. */
@@ -1117,14 +1187,6 @@ const editHeroAmounts = computed(() => {
       value: formatValue(t.resultado_comision ?? t.commission_result),
     },
   ];
-});
-
-const editHeroTotal = computed(() => {
-  const t = editPreviewTransaction.value;
-  if (!t) return "0.00";
-  return formatValue(
-    t.destination_amount ?? t.total_a_enviar ?? t.total_to_send ?? 0,
-  );
 });
 
 async function openPreviewModal(t: Transaction | null) {
@@ -1400,18 +1462,33 @@ function onVoucherFileSelect(
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0] ?? null;
   form[field] = file;
-  if (field === "checked_image" && file) {
-    form.checked = true;
-  }
   if (field === "payment_voucher" && file) {
     if (!form.payment_date?.trim()) {
       form.payment_date = nowLocalDateTimeValue();
     }
-    if (!["failed", "cancelled"].includes((form.status ?? "").toLowerCase())) {
-      form.status = "completed";
-    }
   }
+  syncStatusFromVoucherFiles();
   input.value = "";
+}
+
+function hasVoucherValue(value: unknown): boolean {
+  return value instanceof File || (typeof value === "string" && value.trim() !== "");
+}
+
+function syncStatusFromVoucherFiles() {
+  const currentStatus = (form.status ?? "").toLowerCase();
+  if (["failed", "cancelled"].includes(currentStatus)) return;
+
+  const hasSendVoucher = hasVoucherValue(form.send_voucher ?? editSourceTransaction.value?.send_voucher);
+  const hasCheckedImage = hasVoucherValue(form.checked_image ?? editSourceTransaction.value?.checked_image);
+  const hasPaymentVoucher = hasVoucherValue(
+    form.payment_voucher ?? editSourceTransaction.value?.payment_voucher,
+  );
+
+  form.checked = hasCheckedImage;
+  if (hasSendVoucher && hasCheckedImage && hasPaymentVoucher) {
+    form.status = "verified";
+  }
 }
 
 function revokeIfBlob(url: string | null) {
@@ -2669,16 +2746,6 @@ onMounted(() => {
                               </dd>
                             </div>
                           </dl>
-                          <div class="mt-5 border-t border-[#e8eef8] pt-4">
-                            <div class="flex items-end justify-between gap-4">
-                              <span class="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#7b88a1]">
-                                Total a enviar
-                              </span>
-                              <span class="text-[2.1rem] font-bold tracking-[0.01em] text-[#1f2937]">
-                                {{ editHeroTotal }}
-                              </span>
-                            </div>
-                          </div>
                         </div>
                       </section>
                     </div>
@@ -2884,7 +2951,7 @@ onMounted(() => {
                             </p>
                           </div>
                           <div class="grid gap-4 md:grid-cols-3">
-                            <div class="rounded-2xl border border-[#e8eef8] bg-white p-4">
+                            <div class="order-1 rounded-2xl border border-[#e8eef8] bg-white p-4">
                               <div class="mb-3 flex items-start justify-between gap-3">
                                 <div>
                                   <h4 class="text-sm font-semibold text-[#232b4d]">
@@ -2925,7 +2992,7 @@ onMounted(() => {
                               </p>
                             </div>
 
-                            <div class="rounded-2xl border border-[#e8eef8] bg-white p-4">
+                            <div class="order-3 rounded-2xl border border-[#e8eef8] bg-white p-4">
                               <div class="mb-3 flex items-start justify-between gap-3">
                                 <div>
                                   <h4 class="text-sm font-semibold text-[#232b4d]">
@@ -2966,7 +3033,7 @@ onMounted(() => {
                               </p>
                             </div>
 
-                            <div class="rounded-2xl border border-[#e8eef8] bg-white p-4">
+                            <div class="order-2 rounded-2xl border border-[#e8eef8] bg-white p-4">
                               <div class="mb-3 flex items-start justify-between gap-3">
                                 <div>
                                   <h4 class="text-sm font-semibold text-[#232b4d]">
@@ -3464,7 +3531,7 @@ onMounted(() => {
 
               <div class="grid gap-5 md:grid-cols-3">
                 <div
-                  class="flex flex-col rounded-xl border border-[#d8e5fb] bg-white p-5 shadow-sm shadow-brasper-indigoStrong/5"
+                  class="order-1 flex flex-col rounded-xl border border-[#d8e5fb] bg-white p-5 shadow-sm shadow-brasper-indigoStrong/5"
                 >
                   <div class="mb-4 flex items-start gap-3">
                     <span
@@ -3521,7 +3588,7 @@ onMounted(() => {
                 </div>
 
                 <div
-                  class="flex flex-col rounded-xl border border-[#d8e5fb] bg-white p-5 shadow-sm shadow-brasper-indigoStrong/5"
+                  class="order-3 flex flex-col rounded-xl border border-[#d8e5fb] bg-white p-5 shadow-sm shadow-brasper-indigoStrong/5"
                 >
                   <div class="mb-4 flex items-start gap-3">
                     <span
@@ -3578,7 +3645,7 @@ onMounted(() => {
                 </div>
 
                 <div
-                  class="flex flex-col rounded-xl border border-[#d8e5fb] bg-white p-5 shadow-sm shadow-brasper-indigoStrong/5"
+                  class="order-2 flex flex-col rounded-xl border border-[#d8e5fb] bg-white p-5 shadow-sm shadow-brasper-indigoStrong/5"
                 >
                   <div class="mb-4 flex items-start gap-3">
                     <span
