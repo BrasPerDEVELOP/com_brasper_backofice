@@ -475,7 +475,7 @@ onMounted(() => {
 
       <table
         v-show="!transactionsStore.isLoading"
-        class="w-full min-w-[1400px] text-left text-sm"
+        class="w-full min-w-[1500px] text-left text-sm"
       >
         <thead>
           <tr class="bg-[#dbeafe]">
@@ -486,6 +486,11 @@ onMounted(() => {
               class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark"
             >
               Código
+            </th>
+            <th
+              class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark"
+            >
+              N° operación
             </th>
             <th
               class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark"
@@ -572,7 +577,7 @@ onMounted(() => {
             class="border-t border-[#e5e7eb]"
           >
             <td
-              colspan="17"
+              colspan="18"
               class="rounded-xl border border-[#dbe7fb] bg-[#fbfdff] px-6 py-12 text-center text-[#666]"
             >
               No hay movimientos para mostrar.
@@ -616,6 +621,9 @@ onMounted(() => {
             </td>
             <td class="px-4 py-3 font-medium text-[#374151]">
               {{ t.code ?? "-" }}
+            </td>
+            <td class="whitespace-nowrap px-4 py-3 text-[#374151]">
+              {{ t.operation_number || "—" }}
             </td>
             <td class="max-w-[160px] truncate px-4 py-3 text-[#374151]">
               {{ getClientLabel(t.user_id) }}

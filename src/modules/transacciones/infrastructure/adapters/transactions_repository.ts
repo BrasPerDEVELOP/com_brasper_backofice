@@ -16,6 +16,7 @@ export interface CreateTransactionPayload {
   /** Tipo de cambio del step 1 (`CalculatorResult.rate`). */
   tax_amount?: number | null
   code: string
+  operation_number?: string | null
   send_date?: string
   payment_date?: string
   send_voucher?: string | File | null

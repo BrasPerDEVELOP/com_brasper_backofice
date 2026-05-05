@@ -15,6 +15,7 @@ export interface Transaction {
   origin_amount?: number
   destination_amount?: number
   code?: string
+  operation_number?: string | null
   /** API (inglés) */
   commission_result?: number
   total_to_send?: number

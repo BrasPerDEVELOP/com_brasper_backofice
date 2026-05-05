@@ -184,6 +184,11 @@ function parseTransaction(item: unknown): Transaction {
     checkedImgRaw == null || checkedImgRaw === ''
       ? undefined
       : String(checkedImgRaw)
+  const operationNumberRaw = o.operation_number ?? o.numero_operacion
+  const operation_number =
+    operationNumberRaw == null || operationNumberRaw === ''
+      ? undefined
+      : String(operationNumberRaw).trim()
 
   return {
     id: o.id != null ? String(o.id) : undefined,
@@ -203,6 +208,7 @@ function parseTransaction(item: unknown): Transaction {
     destination_amount:
       typeof o.destination_amount === 'number' ? o.destination_amount : Number(o.destination_amount) || 0,
     code: o.code != null ? String(o.code) : undefined,
+    operation_number,
     resultado_comision: resultado,
     commission_result: parseOptionalAmount(o.commission_result) ?? resultado,
     total_a_enviar: totalSend,
@@ -304,6 +310,9 @@ export class TransactionsApiAdapter implements TransactionsRepository {
     formData.append('origin_amount', String(payload.origin_amount))
     formData.append('destination_amount', String(payload.destination_amount))
     formData.append('code', payload.code)
+    if (payload.operation_number?.trim()) {
+      formData.append('operation_number', payload.operation_number.trim())
+    }
     if (payload.status?.trim()) {
       formData.append('status', payload.status.trim())
     }

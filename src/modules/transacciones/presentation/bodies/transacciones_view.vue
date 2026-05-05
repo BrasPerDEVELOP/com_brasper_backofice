@@ -152,6 +152,7 @@ const form = reactive<{
   total_a_enviar: number | null;
   tax_amount: number | null;
   code: string;
+  operation_number: string;
   send_date: string;
   payment_date: string;
   send_voucher: string | File | null;
@@ -172,6 +173,7 @@ const form = reactive<{
   total_a_enviar: null,
   tax_amount: null,
   code: "",
+  operation_number: "",
   send_date: "",
   payment_date: "",
   send_voucher: null,
@@ -617,7 +619,8 @@ const searchedTransactions = computed(() => {
     list = list.filter((t) => {
       const code = (t.code ?? "").toLowerCase();
       const id = (t.id ?? "").toLowerCase();
-      return code.includes(q) || id.includes(q);
+      const operationNumber = (t.operation_number ?? "").toLowerCase();
+      return code.includes(q) || id.includes(q) || operationNumber.includes(q);
     });
   }
 
@@ -648,6 +651,7 @@ function resetForm() {
   form.total_a_enviar = null;
   form.tax_amount = null;
   form.code = "";
+  form.operation_number = "";
   form.send_date = "";
   form.payment_date = "";
   form.send_voucher = null;
@@ -865,6 +869,7 @@ async function hydrateEditForm(row: Transaction) {
       form.tax_amount = ta != null && ta !== "" ? Number(ta) || null : null;
     }
     form.code = row.code ?? "";
+    form.operation_number = row.operation_number ?? "";
     form.send_date = apiDateTimeToFormValue(row.send_date);
     form.payment_date = apiDateTimeToFormValue(row.payment_date);
     form.send_voucher = null;
@@ -1009,9 +1014,11 @@ async function submitForm() {
       checked: form.checked,
     };
     if (editingId.value) {
+      const operationNumber = form.operation_number.trim();
       /** PUT: el backend recalcula `status` y asigna `payment_date` al pasar a finalizada. */
       await transactionsStore.updateTransaction(editingId.value, {
         ...commonAmounts,
+        operation_number: operationNumber || null,
         send_date: formDateTimeToApi(form.send_date),
         payment_date: formDateTimeToApi(form.payment_date),
       });
@@ -1112,6 +1119,7 @@ const editPreviewTransaction = computed<Transaction | null>(() => {
     total_a_enviar: form.total_a_enviar ?? undefined,
     tax_amount: form.tax_amount ?? undefined,
     code: form.code || base.code,
+    operation_number: form.operation_number || base.operation_number,
     send_date: form.send_date
       ? (formDateTimeToApi(form.send_date) ?? form.send_date)
       : base.send_date,
@@ -1829,7 +1837,7 @@ onMounted(() => {
 
       <table
         v-show="!transactionsStore.isLoading"
-        class="w-full min-w-[960px] text-left text-sm"
+        class="w-full min-w-[1080px] text-left text-sm"
       >
         <thead>
           <tr class="bg-[#dbeafe]">
@@ -1840,6 +1848,11 @@ onMounted(() => {
               class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark"
             >
               Código
+            </th>
+            <th
+              class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark"
+            >
+              N° operación
             </th>
             <th
               class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark"
@@ -1897,7 +1910,7 @@ onMounted(() => {
             class="border-t border-[#e5e7eb]"
           >
             <td
-              colspan="12"
+              colspan="13"
               class="rounded-xl border border-[#dbe7fb] bg-[#fbfdff] px-6 py-12 text-center text-[#666]"
             >
               No hay transacciones. Importa un archivo Excel o crea una nueva.
@@ -1941,6 +1954,9 @@ onMounted(() => {
             </td>
             <td class="px-4 py-3 font-medium text-[#374151]">
               {{ formatTransactionCodeShort(t.code) }}
+            </td>
+            <td class="whitespace-nowrap px-4 py-3 text-[#374151]">
+              {{ t.operation_number || "—" }}
             </td>
             <td class="max-w-[160px] truncate px-4 py-3 text-[#374151]">
               {{ getClientLabel(t.user_id) }}
@@ -2910,6 +2926,55 @@ onMounted(() => {
                                 >Fecha y hora pago</label
                               >
                               <AppDateInput v-model="form.payment_date" with-time />
+                            </div>
+                            <div class="grid gap-4 sm:col-span-2 sm:grid-cols-[minmax(0,1fr)_minmax(220px,280px)] sm:items-start">
+                              <div class="space-y-1.5">
+                                <label class="block text-sm font-medium text-[#374151]"
+                                  >Número de operación</label
+                                >
+                                <input
+                                  v-model.trim="form.operation_number"
+                                  type="text"
+                                  class="w-full rounded-xl border border-[#dce3ef] bg-white px-3 py-2.5 text-sm text-[#374151] outline-none transition focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/15"
+                                  placeholder="Escribe el número de operación"
+                                  autocomplete="off"
+                                />
+                              </div>
+                              <div class="space-y-2">
+                                <div class="flex items-center justify-between gap-3">
+                                  <span class="text-sm font-medium text-[#374151]">
+                                    Ver imagen de envío
+                                  </span>
+                                  <a
+                                    v-if="activeSendVoucherPreviewSrc"
+                                    :href="activeSendVoucherPreviewSrc"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    class="text-xs font-semibold text-brasper-indigoStrong underline decoration-transparent hover:decoration-current"
+                                  >
+                                    Abrir
+                                  </a>
+                                </div>
+                                <a
+                                  v-if="activeSendVoucherPreviewSrc"
+                                  :href="activeSendVoucherPreviewSrc"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  class="block overflow-hidden rounded-xl border border-[#dce3ef] bg-white"
+                                >
+                                  <img
+                                    :src="activeSendVoucherPreviewSrc"
+                                    alt="Imagen de envío"
+                                    class="h-28 w-full object-contain"
+                                  />
+                                </a>
+                                <div
+                                  v-else
+                                  class="flex h-28 items-center justify-center rounded-xl border border-dashed border-[#dce3ef] bg-white px-3 text-center text-xs text-[#9ca3af]"
+                                >
+                                  Sin imagen de envío
+                                </div>
+                              </div>
                             </div>
                           </div>
                         </section>
