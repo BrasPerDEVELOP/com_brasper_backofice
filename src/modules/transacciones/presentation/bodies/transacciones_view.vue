@@ -979,6 +979,7 @@ async function submitForm() {
     const code =
       form.code?.trim() ||
       `TRX-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const operationNumber = form.operation_number.trim();
     const commonAmounts = {
       ...(form.bank_account_origin_id?.trim()
         ? { bank_account_origin: form.bank_account_origin_id.trim() }
@@ -1007,6 +1008,7 @@ async function submitForm() {
           ? Number(form.tax_amount)
           : undefined,
       code,
+      operation_number: operationNumber || undefined,
       status: form.status,
       send_voucher: sendVoucher,
       payment_voucher: paymentVoucher,
@@ -1014,7 +1016,6 @@ async function submitForm() {
       checked: form.checked,
     };
     if (editingId.value) {
-      const operationNumber = form.operation_number.trim();
       /** PUT: el backend recalcula `status` y asigna `payment_date` al pasar a finalizada. */
       await transactionsStore.updateTransaction(editingId.value, {
         ...commonAmounts,
@@ -1901,7 +1902,9 @@ onMounted(() => {
             >
               Comp.<br />pago
             </th>
-            <th class="w-12 px-2 py-3"></th>
+            <th
+              class="sticky right-0 z-[2] w-12 bg-[#dbeafe] px-2 py-3 shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]"
+            ></th>
           </tr>
         </thead>
         <tbody>
@@ -2044,7 +2047,9 @@ onMounted(() => {
               </template>
               <span v-else class="text-[#9ca3af]">—</span>
             </td>
-            <td class="relative px-2 py-3">
+            <td
+              class="sticky right-0 z-[1] bg-white px-2 py-3 shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]"
+            >
               <button
                 type="button"
                 class="rounded p-1.5 text-[#6b7280] hover:bg-[#f3f4f6]"
@@ -3765,6 +3770,19 @@ onMounted(() => {
                     {{ getVoucherLabel(form.checked_image) }}
                   </p>
                 </div>
+              </div>
+
+              <div class="space-y-1.5 rounded-xl border border-[#d8e5fb] bg-white p-5 shadow-sm shadow-brasper-indigoStrong/5">
+                <label class="block text-sm font-medium text-[#374151]">
+                  Número de operación
+                </label>
+                <input
+                  v-model.trim="form.operation_number"
+                  type="text"
+                  class="w-full rounded-xl border border-[#dce3ef] bg-white px-3 py-2.5 text-sm text-[#374151] outline-none transition focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/15"
+                  placeholder="Escribe el número de operación"
+                  autocomplete="off"
+                />
               </div>
             </form>
           </div>

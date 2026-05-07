@@ -54,6 +54,45 @@
           </button>
         </div>
 
+        <div
+          v-if="
+            showCalculationModeToggle &&
+            variant === 'production' &&
+            calculatorStore.calculationMode === 'special'
+          "
+          class="flex flex-col gap-2 rounded-xl border border-[#d8e5fb] bg-[#fbfdff] p-3 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <span class="text-xs font-semibold uppercase tracking-wide text-gray-500">
+            Origen de datos
+          </span>
+          <div class="grid grid-cols-2 gap-1 rounded-lg bg-[#eef2f8] p-1 sm:w-[16rem]">
+            <button
+              type="button"
+              class="rounded-md px-3 py-1.5 text-xs font-semibold transition"
+              :class="
+                !calculatorStore.demoMode
+                  ? 'bg-white text-brasper-indigoStrong shadow-sm'
+                  : 'text-[#6b7280] hover:text-brasper-indigoStrong'
+              "
+              @click="switchEndpointMode(false)"
+            >
+              Original
+            </button>
+            <button
+              type="button"
+              class="rounded-md px-3 py-1.5 text-xs font-semibold transition"
+              :class="
+                calculatorStore.demoMode
+                  ? 'bg-white text-brasper-indigoStrong shadow-sm'
+                  : 'text-[#6b7280] hover:text-brasper-indigoStrong'
+              "
+              @click="switchEndpointMode(true)"
+            >
+              Demo
+            </button>
+          </div>
+        </div>
+
         <div class="overflow-visible rounded-xl border border-gray-300 px-3 py-1.5 text-xl shadow-md">
           <label class="block pl-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Tu envias</label>
           <div class="flex gap-0">
@@ -263,6 +302,7 @@ const {
   onAmountReceiveInput,
   onFromChange,
   onToChange,
+  switchEndpointMode,
   handleButtonClick,
   setMessageLanguage,
   closeWhatsappModal,

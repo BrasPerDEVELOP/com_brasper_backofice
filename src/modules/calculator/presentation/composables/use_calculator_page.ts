@@ -81,6 +81,22 @@ export function useCalculatorPage(variant: CalculatorPageVariant) {
     amountReceiveLocal.value = normalizeTwoDecimals(calculatorStore.amountReceive)
   }
 
+  async function switchEndpointMode(useDemo: boolean) {
+    if (calculatorStore.demoMode === useDemo) return
+    const send = normalizeTwoDecimals(amountSendLocal.value || calculatorStore.amountSend)
+    const receive = normalizeTwoDecimals(amountReceiveLocal.value || calculatorStore.amountReceive)
+    calculatorStore.setDemoMode(useDemo)
+    await calculatorStore.loadData()
+    calculatorStore.setAmountSend(send)
+    if (calculatorStore.calculationMode === 'special') {
+      calculatorStore.setAmountReceive(receive)
+    } else {
+      calculatorStore.recalcFromSend()
+    }
+    amountSendLocal.value = normalizeTwoDecimals(calculatorStore.amountSend)
+    amountReceiveLocal.value = normalizeTwoDecimals(calculatorStore.amountReceive)
+  }
+
   function handleButtonClick() {
     buttonFeedback.value = ''
     const effectiveAmount = normalizeTwoDecimals(
@@ -173,6 +189,7 @@ export function useCalculatorPage(variant: CalculatorPageVariant) {
     onAmountReceiveInput,
     onFromChange,
     onToChange,
+    switchEndpointMode,
     handleButtonClick,
     setMessageLanguage,
     closeWhatsappModal,
