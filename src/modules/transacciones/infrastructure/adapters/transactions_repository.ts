@@ -24,6 +24,12 @@ export interface CreateTransactionPayload {
   checked_image?: string | File | null
   /** UUID o null. No enviar "automatic" - el API espera UUID válido. */
   coupon_id?: string | null
+  coupon_discount_code?: string | null
+  coupon_origin_amount?: number | null
+  coupon_destination_amount?: number | null
+  coupon_discount_percentage?: number | null
+  coupon_discount_commission?: number | null
+  coupon_discount_total_to_send?: number | null
   /** En POST el servidor ignora y deja `false`; usar solo en PUT. */
   checked?: boolean
 }

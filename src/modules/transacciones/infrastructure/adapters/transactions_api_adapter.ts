@@ -179,6 +179,11 @@ function parseTransaction(item: unknown): Transaction {
     couponRaw == null || couponRaw === ''
       ? undefined
       : String(couponRaw)
+  const couponDiscountCodeRaw = o.coupon_discount_code
+  const coupon_discount_code =
+    couponDiscountCodeRaw == null || couponDiscountCodeRaw === ''
+      ? undefined
+      : String(couponDiscountCodeRaw).trim()
   const checkedImgRaw = o.checked_image
   const checked_image =
     checkedImgRaw == null || checkedImgRaw === ''
@@ -215,6 +220,12 @@ function parseTransaction(item: unknown): Transaction {
     total_to_send: parseOptionalAmount(o.total_to_send) ?? totalSend,
     tax_amount: taxAmount,
     coupon_id,
+    coupon_discount_code,
+    coupon_origin_amount: parseOptionalAmount(o.coupon_origin_amount),
+    coupon_destination_amount: parseOptionalAmount(o.coupon_destination_amount),
+    coupon_discount_percentage: parseOptionalAmount(o.coupon_discount_percentage),
+    coupon_discount_commission: parseOptionalAmount(o.coupon_discount_commission),
+    coupon_discount_total_to_send: parseOptionalAmount(o.coupon_discount_total_to_send),
     send_date: o.send_date != null ? String(o.send_date) : undefined,
     payment_date: o.payment_date != null ? String(o.payment_date) : undefined,
     send_voucher: o.send_voucher != null ? String(o.send_voucher) : undefined,
@@ -344,6 +355,18 @@ export class TransactionsApiAdapter implements TransactionsRepository {
       formData.append('checked_image', payload.checked_image)
     if (payload.coupon_id != null && String(payload.coupon_id).trim())
       formData.append('coupon_id', String(payload.coupon_id).trim())
+    if (payload.coupon_discount_code?.trim())
+      formData.append('coupon_discount_code', payload.coupon_discount_code.trim())
+    if (payload.coupon_origin_amount != null)
+      formData.append('coupon_origin_amount', String(payload.coupon_origin_amount))
+    if (payload.coupon_destination_amount != null)
+      formData.append('coupon_destination_amount', String(payload.coupon_destination_amount))
+    if (payload.coupon_discount_percentage != null)
+      formData.append('coupon_discount_percentage', String(payload.coupon_discount_percentage))
+    if (payload.coupon_discount_commission != null)
+      formData.append('coupon_discount_commission', String(payload.coupon_discount_commission))
+    if (payload.coupon_discount_total_to_send != null)
+      formData.append('coupon_discount_total_to_send', String(payload.coupon_discount_total_to_send))
 
     /**
      * `fetch` + FormData evita que axios 1.x deje `Content-Type: application/json`

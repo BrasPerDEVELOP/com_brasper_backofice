@@ -97,7 +97,7 @@
           <label class="block pl-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Tu envias</label>
           <div class="flex gap-0">
             <input
-              v-model.number="amountSendLocal"
+              v-model.number="displayedAmountSendLocal"
               type="number"
               min="0"
               step="0.01"
@@ -133,7 +133,7 @@
           >
           <div class="flex gap-0">
             <input
-              v-model.number="amountReceiveLocal"
+              v-model.number="displayedAmountReceiveLocal"
               type="number"
               min="0"
               step="0.01"
@@ -216,16 +216,25 @@
             <span class="font-semibold text-brasper-indigoStrong">
               {{
                 formatCurrency(
-                  calculatorStore.result.finalCommission,
+                  displayedCommission,
                   calculatorStore.currencyFrom
                 )
               }}
             </span>
           </div>
+          <div
+            v-if="hasAppliedCoupon"
+            class="flex justify-between text-sm"
+          >
+            <span class="text-gray-600">Cupón {{ couponCode }}</span>
+            <span class="font-semibold text-emerald-700">
+              -{{ formatCurrency(couponDiscountAmount, calculatorStore.currencyFrom) }}
+            </span>
+          </div>
           <div class="flex justify-between text-sm">
             <span class="text-gray-600">Total a pagar</span>
             <span class="font-semibold text-brasper-indigoStrong">
-              {{ formatCurrency(calculatorStore.result.totalToSend, calculatorStore.currencyFrom) }}
+              {{ formatCurrency(displayedTotalToSend, calculatorStore.currencyFrom) }}
             </span>
           </div>
           <div class="flex justify-between text-sm">
@@ -269,6 +278,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import CalculatorWhatsappModal from './CalculatorWhatsappModal.vue'
 import { useCalculatorPage, type CalculatorPageVariant } from '../composables/use_calculator_page'
 
@@ -279,8 +289,21 @@ const props = withDefaults(
     showSendCta?: boolean
     /** Si es true, permite alternar entre calculadora normal y especial. */
     showCalculationModeToggle?: boolean
+    /** Descuento de cupón aplicado a la comisión actual. */
+    couponDiscountPercentage?: number | null
+    couponCode?: string | null
+    couponAdjustedAmountSend?: number | null
+    couponAdjustedAmountReceive?: number | null
   }>(),
-  { variant: 'production', showSendCta: true, showCalculationModeToggle: false }
+  {
+    variant: 'production',
+    showSendCta: true,
+    showCalculationModeToggle: false,
+    couponDiscountPercentage: null,
+    couponCode: null,
+    couponAdjustedAmountSend: null,
+    couponAdjustedAmountReceive: null
+  }
 )
 
 const {
@@ -308,4 +331,49 @@ const {
   closeWhatsappModal,
   copyWhatsappMessage
 } = useCalculatorPage(props.variant)
+
+const hasAppliedCoupon = computed(
+  () =>
+    Boolean(props.couponCode?.trim()) &&
+    Number(props.couponDiscountPercentage ?? 0) > 0 &&
+    Boolean(calculatorStore.result)
+)
+
+const baseDisplayedCommission = computed(() => {
+  const res = calculatorStore.result
+  if (!res) return 0
+  return Number.isFinite(res.finalCommission) ? res.finalCommission : res.commission
+})
+
+const couponDiscountAmount = computed(() => {
+  if (!hasAppliedCoupon.value) return 0
+  const base = Math.max(0, baseDisplayedCommission.value)
+  const discount = Math.round((base * (Number(props.couponDiscountPercentage) / 100) + Number.EPSILON) * 100) / 100
+  return Math.min(discount, base)
+})
+
+const displayedCommission = computed(() =>
+  Math.round((Math.max(0, baseDisplayedCommission.value - couponDiscountAmount.value) + Number.EPSILON) * 100) / 100
+)
+
+const displayedTotalToSend = computed(() => {
+  const res = calculatorStore.result
+  if (!res) return 0
+  const amountSend = props.couponAdjustedAmountSend ?? res.amountSend
+  return amountSend - displayedCommission.value
+})
+
+const displayedAmountSendLocal = computed({
+  get: () => props.couponAdjustedAmountSend ?? amountSendLocal.value,
+  set: (value: number) => {
+    amountSendLocal.value = value
+  }
+})
+
+const displayedAmountReceiveLocal = computed({
+  get: () => props.couponAdjustedAmountReceive ?? amountReceiveLocal.value,
+  set: (value: number) => {
+    amountReceiveLocal.value = value
+  }
+})
 </script>

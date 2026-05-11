@@ -24,6 +24,12 @@ export interface Transaction {
   resultado_comision?: number
   total_a_enviar?: number
   coupon_id?: string | null
+  coupon_discount_code?: string | null
+  coupon_origin_amount?: number | null
+  coupon_destination_amount?: number | null
+  coupon_discount_percentage?: number | null
+  coupon_discount_commission?: number | null
+  coupon_discount_total_to_send?: number | null
   send_date?: string
   payment_date?: string
   send_voucher?: string

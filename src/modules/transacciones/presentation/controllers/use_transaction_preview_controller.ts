@@ -198,6 +198,7 @@ export function useTransactionPreviewController() {
       subtitle: "Cliente y cuentas vinculadas",
       items: [
         { label: "Cliente", value: getClientLabel(rec.user_id as string) },
+        { label: "Ventas / asesor", value: getClientLabel(rec.agent_id as string) },
         {
           label: "Cuenta origen",
           value: getBankLabel(rec.bank_account_origin_id as string),
@@ -221,6 +222,10 @@ export function useTransactionPreviewController() {
         {
           label: "Comisión",
           value: getCommissionLabel(rec.commission_id as string),
+        },
+        {
+          label: "Tipo de cambio",
+          value: formatMoney(rec.tax_amount),
         },
       ],
     });
@@ -250,6 +255,16 @@ export function useTransactionPreviewController() {
       amountItems.push({
         label: "Total a enviar",
         value: formatMoney(totalEnviarDisplay),
+      });
+    if (rec.coupon_discount_commission != null && rec.coupon_discount_commission !== "")
+      amountItems.push({
+        label: "Descuento cupón",
+        value: `-${formatMoney(rec.coupon_discount_commission)}`,
+      });
+    if (rec.coupon_discount_total_to_send != null && rec.coupon_discount_total_to_send !== "")
+      amountItems.push({
+        label: "Total con cupón",
+        value: formatMoney(rec.coupon_discount_total_to_send),
       });
 
     sections.push({
@@ -295,11 +310,10 @@ export function useTransactionPreviewController() {
         value: String(rec.created_by),
         variant: "mono",
       });
-    if (rec.coupon_id != null && rec.coupon_id !== "")
+    if (rec.coupon_discount_code != null && rec.coupon_discount_code !== "")
       registroItems.push({
-        label: "Cupón",
-        value: String(rec.coupon_id),
-        variant: "mono",
+        label: "Cupón aplicado",
+        value: String(rec.coupon_discount_code),
       });
 
     sections.push({
@@ -314,14 +328,23 @@ export function useTransactionPreviewController() {
       "status",
       "checked",
       "user_id",
+      "agent_id",
+      "user",
       "bank_account_origin_id",
       "bank_account_destination_id",
       "tax_rate_id",
       "commission_id",
+      "tax_amount",
       "origin_amount",
       "destination_amount",
       "resultado_comision",
       "commission_result",
+      "comision_final_interna",
+      "impuesto_final_interno",
+      "venta_final",
+      "fecha_emision",
+      "observaciones",
+      "dias_atraso",
       "total_a_enviar",
       "total_to_send",
       "send_date",
@@ -331,8 +354,15 @@ export function useTransactionPreviewController() {
       "id",
       "created_by",
       "coupon_id",
+      "coupon_discount_code",
+      "coupon_origin_amount",
+      "coupon_destination_amount",
+      "coupon_discount_percentage",
+      "coupon_discount_commission",
+      "coupon_discount_total_to_send",
       "send_voucher",
       "payment_voucher",
+      "checked_image",
       "bank_account_id",
     ]);
 

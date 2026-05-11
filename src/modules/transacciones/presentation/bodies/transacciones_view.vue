@@ -14,7 +14,9 @@ import { useCuentasBancariasStore } from "@modules/cuentas-bancarias/presentatio
 import { useTasasStore } from "@modules/tasas/presentation/controllers/use_tasas_store_controller";
 import { useComisionesStore } from "@modules/comisiones/presentation/controllers/use_comisiones_store_controller";
 import { useCalculatorStore } from "@modules/calculator/presentation/controllers/use_calculator_store_controller";
+import { useCuponesStore } from "@modules/cupones/presentation/controllers/use_cupones_store_controller";
 import type { BankAccount } from "@modules/cuentas-bancarias/domain/models";
+import type { Coupon } from "@modules/cupones/domain/models";
 import type { Transaction } from "../../domain/models";
 import type { GetTransactionsParams } from "../../infrastructure/adapters/transactions_repository";
 import { parseSimpleImportExcel } from "../../infrastructure/utils/excel_simple_import";
@@ -39,6 +41,7 @@ const cuentasStore = useCuentasBancariasStore();
 const tasasStore = useTasasStore();
 const comisionesStore = useComisionesStore();
 const calculatorStore = useCalculatorStore();
+const cuponesStore = useCuponesStore();
 
 const { ensurePreviewCatalogLoaded, buildPreviewSections } =
   useTransactionPreviewController();
@@ -153,6 +156,7 @@ const form = reactive<{
   tax_amount: number | null;
   code: string;
   operation_number: string;
+  coupon_id: string;
   send_date: string;
   payment_date: string;
   send_voucher: string | File | null;
@@ -174,6 +178,7 @@ const form = reactive<{
   tax_amount: null,
   code: "",
   operation_number: "",
+  coupon_id: "",
   send_date: "",
   payment_date: "",
   send_voucher: null,
@@ -323,6 +328,112 @@ const selectedAccountCurrencies = computed(() => {
     ),
   };
 });
+
+function couponCurrencyMatches(value: string | null | undefined, expected: string): boolean {
+  const couponCurrency = normalizeCurrencyCode(value);
+  const targetCurrency = normalizeCurrencyCode(expected);
+  return !couponCurrency || !targetCurrency || couponCurrency === targetCurrency;
+}
+
+function isCouponCurrentlyActive(coupon: Coupon): boolean {
+  if (!coupon.is_active) return false;
+  const now = Date.now();
+  const start = coupon.start_date ? new Date(coupon.start_date).getTime() : Number.NEGATIVE_INFINITY;
+  const end = coupon.end_date ? new Date(coupon.end_date).getTime() : Number.POSITIVE_INFINITY;
+  if (Number.isFinite(start) && now < start) return false;
+  if (Number.isFinite(end) && now > end) return false;
+  return true;
+}
+
+const availableCoupons = computed(() => {
+  const origin = selectedAccountCurrencies.value.origin || calculatorStore.currencyFrom;
+  const destination = selectedAccountCurrencies.value.destination || calculatorStore.currencyTo;
+  return cuponesStore.coupons
+    .filter(isCouponCurrentlyActive)
+    .filter((coupon) => couponCurrencyMatches(coupon.origin_currency, origin))
+    .filter((coupon) => couponCurrencyMatches(coupon.destination_currency, destination))
+    .sort((a, b) => b.discount_percentage - a.discount_percentage);
+});
+
+const selectedCoupon = computed(() => {
+  const couponId = form.coupon_id.trim();
+  if (!couponId) return null;
+  return availableCoupons.value.find((coupon) => coupon.id === couponId) ?? null;
+});
+
+const couponOptions = computed(() => [
+  { value: "", label: "Sin cupón" },
+  ...availableCoupons.value.map((coupon) => ({
+    value: coupon.id,
+    label: `${coupon.code} - ${coupon.discount_percentage}%`,
+  })),
+]);
+
+const couponPreview = computed(() => {
+  const coupon = selectedCoupon.value;
+  const res = calculatorStore.result;
+  if (!coupon || !res) return null;
+  const baseCommission =
+    calculatorStore.calculationMode === "special"
+      ? res.finalCommission
+      : res.baseCommission;
+  const discountAmount = Math.min(
+    roundMoneyAmount(Math.max(0, baseCommission) * (Number(coupon.discount_percentage) / 100)),
+    roundMoneyAmount(Math.max(0, baseCommission)),
+  );
+  const finalCommission = roundMoneyAmount(Math.max(0, baseCommission - discountAmount));
+  const isReceiveMode =
+    calculatorStore.calculationMode === "normal" &&
+    calculatorStore.inputMode === "receive" &&
+    Number(calculatorStore.amountReceive) > 0;
+  const amountSend = isReceiveMode
+    ? roundMoneyAmount(Number(res.amountSend) - discountAmount)
+    : roundMoneyAmount(Number(res.amountSend));
+  const totalToSend = isReceiveMode
+    ? roundMoneyAmount(amountSend - finalCommission)
+    : roundMoneyAmount(amountSend - finalCommission);
+  const amountReceive = isReceiveMode
+    ? roundMoneyAmount(Number(res.amountReceive))
+    : roundMoneyAmount(totalToSend * Number(res.rate));
+  return {
+    coupon,
+    baseCommission: roundMoneyAmount(baseCommission),
+    discountAmount,
+    finalCommission,
+    amountSend,
+    amountReceive,
+    totalToSend,
+  };
+});
+
+watch(
+  availableCoupons,
+  (coupons) => {
+    if (!form.coupon_id) return;
+    if (!coupons.some((coupon) => coupon.id === form.coupon_id)) {
+      form.coupon_id = "";
+    }
+  },
+  { flush: "post" },
+);
+
+watch(
+  () => [
+    form.coupon_id,
+    calculatorStore.result?.amountSend,
+    calculatorStore.result?.amountReceive,
+    calculatorStore.result?.baseCommission,
+    calculatorStore.result?.finalCommission,
+    calculatorStore.result?.rate,
+    calculatorStore.calculationMode,
+    calculatorStore.inputMode,
+  ],
+  () => {
+    if (!showCreateModal.value || isEditingMode.value || createStepIndex.value !== 0) return;
+    syncFromCalculatorIfSafe();
+  },
+  { flush: "post" },
+);
 
 function bankAccountMatchesCurrency(
   account: BankAccount,
@@ -652,6 +763,7 @@ function resetForm() {
   form.tax_amount = null;
   form.code = "";
   form.operation_number = "";
+  form.coupon_id = "";
   form.send_date = "";
   form.payment_date = "";
   form.send_voucher = null;
@@ -710,9 +822,10 @@ function syncCalculatorFromForm() {
 
 function syncFromCalculator() {
   const res = calculatorStore.result;
-  form.origin_amount = res?.amountSend ?? calculatorStore.amountSend ?? 0;
+  const couponAmounts = couponPreview.value;
+  form.origin_amount = couponAmounts?.amountSend ?? res?.amountSend ?? calculatorStore.amountSend ?? 0;
   form.destination_amount =
-    res?.amountReceive ?? calculatorStore.amountReceive ?? 0;
+    couponAmounts?.amountReceive ?? res?.amountReceive ?? calculatorStore.amountReceive ?? 0;
   form.tax_rate_id = calculatorStore.selectedTaxRateId ?? "";
   form.commission_id = calculatorStore.selectedCommissionId ?? "";
   if (res) {
@@ -728,8 +841,8 @@ function syncFromCalculator() {
         ? res.totalToSend
         : res.amountSend - commissionResult;
 
-    form.resultado_comision = commissionResult;
-    form.total_a_enviar = totalToSend;
+    form.resultado_comision = couponAmounts?.finalCommission ?? commissionResult;
+    form.total_a_enviar = couponAmounts?.totalToSend ?? totalToSend;
     form.tax_amount = res.rate;
   } else {
     form.resultado_comision = null;
@@ -768,6 +881,7 @@ function openCreateModal() {
   showCreateModal.value = true;
   loadFormOptions();
   void loadEditableUsers();
+  void cuponesStore.loadCoupons();
   calculatorStore.setDemoMode(false);
   void calculatorStore.loadData();
 }
@@ -780,6 +894,7 @@ async function loadFormOptions() {
     cuentasStore.loadBanks(),
     tasasStore.loadTaxRates(),
     comisionesStore.loadCommissions(),
+    cuponesStore.loadCoupons(),
   ]);
 }
 
@@ -870,6 +985,7 @@ async function hydrateEditForm(row: Transaction) {
     }
     form.code = row.code ?? "";
     form.operation_number = row.operation_number ?? "";
+    form.coupon_id = row.coupon_id ?? "";
     form.send_date = apiDateTimeToFormValue(row.send_date);
     form.payment_date = apiDateTimeToFormValue(row.payment_date);
     form.send_voucher = null;
@@ -980,6 +1096,12 @@ async function submitForm() {
       form.code?.trim() ||
       `TRX-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const operationNumber = form.operation_number.trim();
+    const selectedCouponPreview = couponPreview.value;
+    const selectedCouponId =
+      selectedCouponPreview?.coupon.id ?? (form.coupon_id.trim() || undefined);
+    const selectedCouponCode =
+      selectedCouponPreview?.coupon.code ??
+      (selectedCouponId ? editSourceTransaction.value?.coupon_discount_code : undefined);
     const commonAmounts = {
       ...(form.bank_account_origin_id?.trim()
         ? { bank_account_origin: form.bank_account_origin_id.trim() }
@@ -1009,6 +1131,29 @@ async function submitForm() {
           : undefined,
       code,
       operation_number: operationNumber || undefined,
+      coupon_id: selectedCouponId,
+      coupon_discount_code: selectedCouponCode,
+      coupon_origin_amount:
+        selectedCouponPreview
+          ? roundMoneyAmount(selectedCouponPreview.amountSend)
+          : selectedCouponId
+            ? editSourceTransaction.value?.coupon_origin_amount
+            : undefined,
+      coupon_destination_amount:
+        selectedCouponPreview
+          ? roundMoneyAmount(selectedCouponPreview.amountReceive)
+          : selectedCouponId
+            ? editSourceTransaction.value?.coupon_destination_amount
+            : undefined,
+      coupon_discount_percentage:
+        selectedCouponPreview?.coupon.discount_percentage ??
+        (selectedCouponId ? editSourceTransaction.value?.coupon_discount_percentage : undefined),
+      coupon_discount_commission:
+        selectedCouponPreview?.discountAmount ??
+        (selectedCouponId ? editSourceTransaction.value?.coupon_discount_commission : undefined),
+      coupon_discount_total_to_send:
+        selectedCouponPreview?.totalToSend ??
+        (selectedCouponId ? editSourceTransaction.value?.coupon_discount_total_to_send : undefined),
       status: form.status,
       send_voucher: sendVoucher,
       payment_voucher: paymentVoucher,
@@ -1121,6 +1266,17 @@ const editPreviewTransaction = computed<Transaction | null>(() => {
     tax_amount: form.tax_amount ?? undefined,
     code: form.code || base.code,
     operation_number: form.operation_number || base.operation_number,
+    coupon_id: form.coupon_id || base.coupon_id,
+    coupon_discount_code: selectedCoupon.value?.code || base.coupon_discount_code,
+    coupon_discount_percentage:
+      selectedCoupon.value?.discount_percentage ?? base.coupon_discount_percentage,
+    coupon_discount_commission:
+      couponPreview.value?.discountAmount ?? base.coupon_discount_commission,
+    coupon_discount_total_to_send:
+      couponPreview.value?.totalToSend ?? base.coupon_discount_total_to_send,
+    coupon_origin_amount: couponPreview.value?.amountSend ?? base.coupon_origin_amount,
+    coupon_destination_amount:
+      couponPreview.value?.amountReceive ?? base.coupon_destination_amount,
     send_date: form.send_date
       ? (formDateTimeToApi(form.send_date) ?? form.send_date)
       : base.send_date,
@@ -1140,6 +1296,20 @@ const editModalSummary = computed(() => {
   };
 });
 
+const editModalCouponSummary = computed(() => {
+  const t = editPreviewTransaction.value;
+  if (!t) return null;
+  const code = t.coupon_discount_code ?? selectedCoupon.value?.code;
+  const percentage = t.coupon_discount_percentage ?? selectedCoupon.value?.discount_percentage;
+  return {
+    hasCoupon: Boolean(code?.trim() || t.coupon_id),
+    code: code?.trim() || "Sin cupón aplicado",
+    percentage,
+    discount: t.coupon_discount_commission,
+    total: t.coupon_discount_total_to_send,
+  };
+});
+
 function getTaxRatePreviewLabel(id: string | undefined): string {
   if (!id?.trim()) return "—";
   const rate = tasasStore.taxRates.find((item) => item.id === id);
@@ -1152,6 +1322,13 @@ function getCommissionPreviewLabel(id: string | undefined): string {
   return commission
     ? `${commission.coin_a}-${commission.coin_b} (${commission.percentage}%)`
     : id;
+}
+
+function getCouponPreviewLabel(t: Transaction): string {
+  const code = t.coupon_discount_code ?? selectedCoupon.value?.code;
+  const percentage = t.coupon_discount_percentage ?? selectedCoupon.value?.discount_percentage;
+  if (!code?.trim()) return "—";
+  return percentage != null ? `${code} (${formatValue(percentage)}%)` : code;
 }
 
 const editHeroParticipants = computed(() => {
@@ -1173,7 +1350,7 @@ const editHeroParticipants = computed(() => {
 const editHeroConditions = computed(() => {
   const t = editPreviewTransaction.value;
   if (!t) return [];
-  return [
+  const items = [
     {
       label: "Tasa",
       value: getTaxRatePreviewLabel(t.tax_rate_id),
@@ -1183,12 +1360,19 @@ const editHeroConditions = computed(() => {
       value: getCommissionPreviewLabel(t.commission_id),
     },
   ];
+  if (t.coupon_discount_code || t.coupon_id) {
+    items.push({
+      label: "Cupón aplicado",
+      value: getCouponPreviewLabel(t),
+    });
+  }
+  return items;
 });
 
 const editHeroAmounts = computed(() => {
   const t = editPreviewTransaction.value;
   if (!t) return [];
-  return [
+  const items = [
     { label: "Monto origen", value: formatValue(t.origin_amount) },
     { label: "Monto destino", value: formatValue(t.destination_amount) },
     {
@@ -1196,6 +1380,19 @@ const editHeroAmounts = computed(() => {
       value: formatValue(t.resultado_comision ?? t.commission_result),
     },
   ];
+  if (t.coupon_discount_commission != null) {
+    items.push({
+      label: "Descuento cupón",
+      value: `-${formatValue(t.coupon_discount_commission)}`,
+    });
+  }
+  if (t.coupon_discount_total_to_send != null) {
+    items.push({
+      label: "Total con cupón",
+      value: formatValue(t.coupon_discount_total_to_send),
+    });
+  }
+  return items;
 });
 
 async function openPreviewModal(t: Transaction | null) {
@@ -2693,8 +2890,51 @@ onMounted(() => {
                       </div>
                     </div>
 
-                     <div class="grid grid-cols-3 gap-3 rounded-2xl border border-[#e6ebf4] bg-white p-4">
-                      
+                    <div
+                      class="grid grid-cols-3 gap-3 rounded-2xl border border-[#e6ebf4] bg-white p-4"
+                      :class="editModalCouponSummary?.hasCoupon ? 'bg-emerald-50/60' : 'bg-white'"
+                    >
+                      <div class="min-w-0">
+                        <span class="block text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7b88a1]">
+                          Cupón aplicado
+                        </span>
+                        <span
+                          class="mt-2 block truncate text-[13px] font-semibold"
+                          :class="editModalCouponSummary?.hasCoupon ? 'text-emerald-950' : 'text-[#64748b]'"
+                        >
+                          {{ editModalCouponSummary?.code }}
+                        </span>
+                      </div>
+                      <div class="min-w-0">
+                        <span class="block text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7b88a1]">
+                          Descuento
+                        </span>
+                        <span
+                          class="mt-2 block truncate text-[13px] font-semibold"
+                          :class="editModalCouponSummary?.hasCoupon ? 'text-emerald-800' : 'text-[#64748b]'"
+                        >
+                          <template v-if="editModalCouponSummary?.hasCoupon">
+                            {{ editModalCouponSummary.percentage != null ? `${formatValue(editModalCouponSummary.percentage)}%` : "—" }}
+                            <template v-if="editModalCouponSummary.discount != null">
+                              · -{{ formatValue(editModalCouponSummary.discount) }}
+                            </template>
+                          </template>
+                          <template v-else>
+                            —
+                          </template>
+                        </span>
+                      </div>
+                      <div class="min-w-0">
+                        <span class="block text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7b88a1]">
+                          Total con cupón
+                        </span>
+                        <span
+                          class="mt-2 block truncate text-[13px] font-semibold"
+                          :class="editModalCouponSummary?.hasCoupon ? 'text-emerald-950' : 'text-[#64748b]'"
+                        >
+                          {{ editModalCouponSummary?.total != null ? formatValue(editModalCouponSummary.total) : "—" }}
+                        </span>
+                      </div>
                     </div>
 
                     <div class="space-y-4">
@@ -3194,7 +3434,71 @@ onMounted(() => {
                 variant="production"
                 :show-send-cta="false"
                 :show-calculation-mode-toggle="true"
+                :coupon-discount-percentage="selectedCoupon?.discount_percentage ?? null"
+                :coupon-code="selectedCoupon?.code ?? null"
+                :coupon-adjusted-amount-send="couponPreview?.amountSend ?? null"
+                :coupon-adjusted-amount-receive="couponPreview?.amountReceive ?? null"
               />
+              <section class="rounded-2xl border border-[#d8e5fb] bg-white p-5 shadow-sm shadow-brasper-indigoStrong/5">
+                <div class="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 class="text-sm font-semibold text-[#1f2937]">
+                      Cupón
+                    </h3>
+                    <p class="mt-1 text-xs text-[#6b7280]">
+                      Se muestran cupones activos para el par de monedas seleccionado.
+                    </p>
+                  </div>
+                  <span
+                    v-if="cuponesStore.isLoading"
+                    class="text-xs font-medium text-[#6b7280]"
+                  >
+                    Cargando cupones...
+                  </span>
+                </div>
+                <AppDropdown
+                  v-model="form.coupon_id"
+                  :options="couponOptions"
+                  placeholder="Sin cupón"
+                  :searchable="couponOptions.length > 6"
+                />
+                <div
+                  v-if="couponPreview"
+                  class="mt-4 grid gap-3 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 text-sm sm:grid-cols-3"
+                >
+                  <div>
+                    <span class="block text-xs font-semibold uppercase tracking-wide text-emerald-800">
+                      Código
+                    </span>
+                    <span class="mt-1 block font-semibold text-emerald-950">
+                      {{ couponPreview.coupon.code }}
+                    </span>
+                  </div>
+                  <div>
+                    <span class="block text-xs font-semibold uppercase tracking-wide text-emerald-800">
+                      Descuento
+                    </span>
+                    <span class="mt-1 block font-semibold text-emerald-950">
+                      {{ couponPreview.coupon.discount_percentage }}%
+                      ({{ formatValue(couponPreview.discountAmount) }})
+                    </span>
+                  </div>
+                  <div>
+                    <span class="block text-xs font-semibold uppercase tracking-wide text-emerald-800">
+                      Total con cupón
+                    </span>
+                    <span class="mt-1 block font-semibold text-emerald-950">
+                      {{ formatValue(couponPreview.totalToSend) }}
+                    </span>
+                  </div>
+                </div>
+                <p
+                  v-else-if="!cuponesStore.isLoading && availableCoupons.length === 0"
+                  class="mt-3 text-xs text-[#6b7280]"
+                >
+                  No hay cupones activos para esta combinación.
+                </p>
+              </section>
             </div>
 
             <form

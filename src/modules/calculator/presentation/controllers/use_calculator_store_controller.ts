@@ -165,6 +165,7 @@ interface CalculatorState {
   currencyFrom: CurrencyCode
   currencyTo: CurrencyCode
   calculationMode: 'normal' | 'special'
+  inputMode: 'send' | 'receive'
   amountSend: number
   amountReceive: number
   taxRates: ExchangeRate[]
@@ -188,6 +189,7 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
     currencyFrom: DEFAULT_FROM,
     currencyTo: DEFAULT_TO,
     calculationMode: 'normal',
+    inputMode: 'send',
     amountSend: 0,
     amountReceive: 0,
     taxRates: [],
@@ -224,7 +226,9 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
 
       const rate = rateForPair(state.taxRates, state.currencyFrom, state.currencyTo)
       let gross = 0
-      if (state.amountSend > 0) {
+      if (state.calculationMode === 'normal' && state.inputMode === 'receive' && state.amountReceive > 0 && rate > 0) {
+        gross = resolveGrossFromReceive(state.amountReceive, rate, pairCommissions)
+      } else if (state.amountSend > 0) {
         gross = state.amountSend
       } else if (state.amountReceive > 0 && rate > 0 && state.calculationMode === 'normal') {
         gross = resolveGrossFromReceive(state.amountReceive, rate, pairCommissions)
@@ -278,6 +282,13 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
             specialTargetReceive: normalResult.amountReceive
           }
         }
+      }
+
+      if (state.inputMode === 'receive' && state.amountReceive > 0) {
+        const receive = state.amountReceive
+        const gross = resolveGrossFromReceive(receive, rate, pairCommissions)
+        const commissionDef = pickCommissionBracket(gross, pairCommissions)
+        return buildNormalResult(gross, rate, commissionDef, receive)
       }
 
       if (state.amountSend > 0) {
@@ -376,6 +387,7 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
     },
 
     setAmountSend(value: number) {
+      this.inputMode = 'send'
       this.amountSend = value
       if (this.calculationMode === 'normal') {
         this.amountReceive = 0
@@ -386,6 +398,7 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
     },
 
     setAmountReceive(value: number) {
+      this.inputMode = 'receive'
       this.amountReceive = value
       if (this.calculationMode === 'normal') {
         this.amountSend = 0
@@ -396,6 +409,7 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
     },
 
     recalcFromSend() {
+      this.inputMode = 'send'
       const res = this.result
       if (res && this.amountSend > 0 && this.calculationMode === 'normal') {
         this.amountReceive = res.amountReceive
@@ -404,6 +418,7 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
     },
 
     recalcFromReceive() {
+      this.inputMode = 'receive'
       const res = this.result
       if (res && this.amountReceive > 0 && this.calculationMode === 'normal') {
         this.amountSend = res.amountSend
@@ -414,6 +429,7 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
     resetAmounts() {
       this.amountSend = 0
       this.amountReceive = 0
+      this.inputMode = 'send'
     },
 
     resetCalculatorMode() {
