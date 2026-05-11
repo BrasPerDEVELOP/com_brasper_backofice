@@ -518,7 +518,6 @@ onMounted(() => {
     <div
       v-if="showImportModal"
       class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      @click.self="showImportModal = false"
     >
       <div class="w-full max-w-md rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-xl">
         <h2 class="mb-4 text-lg font-semibold text-[#1f2937]">Importar usuarios desde Excel</h2>

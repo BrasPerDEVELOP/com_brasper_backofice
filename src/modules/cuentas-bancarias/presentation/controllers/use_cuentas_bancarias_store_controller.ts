@@ -72,8 +72,20 @@ export const useCuentasBancariasStore = defineStore('cuentasBancarias', {
         this._banksLoaded = true
       } catch (e) {
         console.warn('Error al cargar bancos:', e)
-        this.banks = []
+        if (!this._banksLoaded) this.banks = []
       }
+    },
+
+    upsertBankInCatalog(bank: BankOption) {
+      const next = this.banks.filter((b) => b.id !== bank.id)
+      next.push(bank)
+      next.sort((a, b) => a.bank.localeCompare(b.bank, 'es'))
+      this.banks = next
+      this._banksLoaded = true
+    },
+
+    removeBankFromCatalog(id: string) {
+      this.banks = this.banks.filter((b) => b.id !== id)
     },
 
     async loadClientUsers(force = false) {

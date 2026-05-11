@@ -18,6 +18,9 @@ function formatDetailEntry(entry: unknown): string {
 export function formatApiErrorBody(data: unknown): string | null {
   if (data == null) return null;
   if (typeof data === "string") return data.trim() || null;
+  if (Array.isArray(data) && data.length) {
+    return data.map(formatDetailEntry).filter(Boolean).join("; ");
+  }
   if (typeof data !== "object") return String(data);
   const o = data as Record<string, unknown>;
 

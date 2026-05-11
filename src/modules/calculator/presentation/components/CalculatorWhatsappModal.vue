@@ -2,7 +2,6 @@
   <div
     v-if="open"
     class="fixed inset-0 z-50 flex items-center justify-center bg-[#0b1225]/60 px-4 backdrop-blur-[2px]"
-    @click.self="emit('close')"
   >
     <div
       class="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl shadow-[#0b1225]/30"

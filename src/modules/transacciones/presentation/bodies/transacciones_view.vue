@@ -2153,7 +2153,6 @@ onMounted(() => {
       <div
         v-if="showPreviewModal"
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-        @click.self="closePreviewModal"
       >
         <div
           class="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-[#d8e5fb] bg-white shadow-xl"
@@ -3853,7 +3852,6 @@ onMounted(() => {
       <div
         v-if="showImportModal"
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-        @click.self="showImportModal = false"
       >
         <div
           class="w-full max-w-md rounded-2xl border border-[#dbe7fb] bg-white p-6 shadow-xl"
@@ -3951,7 +3949,6 @@ onMounted(() => {
       <div
         v-if="showImportSimpleModal"
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-        @click.self="showImportSimpleModal = false"
       >
         <div
           class="w-full max-w-md rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-xl"
