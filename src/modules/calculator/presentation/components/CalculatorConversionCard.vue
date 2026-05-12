@@ -55,42 +55,22 @@
         </div>
 
         <div
-          v-if="
-            showCalculationModeToggle &&
-            variant === 'production' &&
-            calculatorStore.calculationMode === 'special'
-          "
-          class="flex flex-col gap-2 rounded-xl border border-[#d8e5fb] bg-[#fbfdff] p-3 sm:flex-row sm:items-center sm:justify-between"
+          v-if="showCoinCatalogReload"
+          class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#e8eef8] bg-[#fbfdff] px-3 py-2"
         >
-          <span class="text-xs font-semibold uppercase tracking-wide text-gray-500">
-            Origen de datos
-          </span>
-          <div class="grid grid-cols-2 gap-1 rounded-lg bg-[#eef2f8] p-1 sm:w-[16rem]">
-            <button
-              type="button"
-              class="rounded-md px-3 py-1.5 text-xs font-semibold transition"
-              :class="
-                !calculatorStore.demoMode
-                  ? 'bg-white text-brasper-indigoStrong shadow-sm'
-                  : 'text-[#6b7280] hover:text-brasper-indigoStrong'
-              "
-              @click="switchEndpointMode(false)"
-            >
-              Original
-            </button>
-            <button
-              type="button"
-              class="rounded-md px-3 py-1.5 text-xs font-semibold transition"
-              :class="
-                calculatorStore.demoMode
-                  ? 'bg-white text-brasper-indigoStrong shadow-sm'
-                  : 'text-[#6b7280] hover:text-brasper-indigoStrong'
-              "
-              @click="switchEndpointMode(true)"
-            >
-              Demo
-            </button>
-          </div>
+          <span class="text-xs text-[#64748b]">Catálogo trial (tasas y comisiones)</span>
+          <button
+            type="button"
+            class="inline-flex items-center gap-1.5 rounded-lg border border-[#bcd7ff] bg-white px-3 py-1.5 text-xs font-semibold text-brasper-indigoStrong shadow-sm transition hover:bg-[#eef5ff] disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="reloadingCatalog || calculatorStore.isLoading"
+            @click="reloadCoinCatalog"
+          >
+            {{
+              reloadingCatalog || calculatorStore.isLoading
+                ? 'Actualizando…'
+                : 'Actualizar tasas y comisiones'
+            }}
+          </button>
         </div>
 
         <div class="overflow-visible rounded-xl border border-gray-300 px-3 py-1.5 text-xl shadow-md">
@@ -278,17 +258,21 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import CalculatorWhatsappModal from './CalculatorWhatsappModal.vue'
 import { useCalculatorPage, type CalculatorPageVariant } from '../composables/use_calculator_page'
 
 const props = withDefaults(
   defineProps<{
     variant?: CalculatorPageVariant
+    /** Si es true con variant producción: datos desde API trial (`*-trial`), sin conmutador en UI. */
+    useTrialCoinApi?: boolean
     /** Si es false, oculta el CTA de WhatsApp y el copy de garantía (p. ej. embed en backoffice). */
     showSendCta?: boolean
     /** Si es true, permite alternar entre calculadora normal y especial. */
     showCalculationModeToggle?: boolean
+    /** Botón para volver a cargar tasas/comisiones desde la API (p. ej. cotización en modal). */
+    showCoinCatalogReload?: boolean
     /** Descuento de cupón aplicado a la comisión actual. */
     couponDiscountPercentage?: number | null
     couponCode?: string | null
@@ -297,8 +281,10 @@ const props = withDefaults(
   }>(),
   {
     variant: 'production',
+    useTrialCoinApi: false,
     showSendCta: true,
     showCalculationModeToggle: false,
+    showCoinCatalogReload: false,
     couponDiscountPercentage: null,
     couponCode: null,
     couponAdjustedAmountSend: null,
@@ -325,12 +311,23 @@ const {
   onAmountReceiveInput,
   onFromChange,
   onToChange,
-  switchEndpointMode,
   handleButtonClick,
   setMessageLanguage,
   closeWhatsappModal,
   copyWhatsappMessage
-} = useCalculatorPage(props.variant)
+} = useCalculatorPage(props.variant, { useTrialCoinApi: props.useTrialCoinApi })
+
+const reloadingCatalog = ref(false)
+
+async function reloadCoinCatalog() {
+  if (reloadingCatalog.value || calculatorStore.isLoading) return
+  reloadingCatalog.value = true
+  try {
+    await calculatorStore.loadData({ background: false })
+  } finally {
+    reloadingCatalog.value = false
+  }
+}
 
 const hasAppliedCoupon = computed(
   () =>

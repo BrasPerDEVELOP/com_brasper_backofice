@@ -36,9 +36,21 @@ function errorMessageFromCatch(e: unknown, fallback: string): string {
   return fallback
 }
 
+/** Encadena cargas para no solapar `isLoading` / `isRefreshing` entre peticiones. */
+let loadTransactionsChain: Promise<void> = Promise.resolve()
+
+export interface LoadTransactionsOptions {
+  /**
+   * Por defecto (undefined): si ya hay filas al ejecutar la petición, refresco en segundo plano
+   * (`isRefreshing`) para no ocultar la tabla. `false` fuerza pantalla de carga (`isLoading`).
+   */
+  background?: boolean
+}
+
 interface TransactionsState {
   transactions: Transaction[]
   isLoading: boolean
+  isRefreshing: boolean
   isImporting: boolean
   isCreating: boolean
   isUpdating: boolean
@@ -49,6 +61,7 @@ export const useTransactionsStore = defineStore('transactions', {
   state: (): TransactionsState => ({
     transactions: [],
     isLoading: false,
+    isRefreshing: false,
     isImporting: false,
     isCreating: false,
     isUpdating: false,
@@ -56,18 +69,40 @@ export const useTransactionsStore = defineStore('transactions', {
   }),
 
   actions: {
-    async loadTransactions(params?: GetTransactionsParams) {
-      this.isLoading = true
-      this.error = null
-      try {
-        const repo = getTransactionsRepository()
-        const useCase = new GetTransactionsUseCase(repo)
-        this.transactions = await useCase.execute(params)
-      } catch (e) {
-        this.error = e instanceof Error ? e.message : 'Error al cargar transacciones'
-      } finally {
-        this.isLoading = false
+    async loadTransactions(
+      params?: GetTransactionsParams,
+      options?: LoadTransactionsOptions
+    ) {
+      const run = async () => {
+        const hadRows = this.transactions.length > 0
+        const explicitBlocking = options?.background === false
+        const background = hadRows && !explicitBlocking
+
+        this.error = null
+        if (background) {
+          this.isRefreshing = true
+        } else {
+          this.isLoading = true
+        }
+        try {
+          const repo = getTransactionsRepository()
+          const useCase = new GetTransactionsUseCase(repo)
+          const list = await useCase.execute(params)
+          this.transactions = list
+        } catch (e) {
+          this.error = errorMessageFromCatch(e, 'Error al cargar transacciones')
+        } finally {
+          if (background) {
+            this.isRefreshing = false
+          } else {
+            this.isLoading = false
+          }
+        }
       }
+
+      const next = loadTransactionsChain.catch(() => {}).then(() => run())
+      loadTransactionsChain = next
+      return next
     },
 
     async importExcel(file: File, filters?: GetTransactionsParams) {

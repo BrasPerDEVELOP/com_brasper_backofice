@@ -32,6 +32,7 @@ import UsuarioCreateFormModal from "@/interface/components/UsuarioCreateFormModa
 import CuentaBancariaCreateFormModal from "@/interface/components/CuentaBancariaCreateFormModal.vue";
 import type { UserListItem } from "@modules/auth/infrastructure/adapters/users_management_api_adapter";
 import CalculatorConversionCard from "@modules/calculator/presentation/components/CalculatorConversionCard.vue";
+import TasasDemoCompact from "@modules/tasas/presentation/components/tasas_demo_compact.vue";
 import { Domain } from "@/interface/infrastructure/services";
 import { useTransactionPreviewController } from "../controllers/use_transaction_preview_controller";
 import { fetchUsers } from "@modules/auth/infrastructure/adapters/users_management_api_adapter";
@@ -42,6 +43,15 @@ const tasasStore = useTasasStore();
 const comisionesStore = useComisionesStore();
 const calculatorStore = useCalculatorStore();
 const cuponesStore = useCuponesStore();
+
+/** Catálogo coin (trial) listo para el paso Cotización sin parpadeo de carga. */
+function transactionTrialCoinCatalogReady(): boolean {
+  return (
+    calculatorStore.taxRates.length > 0 &&
+    calculatorStore.commissions.length > 0 &&
+    calculatorStore.lastCoinCatalogWasTrial === true
+  );
+}
 
 const { ensurePreviewCatalogLoaded, buildPreviewSections } =
   useTransactionPreviewController();
@@ -71,6 +81,8 @@ const userFilter = ref<string>("");
 const bankAccountFilter = ref<string>("");
 const createdAtFrom = ref<string>("");
 const createdAtTo = ref<string>("");
+/** Filtro opcional por `bank_id` antes de elegir cuenta destino (paso Datos). */
+const destinationBankFilterId = ref("");
 const perPage = ref(10);
 const currentPage = ref(1);
 const fileInput = ref<HTMLInputElement | null>(null);
@@ -241,6 +253,10 @@ function goCreateNext() {
       return;
     }
     transactionsStore.error = null;
+    form.origin_amount = roundMoneyAmount(Number(form.origin_amount) || 0);
+    form.destination_amount = roundMoneyAmount(
+      Number(form.destination_amount) || 0,
+    );
     createStepIndex.value = 1;
     return;
   }
@@ -299,11 +315,76 @@ function bankAccountToOption(a: BankAccount) {
     : "-";
   const holder =
     (a.account_holder_type ?? "").toLowerCase().includes("juridica") ||
+    (a.account_holder_type ?? "").toLowerCase().includes("jurídica") ||
     (a.account_holder_type ?? "").toLowerCase().includes("legal")
       ? (a.business_name ?? "-")
       : [a.holder_names, a.holder_surnames].filter(Boolean).join(" ") || "-";
   const accNum = a.account_number ?? "-";
   return { value: a.id, label: `${bankName} - ${accNum} (${holder})` };
+}
+
+/** Titular o razón social; misma lógica que `company_name` en el POST. */
+function accountCompanyDisplayLine(a: BankAccount): string {
+  const holderType = (a.account_holder_type ?? "").toLowerCase();
+  const isLegal =
+    holderType.includes("juridica") ||
+    holderType.includes("jurídica") ||
+    holderType.includes("legal");
+  const holderLine = [a.holder_names, a.holder_surnames]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+  return (isLegal ? (a.business_name ?? "").trim() : holderLine) || "—";
+}
+
+/** Cuenta destino: mínimo en lista; el bloque «Detalle» muestra bank_id / bank_name / company_name. */
+function destinationBankAccountToOption(a: BankAccount): {
+  value: string;
+  label: string;
+} {
+  const bankFilter = destinationBankFilterId.value?.trim();
+  const bank = cuentasStore.banks.find((b) => b.id === a.bank_id);
+  const bankName = (bank?.bank ?? "—").trim();
+  const company = accountCompanyDisplayLine(a);
+  const accNum =
+    (a.account_number ?? "").trim() ||
+    (a.cci_number ?? "").trim() ||
+    (a.pix_key ?? "").trim() ||
+    "—";
+  if (bankFilter) {
+    return { value: a.id, label: `${company} · ${accNum}` };
+  }
+  return { value: a.id, label: `${bankName} · ${accNum}` };
+}
+
+/** Metadatos de banco para POST/PUT, alineados con cuenta destino y catálogo `banks`. */
+function bankMetaFromDestinationAccount(
+  accountId: string,
+): { bank_id: string; bank_name: string; company_name: string } | null {
+  const trimmed = accountId?.trim();
+  if (!trimmed) return null;
+  const account = cuentasStore.bankAccounts.find((a) => a.id === trimmed);
+  if (!account?.bank_id?.trim()) return null;
+  const bank = cuentasStore.banks.find((b) => b.id === account.bank_id);
+  const bank_name = (bank?.bank ?? "").trim();
+  const holderType = (account.account_holder_type ?? "").toLowerCase();
+  const isLegal =
+    holderType.includes("juridica") ||
+    holderType.includes("jurídica") ||
+    holderType.includes("legal");
+  const holderLine = [account.holder_names, account.holder_surnames]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+  const company_name =
+    (isLegal ? (account.business_name ?? "").trim() : holderLine) ||
+    bank_name ||
+    "";
+  return {
+    bank_id: account.bank_id.trim(),
+    bank_name,
+    company_name,
+  };
 }
 
 function normalizeCurrencyCode(value: unknown): string {
@@ -473,6 +554,7 @@ function mergeMissingSelectedAccount(
   options: { value: string; label: string }[],
   selectedId: string,
   expectedCurrency = "",
+  mapAccount: (a: BankAccount) => { value: string; label: string } = bankAccountToOption,
 ): { value: string; label: string }[] {
   const id = selectedId?.trim();
   if (!id) return options;
@@ -480,7 +562,7 @@ function mergeMissingSelectedAccount(
   const acc = cuentasStore.bankAccounts.find((a) => String(a.id) === id);
   if (!acc) return options;
   if (!bankAccountMatchesCurrency(acc, expectedCurrency)) return options;
-  return [...options, bankAccountToOption(acc)];
+  return [...options, mapAccount(acc)];
 }
 
 function isBankAccountSelectable(
@@ -530,18 +612,46 @@ const originAccountOptions = computed(() => {
 const destinationAccountOptions = computed(() => {
   const userId = form.user_id?.trim();
   const currency = selectedAccountCurrencies.value.destination;
+  const bankFilter = destinationBankFilterId.value?.trim();
   const base = cuentasStore.bankAccounts
     .filter((a) => bankAccountMatchesSide(a, "destination"))
     .filter((a) => bankAccountMatchesCurrency(a, currency))
     .filter(
       (a) => !userId || String(a.user_id ?? "").trim() === userId,
     )
-    .map(bankAccountToOption);
+    .filter((a) => {
+      if (!bankFilter) return true;
+      return String(a.bank_id ?? "").trim() === bankFilter;
+    })
+    .map(destinationBankAccountToOption);
   return mergeMissingSelectedAccount(
     base,
     form.bank_account_destination_id,
     currency,
+    destinationBankAccountToOption,
   );
+});
+
+/** Bancos del catálogo que tienen al menos una cuenta destino elegible. */
+const destinationBankFilterOptions = computed(() => {
+  const userId = form.user_id?.trim();
+  const currency = selectedAccountCurrencies.value.destination;
+  const accountBankIds = new Set(
+    cuentasStore.bankAccounts
+      .filter((a) => bankAccountMatchesSide(a, "destination"))
+      .filter((a) => bankAccountMatchesCurrency(a, currency))
+      .filter((a) => !userId || String(a.user_id ?? "").trim() === userId)
+      .map((a) => String(a.bank_id ?? "").trim())
+      .filter(Boolean),
+  );
+  const opts = cuentasStore.banks
+    .filter((b) => accountBankIds.has(String(b.id).trim()))
+    .map((b) => ({
+      value: b.id,
+      label: (b.bank ?? "").trim() || "—",
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label, "es"));
+  return [{ value: "", label: "Todos" }, ...opts];
 });
 
 function mergeMissingTransactionUser(
@@ -632,18 +742,52 @@ const salesAdvisorOptions = computed(() =>
     }),
 );
 
-const taxRateOptions = computed(() =>
-  tasasStore.taxRates.map((r) => ({
+/** Par de cotización (calculadora trial) para acotar listas de tasa/comisión en paso Datos. */
+function transactionQuoteCoinPair(): { from: string; to: string } {
+  const from = (calculatorStore.currencyFrom ?? "").toLowerCase();
+  const to = (calculatorStore.currencyTo ?? "").toLowerCase();
+  return { from, to };
+}
+
+const taxRateOptions = computed(() => {
+  const { from, to } = transactionQuoteCoinPair();
+  const all = tasasStore.taxRates;
+  const filtered =
+    from && to
+      ? all.filter(
+          (r) =>
+            (r.coin_a ?? "").toLowerCase() === from &&
+            (r.coin_b ?? "").toLowerCase() === to,
+        )
+      : [];
+  const list = filtered.length > 0 ? filtered : all;
+  return list.map((r) => ({
     value: r.id,
     label: `${r.coin_a}-${r.coin_b} (${r.tax})`,
-  })),
-);
+  }));
+});
 
-const commissionOptions = computed(() =>
-  comisionesStore.commissions.map((c) => ({
+const commissionOptions = computed(() => {
+  const { from, to } = transactionQuoteCoinPair();
+  const all = comisionesStore.commissions;
+  const filtered =
+    from && to
+      ? all.filter(
+          (c) =>
+            (c.coin_a ?? "").toLowerCase() === from &&
+            (c.coin_b ?? "").toLowerCase() === to,
+        )
+      : [];
+  const list = filtered.length > 0 ? filtered : all;
+  return list.map((c) => ({
     value: c.id,
     label: `${c.coin_a}-${c.coin_b} (${c.percentage}%)`,
-  })),
+  }));
+});
+
+/** Metadatos que se enviarán al API; reflejados en paso Datos junto a cuenta destino. */
+const destinationBankMetaDisplay = computed(() =>
+  bankMetaFromDestinationAccount(form.bank_account_destination_id),
 );
 
 const statusFormOptions = TRANSACTION_STATUSES.map((s) => ({
@@ -771,6 +915,7 @@ function resetForm() {
   form.checked_image = null;
   editingId.value = null;
   editSourceTransaction.value = null;
+  destinationBankFilterId.value = "";
   calculatorStore.resetCalculatorMode();
   calculatorStore.resetAmounts();
   calculatorStore.updateSelectedIds();
@@ -823,9 +968,18 @@ function syncCalculatorFromForm() {
 function syncFromCalculator() {
   const res = calculatorStore.result;
   const couponAmounts = couponPreview.value;
-  form.origin_amount = couponAmounts?.amountSend ?? res?.amountSend ?? calculatorStore.amountSend ?? 0;
-  form.destination_amount =
-    couponAmounts?.amountReceive ?? res?.amountReceive ?? calculatorStore.amountReceive ?? 0;
+  form.origin_amount = roundMoneyAmount(
+    couponAmounts?.amountSend ??
+      res?.amountSend ??
+      calculatorStore.amountSend ??
+      0,
+  );
+  form.destination_amount = roundMoneyAmount(
+    couponAmounts?.amountReceive ??
+      res?.amountReceive ??
+      calculatorStore.amountReceive ??
+      0,
+  );
   form.tax_rate_id = calculatorStore.selectedTaxRateId ?? "";
   form.commission_id = calculatorStore.selectedCommissionId ?? "";
   if (res) {
@@ -882,8 +1036,10 @@ function openCreateModal() {
   loadFormOptions();
   void loadEditableUsers();
   void cuponesStore.loadCoupons();
-  calculatorStore.setDemoMode(false);
-  void calculatorStore.loadData();
+  calculatorStore.setDemoMode(true);
+  void calculatorStore.loadData({
+    background: transactionTrialCoinCatalogReady(),
+  });
 }
 
 async function loadFormOptions() {
@@ -971,8 +1127,10 @@ async function hydrateEditForm(row: Transaction) {
     form.status = (row.status ?? "verification").toLowerCase();
     form.checked =
       row.checked === true || (row.status ?? "").toLowerCase() === "checked";
-    form.origin_amount = Number(row.origin_amount) || 0;
-    form.destination_amount = Number(row.destination_amount) || 0;
+    form.origin_amount = roundMoneyAmount(Number(row.origin_amount) || 0);
+    form.destination_amount = roundMoneyAmount(
+      Number(row.destination_amount) || 0,
+    );
     {
       const rec = row as Record<string, unknown>;
       const rc = rec.resultado_comision ?? rec.commission_result;
@@ -992,6 +1150,14 @@ async function hydrateEditForm(row: Transaction) {
     form.payment_voucher = null;
     form.checked_image = null;
     editSourceTransaction.value = row;
+    {
+      const destId = form.bank_account_destination_id?.trim();
+      const acc = destId
+        ? cuentasStore.bankAccounts.find((a) => String(a.id) === destId)
+        : undefined;
+      destinationBankFilterId.value =
+        acc?.bank_id?.trim() ?? row.bank_id?.trim() ?? "";
+    }
     await nextTick();
   } finally {
     isHydratingTransactionForm.value = false;
@@ -1010,8 +1176,9 @@ async function openEditModal(t: Transaction) {
   try {
     await hydrateEditForm(t);
     editModalLoading.value = false;
-    calculatorStore.setDemoMode(false);
-    await calculatorStore.loadData();
+    calculatorStore.setDemoMode(true);
+    const catalogReady = transactionTrialCoinCatalogReady();
+    await calculatorStore.loadData({ background: catalogReady });
     syncCalculatorFromForm();
     void loadFormOptions();
     void loadEditableUsers();
@@ -1056,6 +1223,14 @@ async function submitForm() {
       editingId.value
         ? "La transacción debe conservar tasa y comisión válidas para guardar"
         : "Tasa y comisión son obligatorios (usa la calculadora primero)";
+    return;
+  }
+  const bankMeta = bankMetaFromDestinationAccount(
+    form.bank_account_destination_id,
+  );
+  if (!bankMeta) {
+    transactionsStore.error =
+      "No se pudo resolver el banco de la cuenta destino (falta `bank_id` o la cuenta no está cargada). Recarga o elige otra cuenta destino.";
     return;
   }
   try {
@@ -1159,6 +1334,7 @@ async function submitForm() {
       payment_voucher: paymentVoucher,
       checked_image: checkedImage,
       checked: form.checked,
+      ...bankMeta,
     };
     if (editingId.value) {
       /** PUT: el backend recalcula `status` y asigna `payment_date` al pasar a finalizada. */
@@ -1749,6 +1925,10 @@ async function submitImportSimple() {
   importSimpleError.value = "";
   transactionsStore.error = null;
   try {
+    await Promise.all([
+      cuentasStore.loadBankAccounts(),
+      cuentasStore.loadBanks(),
+    ]);
     const payloads = await parseSimpleImportExcel(importSimpleFile.value);
     if (payloads.length === 0) {
       importSimpleError.value = "No se encontraron filas válidas en el archivo";
@@ -1758,8 +1938,15 @@ async function submitImportSimple() {
     let created = 0;
     const errors: string[] = [];
     for (const p of payloads) {
+      const meta = bankMetaFromDestinationAccount(p.bank_account_destination);
+      if (!meta) {
+        errors.push(
+          `${p.code}: no se resolvió banco para cuenta destino ${p.bank_account_destination}`,
+        );
+        continue;
+      }
       try {
-        await transactionsStore.createTransaction(p);
+        await transactionsStore.createTransaction({ ...p, ...meta });
         created++;
       } catch (e) {
         errors.push(`${p.code}: ${e instanceof Error ? e.message : "Error"}`);
@@ -1781,7 +1968,7 @@ async function submitImportSimple() {
 }
 
 function loadTransactions() {
-  transactionsStore.loadTransactions(apiFilterParams.value);
+  void transactionsStore.loadTransactions(apiFilterParams.value);
 }
 
 watch(
@@ -1791,8 +1978,20 @@ watch(
     form.bank_account_origin_id = "";
     form.bank_account_destination_id = "";
     form.agent_id = "";
+    destinationBankFilterId.value = "";
   },
 );
+
+watch(destinationBankFilterId, () => {
+  if (isHydratingTransactionForm.value) return;
+  const id = form.bank_account_destination_id?.trim();
+  if (!id) return;
+  const acc = cuentasStore.bankAccounts.find((a) => String(a.id) === id);
+  const f = destinationBankFilterId.value?.trim();
+  if (f && acc && String(acc.bank_id ?? "").trim() !== f) {
+    form.bank_account_destination_id = "";
+  }
+});
 
 watch(
   [
@@ -1846,11 +2045,18 @@ watch(
 );
 
 onMounted(() => {
-  Promise.all([
+  /** Evita mostrar `error` de otra vista o de un intento anterior mientras llegan cuentas/API. */
+  transactionsStore.error = null;
+  calculatorStore.setDemoMode(true);
+  void calculatorStore.loadData({
+    background: transactionTrialCoinCatalogReady(),
+  });
+  void loadTransactions();
+  void Promise.all([
     cuentasStore.loadBankAccounts(),
     cuentasStore.loadTransactionFormUsers(),
     cuentasStore.loadBanks(),
-  ]).then(() => loadTransactions());
+  ]);
 });
 </script>
 
@@ -2027,16 +2233,29 @@ onMounted(() => {
       class="relative overflow-x-auto rounded-xl border border-[#e5e7eb] bg-white"
     >
       <div
-        v-if="transactionsStore.isLoading"
+        v-if="
+          transactionsStore.isLoading && transactionsStore.transactions.length === 0
+        "
         class="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/80"
       >
         <span class="text-sm text-[#6b7280]">Cargando...</span>
       </div>
-
-      <table
-        v-show="!transactionsStore.isLoading"
-        class="w-full min-w-[1080px] text-left text-sm"
+      <div
+        v-else-if="transactionsStore.isRefreshing"
+        class="pointer-events-none absolute right-3 top-2 z-10"
       >
+        <span
+          class="inline-flex items-center gap-1.5 rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-medium text-[#64748b] shadow-sm ring-1 ring-[#e2e8f0]"
+        >
+          <span
+            class="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-brasper-indigoStrong"
+            aria-hidden="true"
+          />
+          Actualizando…
+        </span>
+      </div>
+
+      <table class="w-full min-w-[1080px] text-left text-sm">
         <thead>
           <tr class="bg-[#dbeafe]">
             <th class="w-10 px-2 py-3" title="Verificada">
@@ -3118,7 +3337,19 @@ onMounted(() => {
                                 </button>
                               </div>
                             </div>
-                            <div class="space-y-1.5">
+                            <div class="space-y-1.5 sm:col-span-2">
+                              <label class="block text-sm font-medium text-[#374151]"
+                                >Banco</label
+                              >
+                              <AppDropdown
+                                v-model="destinationBankFilterId"
+                                :options="destinationBankFilterOptions"
+                                placeholder="Todos"
+                                :searchable="destinationBankFilterOptions.length > 8"
+                                class="min-w-0"
+                              />
+                            </div>
+                            <div class="space-y-1.5 sm:col-span-2">
                               <label class="block text-sm font-medium text-[#374151]"
                                 >Cuenta destino *</label
                               >
@@ -3158,6 +3389,42 @@ onMounted(() => {
                                   </svg>
                                 </button>
                               </div>
+                            </div>
+                            <div
+                              v-if="destinationBankMetaDisplay"
+                              class="sm:col-span-2 rounded-xl border border-emerald-200/80 bg-emerald-50/60 p-4"
+                            >
+                              <p
+                                class="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-900"
+                              >
+                                Detalle
+                              </p>
+                              <dl class="grid gap-2 text-xs sm:grid-cols-3">
+                                <div>
+                                  <dt class="text-[#047857]">ID banco</dt>
+                                  <dd class="mt-0.5 break-all font-mono font-semibold text-[#064e3b]">
+                                    {{ destinationBankMetaDisplay.bank_id }}
+                                  </dd>
+                                </div>
+                                <div>
+                                  <dt class="text-[#047857]">Nombre</dt>
+                                  <dd class="mt-0.5 font-semibold text-[#064e3b]">
+                                    {{ destinationBankMetaDisplay.bank_name || "—" }}
+                                  </dd>
+                                </div>
+                                <div>
+                                  <dt class="text-[#047857]">Titular / empresa</dt>
+                                  <dd class="mt-0.5 font-semibold text-[#064e3b]">
+                                    {{ destinationBankMetaDisplay.company_name || "—" }}
+                                  </dd>
+                                </div>
+                              </dl>
+                            </div>
+                            <div
+                              v-else-if="form.bank_account_destination_id?.trim()"
+                              class="sm:col-span-2 rounded-lg border border-amber-200 bg-amber-50/90 px-3 py-2 text-xs text-amber-950"
+                            >
+                              No se resolvió el banco de la cuenta destino en el catálogo local.
                             </div>
                             <div class="space-y-1.5">
                               <label class="block text-sm font-medium text-[#374151]"
@@ -3428,16 +3695,22 @@ onMounted(() => {
               <p
                 class="text-center text-[10px] font-semibold uppercase tracking-[0.22em] text-brasper-indigoStrong"
               >
-                Producción
+                Cotización (prueba / trial)
               </p>
               <CalculatorConversionCard
                 variant="production"
+                :use-trial-coin-api="true"
                 :show-send-cta="false"
                 :show-calculation-mode-toggle="true"
+                :show-coin-catalog-reload="true"
                 :coupon-discount-percentage="selectedCoupon?.discount_percentage ?? null"
                 :coupon-code="selectedCoupon?.code ?? null"
                 :coupon-adjusted-amount-send="couponPreview?.amountSend ?? null"
                 :coupon-adjusted-amount-receive="couponPreview?.amountReceive ?? null"
+              />
+              <TasasDemoCompact
+                :use-main-calculator-store="true"
+                :filter-rates-to-selected-pair="true"
               />
               <section class="rounded-2xl border border-[#d8e5fb] bg-white p-5 shadow-sm shadow-brasper-indigoStrong/5">
                 <div class="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
@@ -3639,7 +3912,19 @@ onMounted(() => {
                       </button>
                     </div>
                   </div>
-                  <div class="space-y-1.5">
+                  <div class="space-y-1.5 sm:col-span-2">
+                    <label class="block text-sm font-medium text-[#374151]"
+                      >Banco</label
+                    >
+                    <AppDropdown
+                      v-model="destinationBankFilterId"
+                      :options="destinationBankFilterOptions"
+                      placeholder="Todos"
+                      :searchable="destinationBankFilterOptions.length > 8"
+                      class="min-w-0"
+                    />
+                  </div>
+                  <div class="space-y-1.5 sm:col-span-2">
                     <label class="block text-sm font-medium text-[#374151]"
                       >Cuenta destino *</label
                     >
@@ -3679,6 +3964,47 @@ onMounted(() => {
                         </svg>
                       </button>
                     </div>
+                  </div>
+                  <div
+                    v-if="destinationBankMetaDisplay"
+                    class="sm:col-span-2 rounded-xl border border-emerald-200/80 bg-emerald-50/60 p-4"
+                  >
+                    <p
+                      class="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-900"
+                    >
+                      Detalle
+                    </p>
+                    <dl
+                      class="grid gap-3 text-sm sm:grid-cols-3 sm:gap-4"
+                    >
+                      <div>
+                        <dt class="text-xs font-medium text-[#047857]">ID banco</dt>
+                        <dd
+                          class="mt-0.5 break-all font-mono text-xs font-semibold text-[#064e3b]"
+                        >
+                          {{ destinationBankMetaDisplay.bank_id }}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt class="text-xs font-medium text-[#047857]">Nombre del banco</dt>
+                        <dd class="mt-0.5 font-semibold text-[#064e3b]">
+                          {{ destinationBankMetaDisplay.bank_name || "—" }}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt class="text-xs font-medium text-[#047857]">Titular / empresa</dt>
+                        <dd class="mt-0.5 font-semibold text-[#064e3b]">
+                          {{ destinationBankMetaDisplay.company_name || "—" }}
+                        </dd>
+                      </div>
+                    </dl>
+                  </div>
+                  <div
+                    v-else-if="form.bank_account_destination_id?.trim()"
+                    class="sm:col-span-2 rounded-lg border border-amber-200 bg-amber-50/90 px-3 py-2 text-xs text-amber-950"
+                  >
+                    No se encontró el banco de esta cuenta en el catálogo local. Recarga la página
+                    o revisa la cuenta en Cuentas bancarias.
                   </div>
                 </div>
               </section>

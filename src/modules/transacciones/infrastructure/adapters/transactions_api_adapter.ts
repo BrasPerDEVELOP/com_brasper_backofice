@@ -226,6 +226,18 @@ function parseTransaction(item: unknown): Transaction {
     coupon_discount_percentage: parseOptionalAmount(o.coupon_discount_percentage),
     coupon_discount_commission: parseOptionalAmount(o.coupon_discount_commission),
     coupon_discount_total_to_send: parseOptionalAmount(o.coupon_discount_total_to_send),
+    bank_id:
+      o.bank_id != null && String(o.bank_id).trim()
+        ? String(o.bank_id).trim()
+        : undefined,
+    bank_name:
+      o.bank_name != null && String(o.bank_name).trim()
+        ? String(o.bank_name).trim()
+        : undefined,
+    company_name:
+      o.company_name != null && String(o.company_name).trim()
+        ? String(o.company_name).trim()
+        : undefined,
     send_date: o.send_date != null ? String(o.send_date) : undefined,
     payment_date: o.payment_date != null ? String(o.payment_date) : undefined,
     send_voucher: o.send_voucher != null ? String(o.send_voucher) : undefined,
@@ -367,6 +379,15 @@ export class TransactionsApiAdapter implements TransactionsRepository {
       formData.append('coupon_discount_commission', String(payload.coupon_discount_commission))
     if (payload.coupon_discount_total_to_send != null)
       formData.append('coupon_discount_total_to_send', String(payload.coupon_discount_total_to_send))
+    if (payload.bank_id?.trim()) {
+      formData.append('bank_id', payload.bank_id.trim())
+    }
+    if (payload.bank_name != null) {
+      formData.append('bank_name', String(payload.bank_name))
+    }
+    if (payload.company_name != null) {
+      formData.append('company_name', String(payload.company_name))
+    }
 
     /**
      * `fetch` + FormData evita que axios 1.x deje `Content-Type: application/json`

@@ -11,11 +11,11 @@ export class LoadCalculatorDataUseCase {
   constructor(private readonly repository: CalculatorRepository) {}
 
   async execute(): Promise<LoadedCalculatorData> {
-    const [currencies, taxRates, commissions] = await Promise.all([
-      this.repository.getCurrencies(),
+    /** Tasas y comisiones son las que bloquean la calculadora; `/currencies` no se consume en la UI actual. */
+    const [taxRates, commissions] = await Promise.all([
       this.repository.getTaxRates(),
       this.repository.getCommissions()
     ])
-    return { currencies, taxRates, commissions }
+    return { currencies: [], taxRates, commissions }
   }
 }

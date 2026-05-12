@@ -59,6 +59,7 @@ export function assertCreateTransactionPayload(
   if (!Number.isFinite(p.destination_amount) || p.destination_amount < 0) {
     missing.push("monto destino válido");
   }
+  if (!p.bank_id?.trim()) missing.push("banco (desde cuenta destino)");
   if (missing.length > 0) {
     throw new Error(`Faltan datos obligatorios: ${missing.join(", ")}`);
   }

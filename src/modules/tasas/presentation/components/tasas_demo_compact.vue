@@ -5,6 +5,14 @@
         Configuración demo
       </p>
       <h2 class="text-xl font-semibold text-[#232b4d]">Tasas de Cambio (Demo)</h2>
+      <p
+        v-if="filterRatesToSelectedPair"
+        class="mt-1 text-xs font-medium text-[#5b6b8c]"
+      >
+        Par en cotización:
+        {{ calculatorStore.currencyFrom.toUpperCase() }} →
+        {{ calculatorStore.currencyTo.toUpperCase() }}
+      </p>
     </div>
 
     <div v-if="calculatorStore.isLoading" class="mt-2 text-sm text-[#666]">
@@ -17,9 +25,12 @@
       <p v-if="tasasStore.error" class="mt-2 rounded-lg bg-[#dc3545]/10 px-3 py-2 text-sm text-[#dc3545]">
         {{ tasasStore.error }}
       </p>
-      <div class="mt-3 space-y-2">
+      <div v-if="displayRates.length === 0" class="mt-3 rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs text-amber-950">
+        No hay fila de tasa trial para este par en el catálogo. Revisa en admin o cambia el par en la calculadora.
+      </div>
+      <div v-else class="mt-3 space-y-2">
         <div
-          v-for="rate in sortedRates"
+          v-for="rate in displayRates"
           :key="rate.id"
           class="rounded-lg border border-[#dbe7fb] bg-[#fbfdff] p-2.5"
         >
@@ -117,11 +128,26 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useCalculatorDemoStore } from '@modules/calculator/presentation/controllers/use_calculator_store_controller'
+import {
+  useCalculatorDemoStore,
+  useCalculatorStore
+} from '@modules/calculator/presentation/controllers/use_calculator_store_controller'
 import { useTasasStore } from '../controllers/use_tasas_store_controller'
 import type { ExchangeRate } from '@modules/calculator/domain/models'
 
-const calculatorStore = useCalculatorDemoStore()
+const props = withDefaults(
+  defineProps<{
+    /** Si true, sincroniza con la calculadora principal (p. ej. modal de transacciones en API trial). */
+    useMainCalculatorStore?: boolean
+    /** Si true: solo la fila del par actual (origen → destino) de la calculadora. */
+    filterRatesToSelectedPair?: boolean
+  }>(),
+  { useMainCalculatorStore: false, filterRatesToSelectedPair: false }
+)
+
+const calculatorStore = props.useMainCalculatorStore
+  ? useCalculatorStore()
+  : useCalculatorDemoStore()
 const tasasStore = useTasasStore()
 
 const expandedHistoryId = ref<string | null>(null)
@@ -130,6 +156,13 @@ const draftTaxes = ref<Record<string, string>>({})
 const sortedRates = computed(() =>
   [...calculatorStore.taxRates].sort((a, b) => a.pair.localeCompare(b.pair))
 )
+
+const displayRates = computed(() => {
+  if (!props.filterRatesToSelectedPair) return sortedRates.value
+  const from = calculatorStore.currencyFrom
+  const to = calculatorStore.currencyTo
+  return sortedRates.value.filter((r) => r.from === from && r.to === to)
+})
 
 /** Interpreta tasa desde input (coma o punto decimal). */
 function parseTaxInput(raw: string, fallback: number): number {

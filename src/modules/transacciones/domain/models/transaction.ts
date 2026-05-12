@@ -40,6 +40,10 @@ export interface Transaction {
   created_at?: string
   created_by?: string
   updated_at?: string
+  /** Banco asociado a la transacción (catálogo `banks`). */
+  bank_id?: string
+  bank_name?: string
+  company_name?: string
   /** Contabilidad / respuesta API extendida */
   comision_final_interna?: number
   impuesto_final_interno?: number

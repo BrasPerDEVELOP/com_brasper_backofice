@@ -30,6 +30,10 @@ export interface CreateTransactionPayload {
   coupon_discount_percentage?: number | null
   coupon_discount_commission?: number | null
   coupon_discount_total_to_send?: number | null
+  /** Relación con catálogo de bancos (cuenta destino). */
+  bank_id?: string
+  bank_name?: string
+  company_name?: string
   /** En POST el servidor ignora y deja `false`; usar solo en PUT. */
   checked?: boolean
 }

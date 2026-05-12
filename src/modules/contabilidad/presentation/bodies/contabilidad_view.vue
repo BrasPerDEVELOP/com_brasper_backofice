@@ -337,7 +337,7 @@ function goToPage(page: number) {
 }
 
 function loadTransactions() {
-  transactionsStore.loadTransactions(apiFilterParams.value);
+  void transactionsStore.loadTransactions(apiFilterParams.value);
 }
 
 watch([searchQuery, perPage], () => {
@@ -353,11 +353,13 @@ watch(
 );
 
 onMounted(() => {
-  Promise.all([
+  transactionsStore.error = null;
+  void loadTransactions();
+  void Promise.all([
     cuentasStore.loadBankAccounts(),
     cuentasStore.loadClientUsers(),
     cuentasStore.loadBanks(),
-  ]).then(() => loadTransactions());
+  ]);
 });
 </script>
 
@@ -467,16 +469,29 @@ onMounted(() => {
       class="relative overflow-x-auto rounded-xl border border-[#e5e7eb] bg-white"
     >
       <div
-        v-if="transactionsStore.isLoading"
+        v-if="
+          transactionsStore.isLoading && transactionsStore.transactions.length === 0
+        "
         class="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/80"
       >
         <span class="text-sm text-[#6b7280]">Cargando...</span>
       </div>
-
-      <table
-        v-show="!transactionsStore.isLoading"
-        class="w-full min-w-[1500px] text-left text-sm"
+      <div
+        v-else-if="transactionsStore.isRefreshing"
+        class="pointer-events-none absolute right-3 top-2 z-10"
       >
+        <span
+          class="inline-flex items-center gap-1.5 rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-medium text-[#64748b] shadow-sm ring-1 ring-[#e2e8f0]"
+        >
+          <span
+            class="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-brasper-indigoStrong"
+            aria-hidden="true"
+          />
+          Actualizando…
+        </span>
+      </div>
+
+      <table class="w-full min-w-[1500px] text-left text-sm">
         <thead>
           <tr class="bg-[#dbeafe]">
             <th class="w-10 px-2 py-3" title="Verificada">

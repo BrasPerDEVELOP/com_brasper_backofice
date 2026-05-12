@@ -17,7 +17,16 @@ const DEFAULT_INITIAL_AMOUNT = 1000
 
 export type CalculatorPageVariant = 'production' | 'demo'
 
-export function useCalculatorPage(variant: CalculatorPageVariant) {
+export interface UseCalculatorPageOptions {
+  /** Si true en variante producción: usa siempre `coin/tax-rate-trial` y `coin/commission-trial` en el store principal. */
+  useTrialCoinApi?: boolean
+}
+
+export function useCalculatorPage(
+  variant: CalculatorPageVariant,
+  options?: UseCalculatorPageOptions
+) {
+  const useTrialCoinApi = Boolean(options?.useTrialCoinApi)
   const calculatorStore =
     variant === 'demo' ? useCalculatorDemoStore() : useCalculatorStore()
 
@@ -159,9 +168,14 @@ export function useCalculatorPage(variant: CalculatorPageVariant) {
 
   onMounted(async () => {
     if (variant === 'production') {
-      calculatorStore.setDemoMode(false)
+      calculatorStore.setDemoMode(useTrialCoinApi)
     }
-    await calculatorStore.loadData()
+    const expectTrialCoinCatalog = variant === 'demo' || useTrialCoinApi
+    const catalogReady =
+      calculatorStore.taxRates.length > 0 &&
+      calculatorStore.commissions.length > 0 &&
+      calculatorStore.lastCoinCatalogWasTrial === expectTrialCoinCatalog
+    await calculatorStore.loadData({ background: catalogReady })
     if (!calculatorStore.amountSend || calculatorStore.amountSend <= 0) {
       calculatorStore.setAmountSend(DEFAULT_INITIAL_AMOUNT)
       calculatorStore.recalcFromSend()

@@ -70,13 +70,20 @@ function resolveGrossFromReceive(
   return gross
 }
 
-function rateForPair(
+/**
+ * Tasa efectiva `from` → `to` según catálogo coin: fila directa, o inversa (1 / tasa).
+ * Así el tipo de cambio acompaña el par elegido aunque el backend solo devuelva un sentido.
+ */
+function effectiveExchangeRate(
   taxRates: ExchangeRate[],
   from: CurrencyCode,
   to: CurrencyCode
 ): number {
-  const row = taxRates.find((r) => r.from === from && r.to === to)
-  return row?.rate ?? 0
+  const direct = taxRates.find((r) => r.from === from && r.to === to)
+  if (direct && direct.rate > 0) return direct.rate
+  const inverse = taxRates.find((r) => r.from === to && r.to === from)
+  if (inverse && inverse.rate > 0) return 1 / inverse.rate
+  return 0
 }
 
 function buildNormalResult(
@@ -175,10 +182,23 @@ interface CalculatorState {
   selectedCommissionId: string | null
   isLoading: boolean
   error: string | null
+  /**
+   * Tras la última carga exitosa de tasas/comisiones: si coincidía con API `-trial`.
+   * Evita `background: true` con arrays llenos pero de otro modo (p. ej. producción vs trial).
+   */
+  lastCoinCatalogWasTrial: boolean | null
 }
 
 const DEFAULT_FROM: CurrencyCode = 'pen'
 const DEFAULT_TO: CurrencyCode = 'brl'
+
+/** Evita peticiones duplicadas si varios componentes llaman `loadData` al mismo tiempo. */
+const calculatorLoadDataInflight = new Map<string, Promise<void>>()
+
+export interface LoadCalculatorDataOptions {
+  /** Si true y ya hay tasas/comisiones, no muestra el estado de carga (refresco silencioso). */
+  background?: boolean
+}
 
 /** Si `lockTrial`, siempre API `-trial` (store aislado para calculadora demo en la misma página que producción). */
 function buildCalculatorStoreDefinition(lockTrial: boolean) {
@@ -197,7 +217,8 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
     selectedTaxRateId: null,
     selectedCommissionId: null,
     isLoading: false,
-    error: null
+    error: null,
+    lastCoinCatalogWasTrial: null
   }),
 
   getters: {
@@ -205,11 +226,9 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
       return CURRENCY_OPTIONS[state.currencyFrom] ?? []
     },
 
-    /** Tasa de cambio del par actual (desde API tax-rate). */
+    /** Tasa de cambio del par actual (directa o derivada del inverso en catálogo). */
     currentRate(state): number {
-      const pair = getCurrencyPairKey(state.currencyFrom, state.currencyTo)
-      const found = state.taxRates.find((r) => r.pair === pair)
-      return found?.rate ?? 0
+      return effectiveExchangeRate(state.taxRates, state.currencyFrom, state.currencyTo)
     },
 
     /** Comisiones del par actual (puede haber varios rangos por par). */
@@ -224,7 +243,7 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
       const pairCommissions = this.commissionsForPair
       if (pairCommissions.length === 0) return null
 
-      const rate = rateForPair(state.taxRates, state.currencyFrom, state.currencyTo)
+      const rate = effectiveExchangeRate(state.taxRates, state.currencyFrom, state.currencyTo)
       let gross = 0
       if (state.calculationMode === 'normal' && state.inputMode === 'receive' && state.amountReceive > 0 && rate > 0) {
         gross = resolveGrossFromReceive(state.amountReceive, rate, pairCommissions)
@@ -261,7 +280,7 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
      * O indicás `amountReceive`: se infiere el bruto con neto = recibe/tasa y bruto = neto/(1-p).
      */
     result(state): CalculatorResult | null {
-      const rate = rateForPair(state.taxRates, state.currencyFrom, state.currencyTo)
+      const rate = effectiveExchangeRate(state.taxRates, state.currencyFrom, state.currencyTo)
       if (!rate || rate <= 0) return null
       const pairCommissions = this.commissionsForPair
 
@@ -326,31 +345,67 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
       this.demoMode = value
     },
 
-    async loadData() {
-      this.isLoading = true
-      this.error = null
+    async loadData(options?: LoadCalculatorDataOptions) {
+      const storeId = this.$id
+      const existing = calculatorLoadDataInflight.get(storeId)
+      if (existing) {
+        await existing
+        return
+      }
+
+      const useTrial = lockTrial || this.demoMode
+      const catalogMatchesEndpoint =
+        this.taxRates.length > 0 &&
+        this.commissions.length > 0 &&
+        this.lastCoinCatalogWasTrial === useTrial
+
+      const showLoading = !options?.background || !catalogMatchesEndpoint
+
+      const run = (async () => {
+        if (showLoading) {
+          this.isLoading = true
+        }
+        this.error = null
+        try {
+          const repo = new CalculatorApiAdapter(useTrial)
+          const useCase = new LoadCalculatorDataUseCase(repo)
+          const data = await useCase.execute()
+          this.currencies = data.currencies
+          this.taxRates = data.taxRates
+          this.commissions = data.commissions
+          this.lastCoinCatalogWasTrial = useTrial
+          this.updateSelectedIds()
+        } catch (e) {
+          this.error = e instanceof Error ? e.message : 'Error al cargar datos'
+        } finally {
+          if (showLoading) {
+            this.isLoading = false
+          }
+        }
+      })()
+
+      calculatorLoadDataInflight.set(storeId, run)
       try {
-        const useTrial = lockTrial || this.demoMode
-        const repo = new CalculatorApiAdapter(useTrial)
-        const useCase = new LoadCalculatorDataUseCase(repo)
-        const data = await useCase.execute()
-        this.currencies = data.currencies
-        this.taxRates = data.taxRates
-        this.commissions = data.commissions
-        this.updateSelectedIds()
-      } catch (e) {
-        this.error = e instanceof Error ? e.message : 'Error al cargar datos'
+        await run
       } finally {
-        this.isLoading = false
+        calculatorLoadDataInflight.delete(storeId)
       }
     },
 
     /** Actualiza selectedTaxRateId y selectedCommissionId según el par actual. */
     updateSelectedIds() {
       const pair = getCurrencyPairKey(this.currencyFrom, this.currencyTo)
-      const rate = this.taxRates.find((r) => r.pair === pair)
+      const invPair = getCurrencyPairKey(this.currencyTo, this.currencyFrom)
+      const direct = this.taxRates.find((r) => r.pair === pair)
+      const inverse = this.taxRates.find((r) => r.pair === invPair)
+      const taxRow =
+        direct && direct.rate > 0
+          ? direct
+          : inverse && inverse.rate > 0
+            ? inverse
+            : null
       const commission = this.currentCommission
-      this.selectedTaxRateId = rate?.id ?? null
+      this.selectedTaxRateId = taxRow?.id ?? null
       this.selectedCommissionId = commission?.id ?? null
     },
 
