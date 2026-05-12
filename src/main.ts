@@ -17,7 +17,7 @@ setAuthCallbacks(
     return store.token ?? null
   },
   () => {
-    useAuthStore().logout()
+    useAuthStore().clearSession()
     router.push('/')
   }
 )

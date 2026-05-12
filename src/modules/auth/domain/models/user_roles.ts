@@ -18,3 +18,17 @@ export const USER_ROLE_LABELS: Record<UserRole, string> = {
   marketing: 'Marketing',
   accounting: 'Contabilidad'
 }
+
+/** Alinea el rol del backend con `USER_ROLES` (minúsculas) para comparaciones y permisos por defecto. */
+export function normalizeStoredRole(role: unknown): string | null {
+  if (role == null) return null
+  const s = String(role).trim()
+  if (!s) return null
+  const lower = s.toLowerCase()
+  if (USER_ROLES.includes(lower as UserRole)) return lower
+  return s
+}
+
+export function isAdminRole(role: string | null | undefined): boolean {
+  return normalizeStoredRole(role) === 'admin'
+}

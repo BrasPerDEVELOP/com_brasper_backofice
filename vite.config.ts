@@ -14,7 +14,6 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
-      includeAssets: ['favicon.svg', 'assets/logos/logo.png'],
       manifest: {
         name: 'Brasper Backoffice',
         short_name: 'Backoffice',

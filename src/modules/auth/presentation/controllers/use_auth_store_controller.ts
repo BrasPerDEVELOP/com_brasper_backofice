@@ -1,5 +1,13 @@
 import { defineStore } from 'pinia'
-import { getDefaultPermissionsForRole, normalizePermissions, type PermissionKey, type User } from '../../domain/models'
+import {
+  ALL_PERMISSIONS,
+  getDefaultPermissionsForRole,
+  isAdminRole,
+  normalizePermissions,
+  normalizeStoredRole,
+  type PermissionKey,
+  type User
+} from '../../domain/models'
 import type { UpdateProfilePayload } from '../../infrastructure/adapters/auth_repository'
 import { LoginUseCase } from '../../application/use_cases'
 import { AuthApiAdapter } from '../../infrastructure/adapters'
@@ -28,6 +36,7 @@ function loadStoredUser(): User | null {
     const name = [names, lastnames].filter(Boolean).join(' ') || email
     const phoneVal = o.phone
     const phone = typeof phoneVal === 'number' ? phoneVal : (typeof phoneVal === 'string' && phoneVal ? Number(phoneVal) : null)
+    const roleNorm = normalizeStoredRole(o.role)
     return {
       id: String(o.id),
       email,
@@ -38,10 +47,10 @@ function loadStoredUser(): User | null {
       document_type: o.document_type != null ? String(o.document_type) : null,
       profile_image: o.profile_image != null ? String(o.profile_image) : null,
       is_agent: Boolean(o.is_agent),
-      role: o.role != null ? String(o.role) : null,
+      role: roleNorm,
       phone: Number.isFinite(phone) ? phone : null,
       code_phone: o.code_phone != null ? String(o.code_phone) : null,
-      permissions: normalizePermissions(o.permissions, o.role != null ? String(o.role) : null),
+      permissions: normalizePermissions(o.permissions, roleNorm),
       must_change_password: Boolean(o.must_change_password)
     }
   } catch {
@@ -87,7 +96,7 @@ export const useAuthStore = defineStore('auth', {
 
   getters: {
     isAuthenticated: (state) => state.user !== null,
-    isAdmin: (state) => state.user?.role === 'admin',
+    isAdmin: (state) => isAdminRole(state.user?.role),
     permissions: (state) =>
       state.user?.permissions?.length
         ? state.user.permissions
@@ -116,25 +125,32 @@ export const useAuthStore = defineStore('auth', {
     },
 
     /**
-     * Valida que el usuario actual tenga rol admin. El controlador centraliza
-     * esta validación para evitar mutaciones directas del estado desde las vistas.
-     * @returns true si el usuario es admin
+     * Valida que el usuario pueda usar el backoffice (no solo admin: asesores/ventas, etc.).
+     * Bloquea rol `client` y cuentas sin ningún permiso conocido.
      */
-    validateAdminAccess(): boolean {
+    validateBackofficeAccess(): boolean {
       const user = this.user
       if (!user) {
         this.error = 'Error: No se pudo obtener información del usuario'
         return false
       }
-      if (user.role !== 'admin') {
-        this.error = 'Solo usuarios con rol admin pueden acceder'
+      const role = normalizeStoredRole(user.role)
+      if (role === 'client') {
+        this.error = 'Este panel es para el equipo interno. Los clientes usan el portal público.'
+        return false
+      }
+      const perms = this.permissions
+      const allowed = new Set<string>(ALL_PERMISSIONS)
+      const hasAnyPanelPermission = perms.some((p) => allowed.has(p))
+      if (!hasAnyPanelPermission) {
+        this.error = 'Tu cuenta no tiene permisos para este panel. Consulta con un administrador.'
         return false
       }
       return true
     },
 
     hasPermission(permission: PermissionKey | string): boolean {
-      if (this.user?.role === 'admin') return true
+      if (isAdminRole(this.user?.role)) return true
       return this.permissions.includes(permission)
     },
 

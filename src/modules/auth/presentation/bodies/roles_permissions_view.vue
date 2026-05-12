@@ -14,9 +14,32 @@ import {
   updateRolePermissions,
   type RolePermissions
 } from '../../infrastructure/adapters/role_permissions_api_adapter'
+import axios from 'axios'
 import { useAuthStore } from '../controllers/use_auth_store_controller'
 
 const authStore = useAuthStore()
+
+function formatLoadPermissionsError(e: unknown): string {
+  const tail =
+    'Se muestran permisos por defecto del front (no necesariamente los de la base de datos).'
+  if (axios.isAxiosError(e)) {
+    const status = e.response?.status
+    if (!e.response && e.code === 'ERR_NETWORK') {
+      return `No hubo respuesta del servidor (${e.message}). ${tail} Comprueba red o CORS si en consola aparece bloqueo de origen.`
+    }
+    if (status === 401) {
+      return `No autorizado (401). Suele ser sesión caducada o token inválido. ${tail} Prueba cerrar sesión y volver a entrar.`
+    }
+    if (status === 403) {
+      return `Acceso denegado (403). Tu rol no incluye el permiso roles.permissions.view en el servidor. ${tail}`
+    }
+    return `${e.message}. ${tail}`
+  }
+  if (e instanceof Error) {
+    return `${e.message}. ${tail}`
+  }
+  return `Error desconocido. ${tail}`
+}
 
 const loading = ref(false)
 const saving = ref(false)
@@ -67,10 +90,7 @@ async function loadPermissions() {
     rolePermissions.value = await fetchRolePermissions()
   } catch (e) {
     rolePermissions.value = getDefaultRolePermissions()
-    error.value =
-      e instanceof Error
-        ? `${e.message}. Se muestran permisos por defecto hasta que el backend esté disponible.`
-        : 'No se pudieron cargar permisos; se muestran permisos por defecto.'
+    error.value = formatLoadPermissionsError(e)
   } finally {
     loading.value = false
   }
@@ -91,7 +111,15 @@ async function saveSelectedRole() {
     setRolePermissions(saved.role, saved.permissions)
     successMessage.value = 'Permisos actualizados correctamente'
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'No se pudieron guardar los permisos'
+    error.value = axios.isAxiosError(e)
+      ? e.response?.status === 401
+        ? 'No autorizado (401). Vuelve a iniciar sesión.'
+        : e.response?.status === 403
+          ? 'No tienes permiso para guardar (403).'
+          : (e.message || 'No se pudieron guardar los permisos')
+      : e instanceof Error
+        ? e.message
+        : 'No se pudieron guardar los permisos'
   } finally {
     saving.value = false
   }

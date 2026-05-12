@@ -1,6 +1,6 @@
 import { env } from '@/interface/config/env'
 import { useAuthStore } from '../controllers/use_auth_store_controller'
-import { normalizePermissions, type User } from '../../domain/models'
+import { normalizePermissions, normalizeStoredRole, isAdminRole, type User } from '../../domain/models'
 
 const REQUIRED_QUERY_KEYS = ['data', 'iv', 'salt', 'v'] as const
 const PBKDF2_ITERATIONS = 120000
@@ -77,10 +77,10 @@ function normalizeUser(raw: unknown): User {
     document_type: o.document_type != null ? String(o.document_type) : null,
     profile_image: o.profile_image != null ? String(o.profile_image) : null,
     is_agent: Boolean(o.is_agent),
-    role: o.role != null ? String(o.role) : null,
+    role: normalizeStoredRole(o.role),
     phone: Number.isFinite(phone) ? phone : null,
     code_phone: o.code_phone != null ? String(o.code_phone) : null,
-    permissions: normalizePermissions(o.permissions, o.role != null ? String(o.role) : null),
+    permissions: normalizePermissions(o.permissions, normalizeStoredRole(o.role)),
     must_change_password: Boolean(o.must_change_password)
   }
 }
@@ -128,11 +128,11 @@ export function useAdminSso() {
     }
 
     const user = normalizeUser(payload.user)
-    if (user.role !== 'admin') throw new Error('SSO inválido o expirado.')
+    if (!isAdminRole(user.role)) throw new Error('SSO inválido o expirado.')
 
     authStore.setSession(user, payload.token)
     await authStore.restoreSession()
-    if (!authStore.user || authStore.user.role !== 'admin' || !authStore.token) {
+    if (!authStore.user || !isAdminRole(authStore.user.role) || !authStore.token) {
       throw new Error('SSO inválido o expirado.')
     }
     return true
