@@ -75,7 +75,8 @@ export async function fetchUsers(params?: FetchUsersParams): Promise<UserListIte
   if (params?.role?.trim()) query.role = params.role.trim()
   const response = await apiClient.get<unknown>(url, {
     params: query,
-    headers: { Accept: 'application/json' }
+    headers: { Accept: 'application/json' },
+    skipAuthRedirect: true
   })
   const raw = response.data
   const arr = Array.isArray(raw) ? raw : extractArray(raw)

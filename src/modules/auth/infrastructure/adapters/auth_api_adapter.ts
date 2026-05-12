@@ -8,7 +8,7 @@ import type {
   UpdateProfilePayload
 } from './auth_repository'
 import type { User } from '../../domain/models'
-import { normalizePermissions } from '../../domain/models'
+import { normalizePermissions, normalizeStoredRole } from '../../domain/models'
 
 const log = createLoggerWithContext('auth')
 
@@ -34,6 +34,7 @@ function parseUser(data: unknown): User | null {
   const phone = typeof phoneVal === 'number' ? phoneVal : (typeof phoneVal === 'string' && phoneVal ? Number(phoneVal) : null)
   const documentType = o.document_type ?? o.documentType ?? o.tipo_documento
   const codePhone = o.code_phone ?? o.codePhone ?? o.codigo_telefono
+  const roleNorm = normalizeStoredRole(o.role)
   return {
     id: String(id),
     email,
@@ -44,10 +45,10 @@ function parseUser(data: unknown): User | null {
     document_type: documentType != null ? String(documentType) : null,
     profile_image: o.profile_image != null ? String(o.profile_image) : null,
     is_agent: Boolean(o.is_agent),
-    role: o.role != null ? String(o.role) : null,
+    role: roleNorm,
     phone: Number.isFinite(phone) ? phone : null,
     code_phone: codePhone != null ? String(codePhone) : null,
-    permissions: normalizePermissions(o.permissions, o.role != null ? String(o.role) : null),
+    permissions: normalizePermissions(o.permissions, roleNorm),
     must_change_password: Boolean(o.must_change_password)
   }
 }
@@ -88,10 +89,17 @@ export class AuthApiAdapter implements AuthRepository {
           }
         : rawUserPayload
     const user = parseUser(userPayload)
-    const token = typeof dataObj.token === 'string' ? dataObj.token : ''
+    const token =
+      [dataObj.token, dataObj.access_token, nestedData.token, nestedData.access_token].find(
+        (v): v is string => typeof v === 'string' && v.length > 0
+      ) ?? ''
 
     if (!user) {
       throw new Error('Respuesta de login inválida')
+    }
+
+    if (!token) {
+      throw new Error('No se recibió token de sesión. Revisa la respuesta del servidor.')
     }
 
     if (import.meta.env.DEV) {
@@ -102,8 +110,11 @@ export class AuthApiAdapter implements AuthRepository {
   }
 
   async logout(): Promise<void> {
-    const url = `${authBase()}/logout/`
-    await apiClient.post(url, {}, { headers: { 'Content-Type': 'application/json' } }).catch((err) => {
+    const url = `${authBase()}/logout`
+    await apiClient.post(url, {}, {
+      headers: { 'Content-Type': 'application/json' },
+      skipAuthRedirect: true
+    }).catch((err) => {
       log.warn('Logout request failed', err)
     })
   }

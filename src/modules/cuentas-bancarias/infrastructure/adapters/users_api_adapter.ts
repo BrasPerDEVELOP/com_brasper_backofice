@@ -36,7 +36,8 @@ export async function fetchClientUsers(): Promise<UserOption[]> {
       const url = Domain.http('user/name-list/')
       const response = await apiClient.get<unknown>(url, {
         params: { role },
-        headers: { Accept: 'application/json' }
+        headers: { Accept: 'application/json' },
+        skipAuthRedirect: true
       })
       const raw = response.data
       const arr = Array.isArray(raw) ? raw : extractArray(raw)
@@ -74,7 +75,8 @@ export async function fetchUsersForTransactionForm(): Promise<UserOption[]> {
       const url = Domain.http('user/name-list/')
       const response = await apiClient.get<unknown>(url, {
         params: { role },
-        headers: { Accept: 'application/json' }
+        headers: { Accept: 'application/json' },
+        skipAuthRedirect: true
       })
       const raw = response.data
       const arr = Array.isArray(raw) ? raw : extractArray(raw)

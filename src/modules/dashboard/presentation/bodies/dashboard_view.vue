@@ -6,6 +6,7 @@ import { useCuentasBancariasStore } from "@modules/cuentas-bancarias/presentatio
 import { useCuponesStore } from "@modules/cupones/presentation/controllers/use_cupones_store_controller";
 import { useComisionesStore } from "@modules/comisiones/presentation/controllers/use_comisiones_store_controller";
 import { useTasasStore } from "@modules/tasas/presentation/controllers/use_tasas_store_controller";
+import { useAuthStore } from "@modules/auth/presentation/controllers/use_auth_store_controller";
 import { fetchUsers } from "@modules/auth/infrastructure/adapters/users_management_api_adapter";
 import type { Transaction } from "@modules/transacciones/domain/models";
 import { TRANSACTION_STATUS_LABELS } from "@modules/transacciones/domain/models";
@@ -15,6 +16,7 @@ const cuentasStore = useCuentasBancariasStore();
 const cuponesStore = useCuponesStore();
 const comisionesStore = useComisionesStore();
 const tasasStore = useTasasStore();
+const authStore = useAuthStore();
 
 const loading = ref(true);
 const usersTotal = ref<number | null>(null);
@@ -122,16 +124,17 @@ onMounted(async () => {
     comisionesStore.loadCommissions(),
     tasasStore.loadTaxRates(),
   ]);
-  try {
-    const users = await fetchUsers();
-    usersTotal.value = users.length;
-  } catch (e) {
-    usersLoadError.value =
-      e instanceof Error ? e.message : "No se pudo cargar el listado de usuarios";
-    usersTotal.value = null;
-  } finally {
-    loading.value = false;
+  if (authStore.hasPermission("users.view")) {
+    try {
+      const users = await fetchUsers();
+      usersTotal.value = users.length;
+    } catch (e) {
+      usersLoadError.value =
+        e instanceof Error ? e.message : "No se pudo cargar el listado de usuarios";
+      usersTotal.value = null;
+    }
   }
+  loading.value = false;
 });
 </script>
 

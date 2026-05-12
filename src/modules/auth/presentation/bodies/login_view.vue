@@ -18,7 +18,7 @@
         <div class="mb-8">
           <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brasper-indigoStrong">Acceso seguro</p>
           <h1 class="mt-2 text-3xl font-semibold text-[#232b4d]">Iniciar sesión</h1>
-          <p class="mt-2 text-sm text-[#666]">Ingresa con tu cuenta de administrador de Brasper.</p>
+          <p class="mt-2 text-sm text-[#666]">Ingresa con tu cuenta del equipo Brasper (admin, asesores u otros roles con permiso).</p>
         </div>
 
         <form class="flex flex-col gap-5" @submit.prevent="handleLogin">
@@ -106,10 +106,8 @@ onMounted(() => {
 const handleLogin = async () => {
   try {
     await authStore.login(username.value, password.value)
-    if (!authStore.validateAdminAccess()) {
-      if (authStore.user && authStore.user.role !== 'admin') {
-        await authStore.logout()
-      }
+    if (!authStore.validateBackofficeAccess()) {
+      await authStore.logout()
       return
     }
     await router.push('/app/transacciones')
