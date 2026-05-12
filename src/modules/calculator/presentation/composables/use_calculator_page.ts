@@ -176,12 +176,6 @@ export function useCalculatorPage(
       calculatorStore.commissions.length > 0 &&
       calculatorStore.lastCoinCatalogWasTrial === expectTrialCoinCatalog
     await calculatorStore.loadData({ background: catalogReady })
-    if (!calculatorStore.amountSend || calculatorStore.amountSend <= 0) {
-      calculatorStore.setAmountSend(DEFAULT_INITIAL_AMOUNT)
-      calculatorStore.recalcFromSend()
-      amountSendLocal.value = normalizeTwoDecimals(calculatorStore.amountSend)
-      amountReceiveLocal.value = normalizeTwoDecimals(calculatorStore.amountReceive)
-    }
   })
 
   return {

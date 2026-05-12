@@ -114,54 +114,17 @@ function buildNormalResult(
   }
 }
 
-function buildSpecialResult(
-  gross: number,
-  targetReceive: number,
-  rate: number,
-  commissionDef: CommissionRange | null
-): CalculatorResult {
-  const p = commissionDef ? commissionDef.percentage / 100 : 0
-  const baseCommission = gross * p
-  const targetNetOrigin = rate > 0 ? targetReceive / rate : 0
-  const finalCommission = gross - targetNetOrigin
-  const specialDiscountAmount = baseCommission - finalCommission
-  const specialDiscountPercentage =
-    baseCommission > 0 ? (specialDiscountAmount / baseCommission) * 100 : 0
-
-  let specialDiscountValid = true
-  let specialDiscountInvalidReason: string | null = null
-
-  if (baseCommission <= 0) {
-    specialDiscountValid = Math.abs(finalCommission) < 1e-9
-    if (!specialDiscountValid) {
-      specialDiscountInvalidReason =
-        'La comision base es 0%; no se puede aplicar un descuento especial para sostener este monto.'
-    }
-  } else if (specialDiscountPercentage < 0) {
-    specialDiscountValid = false
-    specialDiscountInvalidReason =
-      'El monto a enviar supera el rango valido: requeriria aumentar la comision en lugar de descontarla.'
-  } else if (specialDiscountPercentage > 100) {
-    specialDiscountValid = false
-    specialDiscountInvalidReason =
-      'El monto a enviar es insuficiente para sostener el monto a recibir aun con 100% de descuento.'
-  }
-
+/** Misma fórmula que la calculadora normal; `special` solo indica catálogo/tasa distinta (p. ej. trial). */
+function asSpecialCatalogResult(normal: CalculatorResult): CalculatorResult {
   return {
-    amountSend: gross,
-    amountReceive: targetReceive,
-    rate,
-    commission: finalCommission,
-    commissionRate: p * 100,
-    totalToSend: gross - finalCommission,
+    ...normal,
     calculationMode: 'special',
-    baseCommission,
-    specialDiscountPercentage,
-    specialDiscountAmount,
-    finalCommission,
-    specialTargetReceive: targetReceive,
-    specialDiscountValid,
-    specialDiscountInvalidReason
+    specialTargetReceive: normal.amountReceive,
+    specialDiscountPercentage: 0,
+    specialDiscountAmount: 0,
+    finalCommission: normal.commission,
+    specialDiscountValid: true,
+    specialDiscountInvalidReason: null
   }
 }
 
@@ -210,8 +173,10 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
     currencyTo: DEFAULT_TO,
     calculationMode: 'normal',
     inputMode: 'send',
-    amountSend: 0,
-    amountReceive: 0,
+    amountSendNormal: 0,
+    amountReceiveNormal: 0,
+    amountSendSpecial: 0,
+    amountReceiveSpecial: 0,
     taxRates: [],
     commissions: [],
     selectedTaxRateId: null,
@@ -224,6 +189,16 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
   getters: {
     destinationOptions(state): CurrencyCode[] {
       return CURRENCY_OPTIONS[state.currencyFrom] ?? []
+    },
+
+    /** Monto a enviar según el modo activo. */
+    amountSend(state): number {
+      return state.calculationMode === 'special' ? state.amountSendSpecial : state.amountSendNormal
+    },
+
+    /** Monto a recibir según el modo activo. */
+    amountReceive(state): number {
+      return state.calculationMode === 'special' ? state.amountReceiveSpecial : state.amountReceiveNormal
     },
 
     /** Tasa de cambio del par actual (directa o derivada del inverso en catálogo). */
@@ -245,12 +220,16 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
 
       const rate = effectiveExchangeRate(state.taxRates, state.currencyFrom, state.currencyTo)
       let gross = 0
-      if (state.calculationMode === 'normal' && state.inputMode === 'receive' && state.amountReceive > 0 && rate > 0) {
-        gross = resolveGrossFromReceive(state.amountReceive, rate, pairCommissions)
-      } else if (state.amountSend > 0) {
-        gross = state.amountSend
-      } else if (state.amountReceive > 0 && rate > 0 && state.calculationMode === 'normal') {
-        gross = resolveGrossFromReceive(state.amountReceive, rate, pairCommissions)
+      const isSpecial = state.calculationMode === 'special'
+      const send = isSpecial ? state.amountSendSpecial : state.amountSendNormal
+      const receive = isSpecial ? state.amountReceiveSpecial : state.amountReceiveNormal
+
+      if (state.inputMode === 'receive' && receive > 0 && rate > 0) {
+        gross = resolveGrossFromReceive(receive, rate, pairCommissions)
+      } else if (send > 0) {
+        gross = send
+      } else if (receive > 0 && rate > 0) {
+        gross = resolveGrossFromReceive(receive, rate, pairCommissions)
       } else {
         return pairCommissions[0] ?? null
       }
@@ -284,40 +263,45 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
       if (!rate || rate <= 0) return null
       const pairCommissions = this.commissionsForPair
 
-      if (state.calculationMode === 'special') {
-        if (state.amountReceive > 0 && state.amountSend > 0) {
-          const gross = state.amountSend
+      const isSpecial = state.calculationMode === 'special'
+      const send = isSpecial ? state.amountSendSpecial : state.amountSendNormal
+      const receive = isSpecial ? state.amountReceiveSpecial : state.amountReceiveNormal
+
+      if (isSpecial) {
+        if (state.inputMode === 'receive' && receive > 0) {
+          const gross = resolveGrossFromReceive(receive, rate, pairCommissions)
           const commissionDef = pickCommissionBracket(gross, pairCommissions)
-          return buildSpecialResult(gross, state.amountReceive, rate, commissionDef)
+          return asSpecialCatalogResult(buildNormalResult(gross, rate, commissionDef, receive))
         }
 
-        if (state.amountSend > 0) {
-          const gross = state.amountSend
+        if (send > 0) {
+          const gross = send
           const commissionDef = pickCommissionBracket(gross, pairCommissions)
-          const normalResult = buildNormalResult(gross, rate, commissionDef)
-          return {
-            ...normalResult,
-            calculationMode: 'special',
-            specialTargetReceive: normalResult.amountReceive
-          }
+          return asSpecialCatalogResult(buildNormalResult(gross, rate, commissionDef))
         }
+
+        if (receive > 0) {
+          const gross = resolveGrossFromReceive(receive, rate, pairCommissions)
+          const commissionDef = pickCommissionBracket(gross, pairCommissions)
+          return asSpecialCatalogResult(buildNormalResult(gross, rate, commissionDef, receive))
+        }
+
+        return null
       }
 
-      if (state.inputMode === 'receive' && state.amountReceive > 0) {
-        const receive = state.amountReceive
+      if (state.inputMode === 'receive' && receive > 0) {
         const gross = resolveGrossFromReceive(receive, rate, pairCommissions)
         const commissionDef = pickCommissionBracket(gross, pairCommissions)
         return buildNormalResult(gross, rate, commissionDef, receive)
       }
 
-      if (state.amountSend > 0) {
-        const gross = state.amountSend
+      if (send > 0) {
+        const gross = send
         const commissionDef = pickCommissionBracket(gross, pairCommissions)
         return buildNormalResult(gross, rate, commissionDef)
       }
 
-      if (state.amountReceive > 0) {
-        const receive = state.amountReceive
+      if (receive > 0) {
         const gross = resolveGrossFromReceive(receive, rate, pairCommissions)
         const commissionDef = pickCommissionBracket(gross, pairCommissions)
         return buildNormalResult(gross, rate, commissionDef, receive)
@@ -421,20 +405,45 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
       this.updateSelectedIds()
     },
 
-    setCalculationMode(mode: 'normal' | 'special') {
+    async setCalculationMode(mode: 'normal' | 'special') {
       if (this.calculationMode === mode) return
-      const previous = this.result
+
+      const snap = {
+        inputMode: this.inputMode,
+        sendN: this.amountSendNormal,
+        recN: this.amountReceiveNormal,
+        sendS: this.amountSendSpecial,
+        recS: this.amountReceiveSpecial
+      }
+
       this.calculationMode = mode
 
+      // Especial: catálogo trial; normal: producción (misma fórmula de comisión/tasa en ambos).
+      this.setDemoMode(mode === 'special')
+
       if (mode === 'special') {
-        if (this.amountReceive <= 0 && previous) this.amountReceive = previous.amountReceive
-        if (this.amountSend <= 0 && previous) this.amountSend = previous.amountSend
+        this.inputMode = snap.inputMode
+        this.amountSendSpecial = snap.sendN
+        this.amountReceiveSpecial = snap.recN
       } else {
-        const res = this.result
-        if (this.amountSend > 0 && res) {
-          this.amountReceive = res.amountReceive
-        } else if (this.amountReceive > 0 && res) {
-          this.amountSend = res.amountSend
+        this.inputMode = snap.inputMode
+        this.amountSendNormal = snap.sendS
+        this.amountReceiveNormal = snap.recS
+      }
+
+      await this.loadData({ background: true })
+
+      if (mode === 'special') {
+        if (this.inputMode === 'receive' && this.amountReceiveSpecial > 0) {
+          this.recalcFromReceive()
+        } else if (this.amountSendSpecial > 0) {
+          this.recalcFromSend()
+        }
+      } else {
+        if (this.inputMode === 'receive' && this.amountReceiveNormal > 0) {
+          this.recalcFromReceive()
+        } else if (this.amountSendNormal > 0) {
+          this.recalcFromSend()
         }
       }
 
@@ -443,22 +452,26 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
 
     setAmountSend(value: number) {
       this.inputMode = 'send'
-      this.amountSend = value
-      if (this.calculationMode === 'normal') {
-        this.amountReceive = 0
+      if (this.calculationMode === 'special') {
+        this.amountSendSpecial = value
+      } else {
+        this.amountSendNormal = value
+        this.amountReceiveNormal = 0
         const res = this.result
-        if (res) this.amountReceive = res.amountReceive
+        if (res) this.amountReceiveNormal = res.amountReceive
       }
       this.updateSelectedIds()
     },
 
     setAmountReceive(value: number) {
       this.inputMode = 'receive'
-      this.amountReceive = value
-      if (this.calculationMode === 'normal') {
-        this.amountSend = 0
+      if (this.calculationMode === 'special') {
+        this.amountReceiveSpecial = value
+      } else {
+        this.amountReceiveNormal = value
+        this.amountSendNormal = 0
         const res = this.result
-        if (res) this.amountSend = res.amountSend
+        if (res) this.amountSendNormal = res.amountSend
       }
       this.updateSelectedIds()
     },
@@ -466,8 +479,12 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
     recalcFromSend() {
       this.inputMode = 'send'
       const res = this.result
-      if (res && this.amountSend > 0 && this.calculationMode === 'normal') {
-        this.amountReceive = res.amountReceive
+      if (res) {
+        if (this.calculationMode === 'special') {
+          if (this.amountSendSpecial > 0) this.amountReceiveSpecial = res.amountReceive
+        } else {
+          if (this.amountSendNormal > 0) this.amountReceiveNormal = res.amountReceive
+        }
       }
       this.updateSelectedIds()
     },
@@ -475,15 +492,21 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
     recalcFromReceive() {
       this.inputMode = 'receive'
       const res = this.result
-      if (res && this.amountReceive > 0 && this.calculationMode === 'normal') {
-        this.amountSend = res.amountSend
+      if (res) {
+        if (this.calculationMode === 'special') {
+          if (this.amountReceiveSpecial > 0) this.amountSendSpecial = res.amountSend
+        } else {
+          if (this.amountReceiveNormal > 0) this.amountSendNormal = res.amountSend
+        }
       }
       this.updateSelectedIds()
     },
 
     resetAmounts() {
-      this.amountSend = 0
-      this.amountReceive = 0
+      this.amountSendNormal = 0
+      this.amountReceiveNormal = 0
+      this.amountSendSpecial = 0
+      this.amountReceiveSpecial = 0
       this.inputMode = 'send'
     },
 

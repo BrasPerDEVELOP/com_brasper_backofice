@@ -68,7 +68,9 @@
             {{
               reloadingCatalog || calculatorStore.isLoading
                 ? 'Actualizando…'
-                : 'Actualizar tasas y comisiones'
+                : calculatorStore.calculationMode === 'special'
+                  ? 'Recalcular'
+                  : 'Actualizar tasas y comisiones'
             }}
           </button>
         </div>
@@ -157,7 +159,8 @@
           <div
             v-if="
               showCalculationModeToggle &&
-              calculatorStore.result.calculationMode === 'special'
+              calculatorStore.result.calculationMode === 'special' &&
+              Math.abs(calculatorStore.result.specialDiscountPercentage) > 0.0005
             "
             class="flex justify-between text-sm"
           >
@@ -167,13 +170,10 @@
             </span>
           </div>
           <div
-            v-if="
-              showCalculationModeToggle &&
-              calculatorStore.result.calculationMode === 'special'
-            "
+            v-if="showCalculationModeToggle"
             class="flex justify-between text-sm"
           >
-            <span class="text-gray-600">Comision base</span>
+            <span class="text-gray-600">Comisión base</span>
             <span class="font-semibold text-gray-900">
               {{ formatCurrency(calculatorStore.result.baseCommission, calculatorStore.currencyFrom) }}
             </span>
@@ -181,7 +181,8 @@
           <div
             v-if="
               showCalculationModeToggle &&
-              calculatorStore.result.calculationMode === 'special'
+              calculatorStore.result.calculationMode === 'special' &&
+              Math.abs(calculatorStore.result.specialDiscountPercentage) > 0.0005
             "
             class="flex justify-between text-sm"
           >
@@ -218,7 +219,6 @@
             </span>
           </div>
           <div
-            v-if="calculatorStore.calculationMode === 'special'"
             class="flex justify-between text-sm"
           >
             <span class="text-gray-600">Tipo de cambio</span>
@@ -327,6 +327,11 @@ async function reloadCoinCatalog() {
   reloadingCatalog.value = true
   try {
     await calculatorStore.loadData({ background: false })
+    if (calculatorStore.inputMode === 'receive' && calculatorStore.amountReceive > 0) {
+      calculatorStore.recalcFromReceive()
+    } else if (calculatorStore.amountSend > 0) {
+      calculatorStore.recalcFromSend()
+    }
   } finally {
     reloadingCatalog.value = false
   }

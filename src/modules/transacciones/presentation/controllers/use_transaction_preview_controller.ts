@@ -230,13 +230,17 @@ export function useTransactionPreviewController() {
       ],
     });
 
+    const hasCoupon = Boolean(
+      rec.coupon_id ||
+        (rec.coupon_discount_code && String(rec.coupon_discount_code).trim()),
+    );
     const amountItems: PreviewItem[] = [
       {
-        label: "Monto origen",
+        label: hasCoupon ? "Monto origen (Base)" : "Monto origen",
         value: formatMoney(rec.origin_amount),
       },
       {
-        label: "Monto destino",
+        label: hasCoupon ? "Monto destino (Base)" : "Monto destino",
         value: formatMoney(rec.destination_amount),
       },
     ];
@@ -244,28 +248,51 @@ export function useTransactionPreviewController() {
       rec.resultado_comision ?? rec.commission_result ?? null;
     if (commissionRes != null && commissionRes !== "")
       amountItems.push({
-        label: "Resultado comisión",
+        label: hasCoupon ? "Comisión (Base)" : "Resultado comisión",
         value: formatMoney(commissionRes),
       });
-    const totalEnviarDisplay =
-      rec.destination_amount != null && rec.destination_amount !== ""
-        ? rec.destination_amount
-        : rec.total_a_enviar ?? rec.total_to_send ?? null;
-    if (totalEnviarDisplay != null && totalEnviarDisplay !== "")
+
+    const totalEnviarBase = rec.total_a_enviar ?? rec.total_to_send ?? null;
+    if (totalEnviarBase != null && totalEnviarBase !== "")
       amountItems.push({
-        label: "Total a enviar",
-        value: formatMoney(totalEnviarDisplay),
+        label: hasCoupon ? "Total a enviar (Base)" : "Total a enviar",
+        value: formatMoney(totalEnviarBase),
       });
-    if (rec.coupon_discount_commission != null && rec.coupon_discount_commission !== "")
-      amountItems.push({
-        label: "Descuento cupón",
-        value: `-${formatMoney(rec.coupon_discount_commission)}`,
-      });
-    if (rec.coupon_discount_total_to_send != null && rec.coupon_discount_total_to_send !== "")
-      amountItems.push({
-        label: "Total con cupón",
-        value: formatMoney(rec.coupon_discount_total_to_send),
-      });
+
+    if (hasCoupon) {
+      if (
+        rec.coupon_discount_commission != null &&
+        rec.coupon_discount_commission !== ""
+      )
+        amountItems.push({
+          label: "Descuento cupón",
+          value: `-${formatMoney(rec.coupon_discount_commission)}`,
+        });
+
+      if (rec.coupon_origin_amount != null && rec.coupon_origin_amount !== "")
+        amountItems.push({
+          label: "Monto origen (Final)",
+          value: formatMoney(rec.coupon_origin_amount),
+        });
+
+      if (
+        rec.coupon_destination_amount != null &&
+        rec.coupon_destination_amount !== ""
+      )
+        amountItems.push({
+          label: "Monto destino (Final)",
+          value: formatMoney(rec.coupon_destination_amount),
+        });
+
+      if (
+        rec.coupon_discount_total_to_send != null &&
+        rec.coupon_discount_total_to_send !== ""
+      )
+        amountItems.push({
+          label: "Total a enviar (Final)",
+          value: formatMoney(rec.coupon_discount_total_to_send),
+        });
+    }
 
     sections.push({
       id: "importes",

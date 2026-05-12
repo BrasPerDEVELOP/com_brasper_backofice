@@ -47,11 +47,11 @@ const calculatorStore = useCalculatorStore();
 const cuponesStore = useCuponesStore();
 
 /** Catálogo coin (trial) listo para el paso Cotización sin parpadeo de carga. */
-function transactionTrialCoinCatalogReady(): boolean {
+function transactionCatalogReadyForCurrentMode(): boolean {
   return (
     calculatorStore.taxRates.length > 0 &&
     calculatorStore.commissions.length > 0 &&
-    calculatorStore.lastCoinCatalogWasTrial === true
+    calculatorStore.lastCoinCatalogWasTrial === calculatorStore.demoMode
   );
 }
 
@@ -1070,9 +1070,9 @@ function openCreateModal() {
   loadFormOptions();
   void loadEditableUsers();
   void cuponesStore.loadCoupons();
-  calculatorStore.setDemoMode(true);
+  calculatorStore.setCalculationMode("normal");
   void calculatorStore.loadData({
-    background: transactionTrialCoinCatalogReady(),
+    background: transactionCatalogReadyForCurrentMode(),
   });
 }
 
@@ -1210,8 +1210,7 @@ async function openEditModal(t: Transaction) {
   try {
     await hydrateEditForm(t);
     editModalLoading.value = false;
-    calculatorStore.setDemoMode(true);
-    const catalogReady = transactionTrialCoinCatalogReady();
+    const catalogReady = transactionCatalogReadyForCurrentMode();
     await calculatorStore.loadData({ background: catalogReady });
     syncCalculatorFromForm();
     void loadFormOptions();
@@ -1582,26 +1581,54 @@ const editHeroConditions = computed(() => {
 const editHeroAmounts = computed(() => {
   const t = editPreviewTransaction.value;
   if (!t) return [];
+  const hasCoupon = Boolean(
+    t.coupon_id || (t.coupon_discount_code && t.coupon_discount_code.trim()),
+  );
   const items = [
-    { label: "Monto origen", value: formatValue(t.origin_amount) },
-    { label: "Monto destino", value: formatValue(t.destination_amount) },
     {
-      label: "Resultado comisión",
+      label: hasCoupon ? "Monto origen (Base)" : "Monto origen",
+      value: formatValue(t.origin_amount),
+    },
+    {
+      label: hasCoupon ? "Monto destino (Base)" : "Monto destino",
+      value: formatValue(t.destination_amount),
+    },
+    {
+      label: hasCoupon ? "Comisión (Base)" : "Resultado comisión",
       value: formatValue(t.resultado_comision ?? t.commission_result),
     },
   ];
-  if (t.coupon_discount_commission != null) {
-    items.push({
-      label: "Descuento cupón",
-      value: `-${formatValue(t.coupon_discount_commission)}`,
-    });
+
+  if (hasCoupon) {
+    if (t.coupon_discount_commission != null) {
+      items.push({
+        label: "Descuento cupón",
+        value: `-${formatValue(t.coupon_discount_commission)}`,
+      });
+    }
+
+    if (t.coupon_origin_amount != null) {
+      items.push({
+        label: "Monto origen (Final)",
+        value: formatValue(t.coupon_origin_amount),
+      });
+    }
+
+    if (t.coupon_destination_amount != null) {
+      items.push({
+        label: "Monto destino (Final)",
+        value: formatValue(t.coupon_destination_amount),
+      });
+    }
+
+    if (t.coupon_discount_total_to_send != null) {
+      items.push({
+        label: "Total a enviar (Final)",
+        value: formatValue(t.coupon_discount_total_to_send),
+      });
+    }
   }
-  if (t.coupon_discount_total_to_send != null) {
-    items.push({
-      label: "Total con cupón",
-      value: formatValue(t.coupon_discount_total_to_send),
-    });
-  }
+
   return items;
 });
 
@@ -2085,9 +2112,8 @@ watch(
 onMounted(() => {
   /** Evita mostrar `error` de otra vista o de un intento anterior mientras llegan cuentas/API. */
   transactionsStore.error = null;
-  calculatorStore.setDemoMode(true);
   void calculatorStore.loadData({
-    background: transactionTrialCoinCatalogReady(),
+    background: transactionCatalogReadyForCurrentMode(),
   });
   void loadTransactions();
   void Promise.all([
@@ -3776,10 +3802,14 @@ onMounted(() => {
                 :coupon-adjusted-amount-receive="couponPreview?.amountReceive ?? null"
               />
               <TasasDemoCompact
+                v-if="calculatorStore.calculationMode === 'special'"
                 :use-main-calculator-store="true"
                 :filter-rates-to-selected-pair="true"
               />
-              <section class="rounded-2xl border border-[#d8e5fb] bg-white p-5 shadow-sm shadow-brasper-indigoStrong/5">
+              <section
+                v-if="calculatorStore.calculationMode !== 'special'"
+                class="rounded-2xl border border-[#d8e5fb] bg-white p-5 shadow-sm shadow-brasper-indigoStrong/5"
+              >
                 <div class="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <h3 class="text-sm font-semibold text-[#1f2937]">
