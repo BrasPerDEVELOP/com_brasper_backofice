@@ -12,11 +12,16 @@ import { useCuentasBancariasStore } from '@/modules/cuentas-bancarias/presentati
 import { formatApiErrorBody } from '@/interface/api/format_api_error'
 import axios from 'axios'
 
-const props = defineProps<{
-  modelValue: boolean
-  /** País del flujo de cuenta (prefijo al crear un banco nuevo). */
-  hintCountry?: 'pe' | 'br'
-}>()
+const props = withDefaults(
+  defineProps<{
+    modelValue: boolean
+    /** País del flujo de cuenta (prefijo al crear un banco nuevo). */
+    hintCountry?: 'pe' | 'br'
+    /** Si true, tras cargar el catálogo abre directo el formulario de nuevo banco. */
+    startOnCreateForm?: boolean
+  }>(),
+  { startOnCreateForm: false }
+)
 
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
@@ -177,13 +182,16 @@ async function onDelete(b: BankOption) {
 
 watch(
   () => props.modelValue,
-  (open) => {
+  async (open) => {
     if (!open) {
       mode.value = 'list'
       error.value = ''
       return
     }
-    void hydrateBankList()
+    await hydrateBankList()
+    if (props.startOnCreateForm) {
+      openFormNew()
+    }
   }
 )
 </script>

@@ -30,6 +30,8 @@ import AppDropdown from "@/interface/components/AppDropdown.vue";
 import AppDateInput from "@/interface/components/AppDateInput.vue";
 import UsuarioCreateFormModal from "@/interface/components/UsuarioCreateFormModal.vue";
 import CuentaBancariaCreateFormModal from "@/interface/components/CuentaBancariaCreateFormModal.vue";
+import BancoCrudModal from "@/interface/components/BancoCrudModal.vue";
+import type { BankOption } from "@modules/cuentas-bancarias/infrastructure/adapters/banks_api_adapter";
 import type { UserListItem } from "@modules/auth/infrastructure/adapters/users_management_api_adapter";
 import CalculatorConversionCard from "@modules/calculator/presentation/components/CalculatorConversionCard.vue";
 import TasasDemoCompact from "@modules/tasas/presentation/components/tasas_demo_compact.vue";
@@ -66,6 +68,9 @@ const importSimpleError = ref("");
 const showPreviewModal = ref(false);
 const showTransactionClientModal = ref(false);
 const showBankAccountCreateModal = ref(false);
+const showBancoCrudModal = ref(false);
+/** Abre `BancoCrudModal` directo en formulario de alta (tuerca junto a Banco). */
+const bancoCrudOpenForCreate = ref(false);
 const bankAccountCreateFlow = ref<"origin" | "destination">("origin");
 const TRANSACTION_BANK_MODAL_COUNTRY = "pe" as const;
 const transactionBankModalHolder = ref<"natural" | "juridica">("natural");
@@ -632,6 +637,35 @@ const destinationAccountOptions = computed(() => {
   );
 });
 
+function bankCatalogOptionLabel(b: BankOption): string {
+  const parts: string[] = [];
+  const name = (b.bank ?? "").trim();
+  if (name) parts.push(name);
+  const cur = (b.currency ?? "").trim();
+  if (cur) parts.push(cur.toUpperCase());
+  const ctry = (b.country ?? "").trim();
+  if (ctry) parts.push(ctry.toUpperCase());
+  const comp = (b.company ?? "").toString().trim();
+  if (comp) parts.push(comp);
+  return parts.length ? parts.join(" · ") : "—";
+}
+
+const bancoCrudHintCountry = computed((): "pe" | "br" =>
+  (calculatorStore.currencyTo ?? "").toLowerCase() === "brl" ? "br" : "pe",
+);
+
+function openBancoCrudForCreate() {
+  bancoCrudOpenForCreate.value = true;
+  showBancoCrudModal.value = true;
+}
+
+function onBancoCrudSaved(payload?: { selectBankId?: string }) {
+  if (payload?.selectBankId?.trim()) {
+    destinationBankFilterId.value = payload.selectBankId.trim();
+  }
+  void cuentasStore.loadBanks(true);
+}
+
 /** Bancos del catálogo que tienen al menos una cuenta destino elegible. */
 const destinationBankFilterOptions = computed(() => {
   const userId = form.user_id?.trim();
@@ -648,7 +682,7 @@ const destinationBankFilterOptions = computed(() => {
     .filter((b) => accountBankIds.has(String(b.id).trim()))
     .map((b) => ({
       value: b.id,
-      label: (b.bank ?? "").trim() || "—",
+      label: bankCatalogOptionLabel(b),
     }))
     .sort((a, b) => a.label.localeCompare(b.label, "es"));
   return [{ value: "", label: "Todos" }, ...opts];
@@ -1991,6 +2025,10 @@ watch(destinationBankFilterId, () => {
   if (f && acc && String(acc.bank_id ?? "").trim() !== f) {
     form.bank_account_destination_id = "";
   }
+});
+
+watch(showBancoCrudModal, (open) => {
+  if (!open) bancoCrudOpenForCreate.value = false;
 });
 
 watch(
@@ -3341,13 +3379,42 @@ onMounted(() => {
                               <label class="block text-sm font-medium text-[#374151]"
                                 >Banco</label
                               >
-                              <AppDropdown
-                                v-model="destinationBankFilterId"
-                                :options="destinationBankFilterOptions"
-                                placeholder="Todos"
-                                :searchable="destinationBankFilterOptions.length > 8"
-                                class="min-w-0"
-                              />
+                              <div class="flex gap-2">
+                                <AppDropdown
+                                  v-model="destinationBankFilterId"
+                                  :options="destinationBankFilterOptions"
+                                  placeholder="Todos"
+                                  :searchable="destinationBankFilterOptions.length > 8"
+                                  class="min-w-0 flex-1"
+                                />
+                                <button
+                                  type="button"
+                                  class="flex shrink-0 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white p-2.5 text-[#6b7280] transition hover:border-[#d1d5db] hover:bg-[#f9fafb] hover:text-[#374151]"
+                                  title="Nuevo banco (catálogo)"
+                                  @click="openBancoCrudForCreate"
+                                >
+                                  <svg
+                                    class="h-5 w-5"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                    aria-hidden="true"
+                                  >
+                                    <path
+                                      stroke-linecap="round"
+                                      stroke-linejoin="round"
+                                      stroke-width="2"
+                                      d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                                    />
+                                    <path
+                                      stroke-linecap="round"
+                                      stroke-linejoin="round"
+                                      stroke-width="2"
+                                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                                    />
+                                  </svg>
+                                </button>
+                              </div>
                             </div>
                             <div class="space-y-1.5 sm:col-span-2">
                               <label class="block text-sm font-medium text-[#374151]"
@@ -3916,13 +3983,42 @@ onMounted(() => {
                     <label class="block text-sm font-medium text-[#374151]"
                       >Banco</label
                     >
-                    <AppDropdown
-                      v-model="destinationBankFilterId"
-                      :options="destinationBankFilterOptions"
-                      placeholder="Todos"
-                      :searchable="destinationBankFilterOptions.length > 8"
-                      class="min-w-0"
-                    />
+                    <div class="flex gap-2">
+                      <AppDropdown
+                        v-model="destinationBankFilterId"
+                        :options="destinationBankFilterOptions"
+                        placeholder="Todos"
+                        :searchable="destinationBankFilterOptions.length > 8"
+                        class="min-w-0 flex-1"
+                      />
+                      <button
+                        type="button"
+                        class="flex shrink-0 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white p-2.5 text-[#6b7280] transition hover:border-[#d1d5db] hover:bg-[#f9fafb] hover:text-[#374151]"
+                        title="Nuevo banco (catálogo)"
+                        @click="openBancoCrudForCreate"
+                      >
+                        <svg
+                          class="h-5 w-5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                          />
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                          />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                   <div class="space-y-1.5 sm:col-span-2">
                     <label class="block text-sm font-medium text-[#374151]"
@@ -4664,6 +4760,12 @@ onMounted(() => {
       :holder-type="transactionBankModalHolder"
       :locked-user-id="form.user_id?.trim() || undefined"
       @created="onTransactionBankAccountCreated"
+    />
+    <BancoCrudModal
+      v-model="showBancoCrudModal"
+      :hint-country="bancoCrudHintCountry"
+      :start-on-create-form="bancoCrudOpenForCreate"
+      @saved="onBancoCrudSaved"
     />
   </div>
 </template>

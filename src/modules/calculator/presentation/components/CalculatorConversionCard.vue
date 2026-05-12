@@ -217,7 +217,10 @@
               {{ formatCurrency(displayedTotalToSend, calculatorStore.currencyFrom) }}
             </span>
           </div>
-          <div class="flex justify-between text-sm">
+          <div
+            v-if="calculatorStore.calculationMode === 'special'"
+            class="flex justify-between text-sm"
+          >
             <span class="text-gray-600">Tipo de cambio</span>
             <span class="font-semibold text-gray-900">
               1 {{ calculatorStore.currencyFrom.toUpperCase() }} = {{ formatRate(calculatorStore.result.rate) }}
