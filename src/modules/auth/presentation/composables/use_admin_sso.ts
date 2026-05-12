@@ -1,6 +1,6 @@
 import { env } from '@/interface/config/env'
 import { useAuthStore } from '../controllers/use_auth_store_controller'
-import type { User } from '../../domain/models'
+import { normalizePermissions, type User } from '../../domain/models'
 
 const REQUIRED_QUERY_KEYS = ['data', 'iv', 'salt', 'v'] as const
 const PBKDF2_ITERATIONS = 120000
@@ -79,7 +79,9 @@ function normalizeUser(raw: unknown): User {
     is_agent: Boolean(o.is_agent),
     role: o.role != null ? String(o.role) : null,
     phone: Number.isFinite(phone) ? phone : null,
-    code_phone: o.code_phone != null ? String(o.code_phone) : null
+    code_phone: o.code_phone != null ? String(o.code_phone) : null,
+    permissions: normalizePermissions(o.permissions, o.role != null ? String(o.role) : null),
+    must_change_password: Boolean(o.must_change_password)
   }
 }
 

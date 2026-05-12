@@ -4,6 +4,7 @@ import {
   fetchUsers,
   deleteUser,
   createUser,
+  resetUserPassword,
   USER_ROLES,
   type UserListItem
 } from '../../infrastructure/adapters/users_management_api_adapter'
@@ -12,7 +13,9 @@ import { USER_ROLE_LABELS } from '../../domain/models'
 import * as XLSX from 'xlsx'
 import AppDropdown from '@/interface/components/AppDropdown.vue'
 import UsuarioCreateFormModal from '@/interface/components/UsuarioCreateFormModal.vue'
+import { useAuthStore } from '../controllers/use_auth_store_controller'
 
+const authStore = useAuthStore()
 const users = ref<UserListItem[]>([])
 const loading = ref(false)
 const error = ref('')
@@ -26,8 +29,20 @@ const importing = ref(false)
 const importError = ref('')
 const searchQuery = ref('')
 const openMenuId = ref<string | null>(null)
+const resetPasswordUser = ref<UserListItem | null>(null)
+const resetPasswordForm = ref({
+  new_password: '',
+  confirm_password: ''
+})
+const resetPasswordLoading = ref(false)
+const resetPasswordError = ref('')
 
 const roleSelectFilter = ref<string>('todos')
+
+const canCreateUsers = computed(() => authStore.hasPermission('users.create'))
+const canUpdateUsers = computed(() => authStore.hasPermission('users.update'))
+const canDeleteUsers = computed(() => authStore.hasPermission('users.delete'))
+const canResetPasswords = computed(() => authStore.hasPermission('users.reset_password'))
 
 const perPage = ref(10)
 const currentPage = ref(1)
@@ -107,6 +122,7 @@ async function loadUsers() {
 }
 
 function openCreateModal() {
+  if (!canCreateUsers.value) return
   error.value = ''
   successMessage.value = ''
   selectedUser.value = null
@@ -114,6 +130,7 @@ function openCreateModal() {
 }
 
 function openEditModal(user: UserListItem) {
+  if (!canUpdateUsers.value) return
   error.value = ''
   successMessage.value = ''
   openMenuId.value = null
@@ -190,6 +207,7 @@ function toggleMenu(id: string) {
 }
 
 async function handleDelete(u: UserListItem) {
+  if (!canDeleteUsers.value) return
   if (!confirm(`¿Eliminar a ${u.name} (${u.email})?`)) return
   openMenuId.value = null
   deletingId.value = u.id
@@ -202,6 +220,56 @@ async function handleDelete(u: UserListItem) {
     error.value = e instanceof Error ? e.message : 'Error al eliminar usuario'
   } finally {
     deletingId.value = null
+  }
+}
+
+function openResetPasswordModal(user: UserListItem) {
+  if (!canResetPasswords.value) return
+  openMenuId.value = null
+  resetPasswordUser.value = user
+  resetPasswordForm.value = {
+    new_password: '',
+    confirm_password: ''
+  }
+  resetPasswordError.value = ''
+}
+
+function closeResetPasswordModal() {
+  if (resetPasswordLoading.value) return
+  resetPasswordUser.value = null
+  resetPasswordError.value = ''
+}
+
+async function submitResetPassword() {
+  const user = resetPasswordUser.value
+  if (!user) return
+  const next = resetPasswordForm.value.new_password.trim()
+  const confirm = resetPasswordForm.value.confirm_password.trim()
+  resetPasswordError.value = ''
+  if (!next || !confirm) {
+    resetPasswordError.value = 'Completa la contraseña temporal y su confirmación'
+    return
+  }
+  if (next.length < 8) {
+    resetPasswordError.value = 'La contraseña temporal debe tener al menos 8 caracteres'
+    return
+  }
+  if (next !== confirm) {
+    resetPasswordError.value = 'La confirmación no coincide'
+    return
+  }
+  resetPasswordLoading.value = true
+  try {
+    await resetUserPassword({
+      userId: user.id,
+      new_password: next
+    })
+    successMessage.value = 'Contraseña temporal actualizada correctamente'
+    resetPasswordUser.value = null
+  } catch (e) {
+    resetPasswordError.value = e instanceof Error ? e.message : 'Error al resetear contraseña'
+  } finally {
+    resetPasswordLoading.value = false
   }
 }
 
@@ -256,6 +324,7 @@ onMounted(() => {
       <h1 class="text-2xl font-medium text-[#1f2937]">Usuarios</h1>
       <div class="flex items-center gap-2">
         <button
+          v-if="canCreateUsers"
           type="button"
           class="rounded-lg border border-[#e5e7eb] bg-white p-2 text-[#6b7280] hover:bg-[#f9fafb]"
           title="Vista tabla"
@@ -274,6 +343,7 @@ onMounted(() => {
           </svg>
         </button>
         <button
+          v-if="canCreateUsers"
           type="button"
           class="inline-flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-white px-4 py-2.5 text-sm font-medium text-[#374151] transition hover:bg-[#f9fafb]"
           @click="showImportModal = true"
@@ -407,6 +477,7 @@ onMounted(() => {
               @click.stop
             >
               <button
+                v-if="canUpdateUsers"
                 type="button"
                 class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-[#374151] hover:bg-[#f9fafb]"
                 @click="openEditModal(u)"
@@ -415,6 +486,17 @@ onMounted(() => {
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                 </svg>
                 Editar
+              </button>
+              <button
+                v-if="canResetPasswords"
+                type="button"
+                class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-[#374151] hover:bg-[#f9fafb]"
+                @click="openResetPasswordModal(u)"
+              >
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586l5.257-5.257A6 6 0 1121 9z" />
+                </svg>
+                Resetear contraseña
               </button>
               <button
                 type="button"
@@ -427,6 +509,7 @@ onMounted(() => {
                 Ver ficha
               </button>
               <button
+                v-if="canDeleteUsers"
                 type="button"
                 class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-[#dc3545] hover:bg-[#fef2f2]"
                 :disabled="deletingId === u.id"
@@ -507,11 +590,69 @@ onMounted(() => {
 
   <UsuarioCreateFormModal
     v-model="showCreateModal"
-    :show-role-field="roleSelectFilter.toLowerCase() === 'todos'"
+    :show-role-field="roleSelectFilter.toLowerCase() === 'todos' && canUpdateUsers"
     :default-role="createModalDefaultRole"
     :user="selectedUser"
     @created="onUserSaved"
   />
+
+  <Teleport to="body">
+    <div
+      v-if="resetPasswordUser"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+    >
+      <div class="w-full max-w-md rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-xl">
+        <h2 class="text-lg font-semibold text-[#1f2937]">Resetear contraseña</h2>
+        <p class="mt-2 text-sm text-[#6b7280]">
+          Se asignará una contraseña temporal para {{ resetPasswordUser.name }}. El usuario deberá cambiarla al iniciar sesión.
+        </p>
+        <form class="mt-5 space-y-4" @submit.prevent="submitResetPassword">
+          <div>
+            <label class="mb-1 block text-sm font-medium text-[#374151]">Contraseña temporal</label>
+            <input
+              v-model="resetPasswordForm.new_password"
+              type="password"
+              minlength="8"
+              autocomplete="new-password"
+              class="w-full rounded-lg border border-[#e5e7eb] px-4 py-2.5 text-sm focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
+              required
+            />
+          </div>
+          <div>
+            <label class="mb-1 block text-sm font-medium text-[#374151]">Confirmar contraseña</label>
+            <input
+              v-model="resetPasswordForm.confirm_password"
+              type="password"
+              minlength="8"
+              autocomplete="new-password"
+              class="w-full rounded-lg border border-[#e5e7eb] px-4 py-2.5 text-sm focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
+              required
+            />
+          </div>
+          <p v-if="resetPasswordError" class="rounded-lg bg-[#dc3545]/10 px-4 py-3 text-sm text-[#dc3545]">
+            {{ resetPasswordError }}
+          </p>
+          <div class="flex justify-end gap-3 border-t border-[#e5e7eb] pt-4">
+            <button
+              type="button"
+              class="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2.5 text-sm font-medium text-[#6b7280] transition hover:bg-[#f9fafb]"
+              :disabled="resetPasswordLoading"
+              @click="closeResetPasswordModal"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              class="rounded-lg bg-brasper-indigoStrong px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brasper-indigoDark disabled:opacity-60"
+              :disabled="resetPasswordLoading"
+            >
+              {{ resetPasswordLoading ? 'Guardando...' : 'Guardar' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </Teleport>
 
   <!-- Modal Importar Excel -->
   <Teleport to="body">

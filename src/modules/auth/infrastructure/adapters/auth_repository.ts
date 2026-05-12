@@ -25,4 +25,10 @@ export interface AuthRepository {
   logout(): Promise<void>
   getCurrentUser(userId: string): Promise<User | null>
   updateProfile(payload: UpdateProfilePayload): Promise<User | null>
+  changePassword(payload: ChangePasswordPayload): Promise<void>
+}
+
+export interface ChangePasswordPayload {
+  current_password: string
+  new_password: string
 }

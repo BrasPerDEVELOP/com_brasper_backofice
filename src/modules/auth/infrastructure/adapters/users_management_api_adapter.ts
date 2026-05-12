@@ -183,3 +183,23 @@ export async function deleteUser(userId: string): Promise<void> {
     }
   }
 }
+
+export interface ResetUserPasswordPayload {
+  userId: string
+  new_password: string
+}
+
+export async function resetUserPassword(payload: ResetUserPasswordPayload): Promise<void> {
+  const id = payload.userId.trim()
+  const password = payload.new_password.trim()
+  if (!id) throw new Error('ID de usuario inválido')
+  if (!password) throw new Error('La contraseña temporal es obligatoria')
+  await apiClient.post(
+    Domain.http(`user/${id}/reset-password/`),
+    { new_password: password },
+    {
+      headers: { 'Content-Type': 'application/json' },
+      skipAuthRedirect: true
+    }
+  )
+}

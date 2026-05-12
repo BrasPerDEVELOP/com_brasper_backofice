@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import type { User } from '../../domain/models'
+import { getDefaultPermissionsForRole, normalizePermissions, type PermissionKey, type User } from '../../domain/models'
 import type { UpdateProfilePayload } from '../../infrastructure/adapters/auth_repository'
 import { LoginUseCase } from '../../application/use_cases'
 import { AuthApiAdapter } from '../../infrastructure/adapters'
@@ -40,7 +40,9 @@ function loadStoredUser(): User | null {
       is_agent: Boolean(o.is_agent),
       role: o.role != null ? String(o.role) : null,
       phone: Number.isFinite(phone) ? phone : null,
-      code_phone: o.code_phone != null ? String(o.code_phone) : null
+      code_phone: o.code_phone != null ? String(o.code_phone) : null,
+      permissions: normalizePermissions(o.permissions, o.role != null ? String(o.role) : null),
+      must_change_password: Boolean(o.must_change_password)
     }
   } catch {
     return null
@@ -85,7 +87,11 @@ export const useAuthStore = defineStore('auth', {
 
   getters: {
     isAuthenticated: (state) => state.user !== null,
-    isAdmin: (state) => state.user?.role === 'admin'
+    isAdmin: (state) => state.user?.role === 'admin',
+    permissions: (state) =>
+      state.user?.permissions?.length
+        ? state.user.permissions
+        : getDefaultPermissionsForRole(state.user?.role)
   },
 
   actions: {
@@ -125,6 +131,16 @@ export const useAuthStore = defineStore('auth', {
         return false
       }
       return true
+    },
+
+    hasPermission(permission: PermissionKey | string): boolean {
+      if (this.user?.role === 'admin') return true
+      return this.permissions.includes(permission)
+    },
+
+    hasAnyPermission(permissions: Array<PermissionKey | string>): boolean {
+      if (permissions.length === 0) return true
+      return permissions.some((permission) => this.hasPermission(permission))
     },
 
     async login(username: string, password: string) {
@@ -225,6 +241,35 @@ export const useAuthStore = defineStore('auth', {
         } else {
           this.error = e instanceof Error ? e.message : 'Error al actualizar perfil'
         }
+        throw e
+      } finally {
+        this.isLoading = false
+      }
+    },
+
+    async changePassword(payload: { current_password: string; new_password: string }) {
+      this.isLoading = true
+      this.error = null
+      try {
+        const repository = new AuthApiAdapter()
+        await repository.changePassword(payload)
+        if (this.user?.must_change_password) {
+          this.user = { ...this.user, must_change_password: false }
+          localStorage.setItem(USER_KEY, JSON.stringify(this.user))
+        }
+      } catch (e: unknown) {
+        const err = e as { response?: { status?: number; data?: unknown } }
+        const data = err.response?.data
+        const detail =
+          data != null && typeof data === 'object'
+            ? (data as Record<string, unknown>).detail
+            : null
+        this.error =
+          typeof detail === 'string'
+            ? detail
+            : e instanceof Error
+              ? e.message
+              : 'Error al cambiar contraseña'
         throw e
       } finally {
         this.isLoading = false

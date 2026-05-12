@@ -1,17 +1,19 @@
 import { apiClient } from '@/interface/api/client'
 import { Domain } from '@/interface/infrastructure/services'
 import { createLoggerWithContext } from '@/interface/infrastructure/logger'
-import type { AuthRepository, LoginResponse, UpdateProfilePayload } from './auth_repository'
+import type {
+  AuthRepository,
+  ChangePasswordPayload,
+  LoginResponse,
+  UpdateProfilePayload
+} from './auth_repository'
 import type { User } from '../../domain/models'
+import { normalizePermissions } from '../../domain/models'
 
 const log = createLoggerWithContext('auth')
 
 function authBase() {
   return Domain.http('/auth')
-}
-
-function userBase() {
-  return Domain.http('/user')
 }
 
 /**
@@ -44,14 +46,16 @@ function parseUser(data: unknown): User | null {
     is_agent: Boolean(o.is_agent),
     role: o.role != null ? String(o.role) : null,
     phone: Number.isFinite(phone) ? phone : null,
-    code_phone: codePhone != null ? String(codePhone) : null
+    code_phone: codePhone != null ? String(codePhone) : null,
+    permissions: normalizePermissions(o.permissions, o.role != null ? String(o.role) : null),
+    must_change_password: Boolean(o.must_change_password)
   }
 }
 
 export class AuthApiAdapter implements AuthRepository {
   async login(username: string, password: string): Promise<LoginResponse> {
     const url = `${authBase()}/login/`
-    const response = await apiClient.post<{ user?: unknown; token?: string; data?: { user?: unknown } }>(url, { username, password }, {
+    const response = await apiClient.post<Record<string, unknown>>(url, { username, password }, {
       headers: { 'Content-Type': 'application/json' }
     })
     let data = response.data
@@ -63,9 +67,28 @@ export class AuthApiAdapter implements AuthRepository {
       }
     }
 
-    const userPayload = data?.user ?? data?.data?.user ?? data
+    const dataObj = data as Record<string, unknown>
+    const nestedData =
+      dataObj.data != null && typeof dataObj.data === 'object'
+        ? (dataObj.data as Record<string, unknown>)
+        : {}
+    const rawUserPayload = dataObj.user ?? nestedData.user ?? data
+    const userPayload =
+      rawUserPayload != null && typeof rawUserPayload === 'object'
+        ? {
+            ...(rawUserPayload as Record<string, unknown>),
+            permissions:
+              (rawUserPayload as Record<string, unknown>).permissions ??
+              dataObj.permissions ??
+              nestedData.permissions,
+            must_change_password:
+              (rawUserPayload as Record<string, unknown>).must_change_password ??
+              dataObj.must_change_password ??
+              nestedData.must_change_password
+          }
+        : rawUserPayload
     const user = parseUser(userPayload)
-    const token = typeof data?.token === 'string' ? data.token : ''
+    const token = typeof dataObj.token === 'string' ? dataObj.token : ''
 
     if (!user) {
       throw new Error('Respuesta de login inválida')
@@ -86,35 +109,67 @@ export class AuthApiAdapter implements AuthRepository {
   }
 
   async getCurrentUser(userId: string): Promise<User | null> {
-    const url = `${userBase()}/${userId}`
+    void userId
+    const url = `${authBase()}/me/`
     const response = await apiClient.get<unknown>(url).catch(() => ({ data: null }))
     const raw = response?.data ?? null
-    const payload =
+    const parsedPayload =
       raw != null && typeof raw === 'object'
         ? ((raw as Record<string, unknown>).user ?? (raw as Record<string, unknown>).data ?? raw)
         : raw
-    return parseUser(payload)
+    return parseUser(parsedPayload)
   }
 
   async updateProfile(payload: UpdateProfilePayload): Promise<User | null> {
-    const url = `${userBase()}/`
-    const form = new FormData()
-    form.append('id', payload.id)
-    if (payload.names != null && payload.names !== '') form.append('names', payload.names)
-    if (payload.lastnames != null && payload.lastnames !== '') form.append('lastnames', payload.lastnames)
-    if (payload.email != null && payload.email !== '') form.append('email', payload.email)
-    if (payload.document_number != null && payload.document_number !== '') form.append('document_number', payload.document_number)
-    if (payload.document_type != null && payload.document_type !== '') form.append('document_type', payload.document_type)
-    if (payload.is_agent != null) form.append('is_agent', payload.is_agent ? 'true' : 'false')
-    if (payload.role != null && payload.role !== '') form.append('role', payload.role)
-    if (payload.phone != null) form.append('phone', String(payload.phone))
-    if (payload.code_phone != null && payload.code_phone !== '') form.append('code_phone', payload.code_phone)
+    const url = `${authBase()}/me/`
+    let profileImage = typeof payload.profile_image === 'string' ? payload.profile_image : undefined
     if (payload.profile_image instanceof File) {
+      const form = new FormData()
       form.append('profile_image', payload.profile_image)
+      const uploadResponse = await apiClient.post<unknown>(`${authBase()}/me/profile-image`, form, {
+        skipAuthRedirect: true
+      })
+      const rawUpload = uploadResponse.data
+      if (rawUpload != null && typeof rawUpload === 'object') {
+        const value = (rawUpload as Record<string, unknown>).profile_image
+        if (typeof value === 'string') profileImage = value
+      }
     }
-    const response = await apiClient.put<unknown>(url, form, {
+    const body: Record<string, unknown> = {}
+    if (payload.names != null && payload.names !== '') body.names = payload.names
+    if (payload.lastnames != null && payload.lastnames !== '') body.lastnames = payload.lastnames
+    if (payload.email != null && payload.email !== '') body.email = payload.email
+    if (payload.document_number != null && payload.document_number !== '') body.document_number = payload.document_number
+    if (payload.document_type != null && payload.document_type !== '') body.document_type = payload.document_type
+    if (payload.is_agent != null) body.is_agent = payload.is_agent
+    if (payload.role != null && payload.role !== '') body.role = payload.role
+    if (payload.phone != null) body.phone = payload.phone
+    if (payload.code_phone != null && payload.code_phone !== '') body.code_phone = payload.code_phone
+    if (profileImage) body.profile_image = profileImage
+    const response = await apiClient.put<unknown>(url, body, {
+      headers: { 'Content-Type': 'application/json' },
       skipAuthRedirect: true
     })
-    return parseUser(response?.data ?? null)
+    const raw = response?.data ?? null
+    const parsedPayload =
+      raw != null && typeof raw === 'object'
+        ? ((raw as Record<string, unknown>).user ?? (raw as Record<string, unknown>).data ?? raw)
+        : raw
+    return parseUser(parsedPayload)
+  }
+
+  async changePassword(payload: ChangePasswordPayload): Promise<void> {
+    const url = `${authBase()}/change-password/`
+    await apiClient.post(
+      url,
+      {
+        current_password: payload.current_password,
+        new_password: payload.new_password
+      },
+      {
+        headers: { 'Content-Type': 'application/json' },
+        skipAuthRedirect: true
+      }
+    )
   }
 }

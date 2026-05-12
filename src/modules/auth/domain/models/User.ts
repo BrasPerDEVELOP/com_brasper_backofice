@@ -15,4 +15,6 @@ export interface User {
   role: string | null
   phone: number | null
   code_phone: string | null
+  permissions: string[]
+  must_change_password: boolean
 }

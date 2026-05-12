@@ -7,7 +7,7 @@
           <h1 class="text-2xl font-semibold text-[#232b4d]">Perfil de usuario</h1>
         </div>
         <button
-          v-if="authStore.user && !isEditing"
+          v-if="authStore.user && !isEditing && canUpdateProfile"
           type="button"
           class="rounded-xl border border-brasper-indigoStrong/30 bg-brasper-indigoStrong/10 px-4 py-2.5 text-sm font-medium text-brasper-indigoDark transition hover:bg-brasper-indigoStrong/20"
           @click="startEditing"
@@ -18,6 +18,9 @@
 
       <p v-if="authStore.error" class="mb-4 rounded-lg bg-[#dc3545]/10 px-4 py-3 text-sm text-[#dc3545]">
         {{ authStore.error }}
+      </p>
+      <p v-if="successMessage" class="mb-4 rounded-lg bg-brasper-cyanLight/15 px-4 py-3 text-sm text-brasper-indigoDark">
+        {{ successMessage }}
       </p>
 
       <div v-if="authStore.user" class="space-y-8">
@@ -194,6 +197,70 @@
             </p>
           </div>
         </div>
+
+        <section
+          v-if="canChangePassword"
+          class="rounded-2xl border border-[#dbe7fb] bg-[#fbfdff] p-5"
+        >
+          <div class="mb-4">
+            <h2 class="text-base font-semibold text-[#232b4d]">Contraseña</h2>
+            <p
+              v-if="authStore.user.must_change_password"
+              class="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800"
+            >
+              Debes cambiar tu contraseña temporal para continuar usando tu cuenta con normalidad.
+            </p>
+          </div>
+          <form class="grid gap-3 sm:grid-cols-3" @submit.prevent="savePassword">
+            <div class="space-y-1.5">
+              <label class="block text-xs font-medium text-[#666]">Contraseña actual</label>
+              <input
+                v-model="passwordForm.current_password"
+                type="password"
+                autocomplete="current-password"
+                class="w-full rounded-xl border border-[#cfdbef] bg-white px-4 py-3 text-sm text-[#333] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
+                required
+              />
+            </div>
+            <div class="space-y-1.5">
+              <label class="block text-xs font-medium text-[#666]">Nueva contraseña</label>
+              <input
+                v-model="passwordForm.new_password"
+                type="password"
+                autocomplete="new-password"
+                minlength="8"
+                class="w-full rounded-xl border border-[#cfdbef] bg-white px-4 py-3 text-sm text-[#333] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
+                required
+              />
+            </div>
+            <div class="space-y-1.5">
+              <label class="block text-xs font-medium text-[#666]">Confirmar contraseña</label>
+              <input
+                v-model="passwordForm.confirm_password"
+                type="password"
+                autocomplete="new-password"
+                minlength="8"
+                class="w-full rounded-xl border border-[#cfdbef] bg-white px-4 py-3 text-sm text-[#333] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
+                required
+              />
+            </div>
+            <p
+              v-if="passwordError"
+              class="rounded-lg bg-[#dc3545]/10 px-4 py-3 text-sm text-[#dc3545] sm:col-span-3"
+            >
+              {{ passwordError }}
+            </p>
+            <div class="sm:col-span-3">
+              <button
+                type="submit"
+                class="rounded-xl bg-brasper-indigoStrong px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brasper-indigoDark disabled:opacity-60"
+                :disabled="authStore.isLoading"
+              >
+                {{ authStore.isLoading ? 'Guardando...' : 'Cambiar contraseña' }}
+              </button>
+            </div>
+          </form>
+        </section>
       </div>
 
       <p v-else class="rounded-lg bg-[#dc3545]/10 px-3 py-2 text-sm text-[#dc3545]">
@@ -217,6 +284,11 @@ const documentTypeOptions = [
 ]
 
 const authStore = useAuthStore()
+const successMessage = ref('')
+const passwordError = ref('')
+
+const canUpdateProfile = computed(() => authStore.hasPermission('profile.update'))
+const canChangePassword = computed(() => authStore.hasPermission('profile.change_password'))
 
 const isRoleClient = computed(() => {
   const r = authStore.user?.role?.toLowerCase()
@@ -251,6 +323,12 @@ const form = ref<{
   phone: '',
   code_phone: '',
   profile_image: null
+})
+
+const passwordForm = ref({
+  current_password: '',
+  new_password: '',
+  confirm_password: ''
 })
 
 const avatarPreviewUrl = ref('')
@@ -322,7 +400,7 @@ const initials = computed(() => {
 })
 
 function startEditing() {
-  if (authStore.user) {
+  if (authStore.user && canUpdateProfile.value) {
     form.value = {
       names: authStore.user.names ?? '',
       lastnames: authStore.user.lastnames ?? '',
@@ -343,6 +421,7 @@ function cancelEditing() {
 
 async function saveProfile() {
   try {
+    successMessage.value = ''
     await authStore.updateProfile({
       names: form.value.names.trim() || null,
       lastnames: form.value.lastnames.trim() || null,
@@ -354,6 +433,41 @@ async function saveProfile() {
     })
     form.value.profile_image = null
     isEditing.value = false
+    successMessage.value = 'Perfil actualizado correctamente'
+  } catch {
+    // Error ya mostrado en authStore.error
+  }
+}
+
+async function savePassword() {
+  passwordError.value = ''
+  successMessage.value = ''
+  const current = passwordForm.value.current_password.trim()
+  const next = passwordForm.value.new_password.trim()
+  const confirm = passwordForm.value.confirm_password.trim()
+  if (!current || !next || !confirm) {
+    passwordError.value = 'Completa todos los campos de contraseña'
+    return
+  }
+  if (next.length < 8) {
+    passwordError.value = 'La nueva contraseña debe tener al menos 8 caracteres'
+    return
+  }
+  if (next !== confirm) {
+    passwordError.value = 'La confirmación no coincide con la nueva contraseña'
+    return
+  }
+  try {
+    await authStore.changePassword({
+      current_password: current,
+      new_password: next
+    })
+    passwordForm.value = {
+      current_password: '',
+      new_password: '',
+      confirm_password: ''
+    }
+    successMessage.value = 'Contraseña actualizada correctamente'
   } catch {
     // Error ya mostrado en authStore.error
   }

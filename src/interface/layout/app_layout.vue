@@ -39,22 +39,30 @@ async function handleLogout() {
 
 const showSidebar = computed(() => route.path.startsWith("/app"));
 
-const navItems = [
-  { to: "/app/dashboard", label: "Panel", icon: "chart" },
-  { to: "/app/usuarios", label: "Usuarios", icon: "users" },
-  { to: "/app/transacciones", label: "Transacciones", icon: "transactions" },
-  { to: "/app/contabilidad", label: "Contabilidad", icon: "ledger" },
-  { to: "/app/calculator", label: "Calculadora", icon: "calc" },
-  { to: "/app/cupones", label: "Cupones", icon: "ticket" },
-  { to: "/app/cuentas", label: "Cuentas", icon: "bank" },
-  { to: "/app/comisiones", label: "Comisiones", icon: "folder" },
-  { to: "/app/tasas", label: "Tasas", icon: "exchange" },
-  { to: "/app/home-banner", label: "Banner Home", icon: "image" },
+const allNavItems = [
+  { to: "/app/dashboard", label: "Panel", icon: "chart", permission: "dashboard.view" },
+  { to: "/app/usuarios", label: "Usuarios", icon: "users", permission: "users.view" },
+  { to: "/app/transacciones", label: "Transacciones", icon: "transactions", permission: "transactions.view" },
+  { to: "/app/contabilidad", label: "Contabilidad", icon: "ledger", permission: "accounting.view" },
+  { to: "/app/calculator", label: "Calculadora", icon: "calc", permission: "calculator.view" },
+  { to: "/app/cupones", label: "Cupones", icon: "ticket", permission: "coupons.view" },
+  { to: "/app/cuentas", label: "Cuentas", icon: "bank", permission: "bank_accounts.view" },
+  { to: "/app/comisiones", label: "Comisiones", icon: "folder", permission: "commissions.view" },
+  { to: "/app/tasas", label: "Tasas", icon: "exchange", permission: "rates.view" },
+  { to: "/app/home-banner", label: "Banner Home", icon: "image", permission: "home_banner.view" },
 ];
 
-const bottomNavItems = [
-  { to: "/app/tasas", label: "Configuración", icon: "settings" },
+const allBottomNavItems = [
+  { to: "/app/roles-permisos", label: "Permisos", icon: "settings", permission: "roles.permissions.view" },
 ];
+
+const navItems = computed(() =>
+  allNavItems.filter((item) => authStore.hasPermission(item.permission))
+);
+
+const bottomNavItems = computed(() =>
+  allBottomNavItems.filter((item) => authStore.hasPermission(item.permission))
+);
 
 const sidebarLogoutButtonClass = [
   "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-all",
@@ -76,6 +84,7 @@ const breadcrumbs = computed(() => {
     tasas: "Configuración > Tasas de cambio",
     perfil: "Cuenta > Perfil",
     usuarios: "Cuenta > Usuarios",
+    "roles-permisos": "Configuración > Permisos de roles",
   };
   return map[name];
 });
