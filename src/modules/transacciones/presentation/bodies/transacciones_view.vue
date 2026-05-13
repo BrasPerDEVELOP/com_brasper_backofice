@@ -140,7 +140,11 @@ const bankAccountFilterOptions = computed(() => [
       (a.account_holder_type ?? "").toLowerCase().includes("legal")
         ? (a.business_name ?? "-")
         : [a.holder_names, a.holder_surnames].filter(Boolean).join(" ") || "-";
-    const accNum = a.account_number ?? "-";
+    const nums = [];
+    if (a.account_number?.trim()) nums.push(a.account_number.trim());
+    if (a.cci_number?.trim()) nums.push(`CCI: ${a.cci_number.trim()}`);
+    if (a.pix_key?.trim()) nums.push(`PIX: ${a.pix_key.trim()}`);
+    const accNum = nums.length > 0 ? nums.join(" / ") : "-";
     return { value: a.id, label: `${bankName} - ${accNum} (${holder})` };
   }),
 ]);
@@ -326,7 +330,11 @@ function bankAccountToOption(a: BankAccount) {
     (a.account_holder_type ?? "").toLowerCase().includes("legal")
       ? (a.business_name ?? "-")
       : [a.holder_names, a.holder_surnames].filter(Boolean).join(" ") || "-";
-  const accNum = a.account_number ?? "-";
+  const nums = [];
+  if (a.account_number?.trim()) nums.push(a.account_number.trim());
+  if (a.cci_number?.trim()) nums.push(`CCI: ${a.cci_number.trim()}`);
+  if (a.pix_key?.trim()) nums.push(`PIX: ${a.pix_key.trim()}`);
+  const accNum = nums.length > 0 ? nums.join(" / ") : "-";
   return { value: a.id, label: `${bankName} - ${accNum} (${holder})` };
 }
 
@@ -353,11 +361,11 @@ function destinationBankAccountToOption(a: BankAccount): {
   const bank = cuentasStore.banks.find((b) => b.id === a.bank_id);
   const bankName = (bank?.bank ?? "—").trim();
   const company = accountCompanyDisplayLine(a);
-  const accNum =
-    (a.account_number ?? "").trim() ||
-    (a.cci_number ?? "").trim() ||
-    (a.pix_key ?? "").trim() ||
-    "—";
+  const nums = [];
+  if (a.account_number?.trim()) nums.push(a.account_number.trim());
+  if (a.cci_number?.trim()) nums.push(`CCI: ${a.cci_number.trim()}`);
+  if (a.pix_key?.trim()) nums.push(`PIX: ${a.pix_key.trim()}`);
+  const accNum = nums.length > 0 ? nums.join(" / ") : "—";
   if (bankFilter) {
     return { value: a.id, label: `${company} · ${accNum}` };
   }

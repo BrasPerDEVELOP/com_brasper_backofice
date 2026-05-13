@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive, watch } from 'vue'
 import { storeToRefs } from 'pinia'
+import { CURRENCY_CODES } from '@/modules/calculator/domain/models/currency_code'
 import {
   createBank,
   updateBank,
@@ -304,23 +305,26 @@ watch(
             <div class="grid gap-4 sm:grid-cols-2">
               <div class="space-y-1.5">
                 <label class="block text-sm font-medium text-[#374151]">Moneda *</label>
-                <input
+                <select
                   v-model="form.currency"
-                  type="text"
-                  class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm uppercase focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
-                  placeholder="BRL, PEN…"
-                  autocomplete="off"
-                />
+                  class="form-select w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm uppercase focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
+                >
+                  <option value="" disabled>Seleccionar</option>
+                  <option v-for="c in CURRENCY_CODES" :key="c" :value="c.toUpperCase()">
+                    {{ c.toUpperCase() }}
+                  </option>
+                </select>
               </div>
               <div class="space-y-1.5">
                 <label class="block text-sm font-medium text-[#374151]">País *</label>
-                <input
+                <select
                   v-model="form.country"
-                  type="text"
-                  class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm lowercase focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
-                  placeholder="pe, br…"
-                  autocomplete="off"
-                />
+                  class="form-select w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm lowercase focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
+                >
+                  <option value="" disabled>Seleccionar</option>
+                  <option value="pe">pe - Perú</option>
+                  <option value="br">br - Brasil</option>
+                </select>
               </div>
             </div>
             <div class="space-y-1.5">

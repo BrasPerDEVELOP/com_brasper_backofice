@@ -53,7 +53,11 @@ function bankAccountToOption(a: BankAccount) {
     (a.account_holder_type ?? "").toLowerCase().includes("legal")
       ? (a.business_name ?? "-")
       : [a.holder_names, a.holder_surnames].filter(Boolean).join(" ") || "-";
-  const accNum = a.account_number ?? "-";
+  const nums = [];
+  if (a.account_number?.trim()) nums.push(a.account_number.trim());
+  if (a.cci_number?.trim()) nums.push(`CCI: ${a.cci_number.trim()}`);
+  if (a.pix_key?.trim()) nums.push(`PIX: ${a.pix_key.trim()}`);
+  const accNum = nums.length > 0 ? nums.join(" / ") : "-";
   return { value: a.id, label: `${bankName} - ${accNum} (${holder})` };
 }
 
