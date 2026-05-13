@@ -95,10 +95,6 @@ function close() {
 }
 
 async function handleSubmit() {
-  if (!isEditing.value && !form.value.email?.trim()) {
-    error.value = 'Email es obligatorio'
-    return
-  }
   creating.value = true
   error.value = ''
   try {
@@ -144,15 +140,12 @@ watch(
         <form class="space-y-6" @submit.prevent="handleSubmit">
           <div class="grid gap-4 sm:grid-cols-2">
             <div>
-              <label class="mb-1.5 block text-sm font-medium text-[#374151]">
-                Email {{ isEditing ? '' : '*' }}
-              </label>
+              <label class="mb-1.5 block text-sm font-medium text-[#374151]">Email</label>
               <input
                 v-model="form.email"
                 type="email"
                 class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
                 placeholder="usuario@ejemplo.com"
-                :required="!isEditing"
               />
             </div>
             <div>

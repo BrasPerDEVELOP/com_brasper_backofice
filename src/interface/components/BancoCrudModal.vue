@@ -231,37 +231,55 @@ watch(
               </button>
             </div>
             <p v-if="loading" class="py-8 text-center text-sm text-[#6b7280]">Cargando…</p>
-            <ul v-else-if="banks.length > 0" class="space-y-2">
-              <li
-                v-for="b in banks"
-                :key="b.id"
-                class="flex items-center justify-between gap-3 rounded-xl border border-[#e8eef3] bg-[#fbfdff] px-3 py-2.5 text-sm"
-              >
-                <div class="min-w-0 flex-1">
-                  <p class="truncate font-medium text-[#1f2937]">{{ b.bank }}</p>
-                  <p class="truncate text-xs text-[#6b7280]">
-                    {{ b.currency?.toUpperCase() }} · {{ b.country?.toUpperCase() }}
-                    <template v-if="b.company"> · {{ b.company }}</template>
-                  </p>
-                </div>
-                <div class="flex shrink-0 gap-1">
-                  <button
-                    type="button"
-                    class="rounded-lg border border-[#e5e7eb] px-2.5 py-1.5 text-xs font-medium text-[#374151] hover:bg-[#f9fafb]"
-                    @click="openFormEdit(b)"
+            <div v-else-if="banks.length > 0" class="overflow-x-auto rounded-xl border border-[#e8eef3]">
+              <table class="w-full min-w-[28rem] border-collapse text-left text-sm">
+                <thead>
+                  <tr class="border-b border-[#e8eef3] bg-[#f1f5f9]">
+                    <th class="px-3 py-2.5 font-semibold text-[#374151]">Nombre del banco</th>
+                    <th class="px-3 py-2.5 font-semibold text-[#374151]">Razón social</th>
+                    <th class="whitespace-nowrap px-3 py-2.5 font-semibold text-[#374151]">Moneda / País</th>
+                    <th class="w-1 px-2 py-2.5 text-right font-semibold text-[#374151]"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="b in banks"
+                    :key="b.id"
+                    class="border-b border-[#e8eef3] bg-[#fbfdff] last:border-b-0"
                   >
-                    Editar
-                  </button>
-                  <button
-                    type="button"
-                    class="rounded-lg border border-[#fecaca] px-2.5 py-1.5 text-xs font-medium text-[#b91c1c] hover:bg-[#fef2f2]"
-                    @click="onDelete(b)"
-                  >
-                    Eliminar
-                  </button>
-                </div>
-              </li>
-            </ul>
+                    <td class="max-w-[10rem] px-3 py-2.5 align-middle">
+                      <p class="truncate font-medium text-[#1f2937]" :title="b.bank">{{ b.bank }}</p>
+                    </td>
+                    <td class="max-w-[12rem] px-3 py-2.5 align-middle text-[#374151]">
+                      <p class="truncate text-sm" :title="b.company ?? ''">
+                        {{ b.company?.trim() ? b.company : '—' }}
+                      </p>
+                    </td>
+                    <td class="whitespace-nowrap px-3 py-2.5 align-middle text-xs text-[#6b7280]">
+                      {{ b.currency?.toUpperCase() }} · {{ b.country?.toUpperCase() }}
+                    </td>
+                    <td class="px-2 py-2 align-middle">
+                      <div class="flex shrink-0 justify-end gap-1">
+                        <button
+                          type="button"
+                          class="rounded-lg border border-[#e5e7eb] px-2.5 py-1.5 text-xs font-medium text-[#374151] hover:bg-[#f9fafb]"
+                          @click="openFormEdit(b)"
+                        >
+                          Editar
+                        </button>
+                        <button
+                          type="button"
+                          class="rounded-lg border border-[#fecaca] px-2.5 py-1.5 text-xs font-medium text-[#b91c1c] hover:bg-[#fef2f2]"
+                          @click="onDelete(b)"
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
             <p v-else class="py-8 text-center text-sm text-[#6b7280]">No hay bancos registrados.</p>
           </template>
 
@@ -306,7 +324,7 @@ watch(
               </div>
             </div>
             <div class="space-y-1.5">
-              <label class="block text-sm font-medium text-[#374151]">Empresa / titular cuenta</label>
+              <label class="block text-sm font-medium text-[#374151]">Razón social (empresa / titular cuenta)</label>
               <input
                 v-model="form.company"
                 type="text"

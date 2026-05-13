@@ -55,9 +55,15 @@ function formatValue(value: string | null | undefined): string {
   return value ?? '-'
 }
 
-function getBankName(bankId: string): string {
+/** Celda Banco: nombre + moneda del catálogo; `razonSocial` = empresa/titular del banco. */
+function getBankTableCell(bankId: string): { title: string; razonSocial: string } {
   const bank = cuentasStore.banks.find((b) => b.id === bankId)
-  return bank ? `${bank.bank}${bank.currency ? ` (${bank.currency})` : ''}` : formatValue(bankId)
+  if (!bank) return { title: formatValue(bankId), razonSocial: '' }
+  const cur = bank.currency ? ` (${bank.currency})` : ''
+  return {
+    title: `${bank.bank}${cur}`,
+    razonSocial: (bank.company ?? '').toString().trim()
+  }
 }
 
 function getAccountName(account: BankAccount): string {
@@ -132,7 +138,8 @@ const searchedAccounts = computed(() => {
     const name = getAccountName(a).toLowerCase()
     const doc = getDocumentNumber(a).toLowerCase()
     const accountNum = formatValue(a.account_number).toLowerCase()
-    const bank = getBankName(a.bank_id).toLowerCase()
+    const { title, razonSocial } = getBankTableCell(a.bank_id)
+    const bank = `${title} ${razonSocial}`.toLowerCase()
     return name.includes(q) || doc.includes(q) || accountNum.includes(q) || bank.includes(q)
   })
 })
@@ -337,7 +344,7 @@ onMounted(() => {
       <table class="w-full text-left text-sm">
         <thead>
           <tr class="bg-[#dbeafe]">
-            <th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">Banco</th>
+            <th class="min-w-[10rem] px-4 py-3 font-semibold text-brasper-indigoDark">Banco</th>
             <th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">Moneda</th>
             <th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">
               {{ holderFilter === 'juridica' ? 'Razón social' : 'Nombres' }}
@@ -354,7 +361,17 @@ onMounted(() => {
             :key="account.id"
             class="border-t border-[#e5e7eb] bg-white transition hover:bg-[#f9fafb]"
           >
-              <td class="px-4 py-3 text-[#374151]">{{ getBankName(account.bank_id) }}</td>
+              <td class="px-4 py-3 text-[#374151]">
+                <template v-for="cell in [getBankTableCell(account.bank_id)]" :key="account.id">
+                  <p class="font-medium">{{ cell.title }}</p>
+                  <p
+                    v-if="cell.razonSocial"
+                    class="mt-0.5 text-xs leading-snug text-[#6b7280]"
+                  >
+                    {{ cell.razonSocial }}
+                  </p>
+                </template>
+              </td>
               <td class="px-4 py-3 text-[#374151]">{{ getAccountCurrency(account) }}</td>
               <td class="px-4 py-3 text-[#374151]">{{ getAccountName(account) }}</td>
               <td class="px-4 py-3 text-[#374151]">{{ getDocumentType(account) }}</td>

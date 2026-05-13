@@ -9,6 +9,8 @@ import {
   TRANSACTION_STATUSES,
   TRANSACTION_STATUS_LABELS,
   isTransactionChecked,
+  normalizeTransactionStatus,
+  resolveTransactionStatusForDisplay,
 } from "@modules/transacciones/domain/models";
 import AppDropdown from "@/interface/components/AppDropdown.vue";
 import AppDateInput from "@/interface/components/AppDateInput.vue";
@@ -108,10 +110,11 @@ const searchedTransactions = computed(() => {
   let list = transactionsStore.transactions;
 
   if (statusFilter.value && statusFilter.value !== "todos") {
-    list = list.filter(
-      (t) =>
-        (t.status ?? "").toLowerCase() === statusFilter.value.toLowerCase(),
-    );
+    list = list.filter((t) => {
+      const eff =
+        resolveTransactionStatusForDisplay(t) ?? t.status ?? "";
+      return eff.toLowerCase() === statusFilter.value.toLowerCase();
+    });
   }
 
   if (userFilter.value?.trim()) {
@@ -272,7 +275,7 @@ function voucherMediaHref(path: unknown): string {
 
 function getStatusLabel(status: string | undefined): string {
   if (!status) return "-";
-  const s = status.toLowerCase();
+  const s = normalizeTransactionStatus(status);
   return (
     TRANSACTION_STATUS_LABELS[s as keyof typeof TRANSACTION_STATUS_LABELS] ??
     status
@@ -280,7 +283,7 @@ function getStatusLabel(status: string | undefined): string {
 }
 
 function statusRowBadgeClass(status: string | undefined): string {
-  const s = (status ?? "").toLowerCase();
+  const s = normalizeTransactionStatus(status ?? "");
   switch (s) {
     case "verification":
     case "pending":
@@ -695,9 +698,17 @@ onMounted(() => {
             <td class="px-4 py-3">
               <span
                 class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium"
-                :class="statusRowBadgeClass(t.status)"
+                :class="
+                  statusRowBadgeClass(
+                    resolveTransactionStatusForDisplay(t) ?? t.status,
+                  )
+                "
               >
-                {{ getStatusLabel(t.status) }}
+                {{
+                  getStatusLabel(
+                    resolveTransactionStatusForDisplay(t) ?? t.status,
+                  )
+                }}
               </span>
             </td>
             <td class="px-4 py-3 text-[#374151]">

@@ -2,6 +2,7 @@ import type { Transaction } from "../../domain/models";
 import {
   TRANSACTION_STATUS_LABELS,
   isTransactionChecked,
+  resolveTransactionStatusForDisplay,
 } from "../../domain/models";
 import { useTasasStore } from "@modules/tasas/presentation/controllers/use_tasas_store_controller";
 import { useComisionesStore } from "@modules/comisiones/presentation/controllers/use_comisiones_store_controller";
@@ -165,10 +166,7 @@ export function useTransactionPreviewController() {
 
     const code = (rec.code as string) ?? "";
     const status = rec.status as string | undefined;
-    const isVerified = isTransactionChecked({
-      checked: rec.checked === true || rec.checked === "true",
-      status: typeof status === "string" ? status : undefined,
-    });
+    const isVerified = isTransactionChecked(t);
 
     sections.push({
       id: "resumen",
@@ -182,7 +180,9 @@ export function useTransactionPreviewController() {
         },
         {
           label: "Estado",
-          value: getStatusLabel(status),
+          value: getStatusLabel(
+            resolveTransactionStatusForDisplay(t) ?? status,
+          ),
           variant: "status",
         },
         {

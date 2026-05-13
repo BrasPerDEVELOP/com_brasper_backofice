@@ -20,6 +20,21 @@ function parseOptionalAmount(v: unknown): number | undefined {
   return Number.isFinite(n) ? n : undefined
 }
 
+function parseTruthyFlag(v: unknown): boolean {
+  if (v === true || v === 'true' || v === 1 || v === '1') return true
+  return false
+}
+
+/** Primer string no vacío entre candidatos (alias de API). */
+function firstNonEmptyString(...vals: unknown[]): string | undefined {
+  for (const v of vals) {
+    if (v == null || v === '') continue
+    const s = String(v).trim()
+    if (s) return s
+  }
+  return undefined
+}
+
 function appendFileToForm(form: FormData, key: string, file: File): void {
   const name = file.name?.trim() || 'upload'
   form.append(key, file, name)
@@ -184,16 +199,33 @@ function parseTransaction(item: unknown): Transaction {
     couponDiscountCodeRaw == null || couponDiscountCodeRaw === ''
       ? undefined
       : String(couponDiscountCodeRaw).trim()
-  const checkedImgRaw = o.checked_image
-  const checked_image =
-    checkedImgRaw == null || checkedImgRaw === ''
-      ? undefined
-      : String(checkedImgRaw)
+  const checked_image = firstNonEmptyString(
+    o.checked_image,
+    o.checkedImage,
+    o.checked_image_url,
+    o.verification_image,
+    o.imagen_verificacion,
+    o.checklist_image,
+    o.imagen_checklist,
+    o.verify_image
+  )
   const operationNumberRaw = o.operation_number ?? o.numero_operacion
   const operation_number =
     operationNumberRaw == null || operationNumberRaw === ''
       ? undefined
       : String(operationNumberRaw).trim()
+
+  const statusRaw = o.status ?? o.estado ?? o.transaction_status ?? o.state
+  const transactionStatus =
+    statusRaw != null && String(statusRaw).trim()
+      ? String(statusRaw).trim()
+      : undefined
+  const transactionChecked =
+    parseTruthyFlag(o.checked) ||
+    parseTruthyFlag(o.is_checked) ||
+    parseTruthyFlag(o.is_verified) ||
+    parseTruthyFlag(o.verified) ||
+    parseTruthyFlag(o.has_checked_image)
 
   return {
     id: o.id != null ? String(o.id) : undefined,
@@ -208,7 +240,7 @@ function parseTransaction(item: unknown): Transaction {
       coerceUserId(o.user),
     tax_rate_id: o.tax_rate_id != null ? String(o.tax_rate_id) : undefined,
     commission_id: o.commission_id != null ? String(o.commission_id) : undefined,
-    status: o.status != null ? String(o.status) : undefined,
+    status: transactionStatus,
     origin_amount: typeof o.origin_amount === 'number' ? o.origin_amount : Number(o.origin_amount) || 0,
     destination_amount:
       typeof o.destination_amount === 'number' ? o.destination_amount : Number(o.destination_amount) || 0,
@@ -234,10 +266,16 @@ function parseTransaction(item: unknown): Transaction {
       o.bank_name != null && String(o.bank_name).trim()
         ? String(o.bank_name).trim()
         : undefined,
-    company_name:
-      o.company_name != null && String(o.company_name).trim()
-        ? String(o.company_name).trim()
-        : undefined,
+    company_name: (() => {
+      const raw =
+        o.company_name ??
+        o.razon_social ??
+        o.business_name ??
+        o['razón_social']
+      return raw != null && String(raw).trim()
+        ? String(raw).trim()
+        : undefined
+    })(),
     send_date: o.send_date != null ? String(o.send_date) : undefined,
     payment_date: o.payment_date != null ? String(o.payment_date) : undefined,
     send_voucher: o.send_voucher != null ? String(o.send_voucher) : undefined,
@@ -246,7 +284,7 @@ function parseTransaction(item: unknown): Transaction {
     created_at: o.created_at != null ? String(o.created_at) : undefined,
     created_by: o.created_by != null ? String(o.created_by) : undefined,
     updated_at: o.updated_at != null ? String(o.updated_at) : undefined,
-    checked: o.checked === true || o.checked === 'true',
+    checked: transactionChecked,
     comision_final_interna: comisionFinalInterna ?? resultado,
     impuesto_final_interno: impuestoFinalInterno,
     venta_final: ventaFinal,

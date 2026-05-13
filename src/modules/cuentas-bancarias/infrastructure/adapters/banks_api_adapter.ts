@@ -49,6 +49,9 @@ function parseBank(item: unknown): BankOption | null {
   const id = rawId != null ? String(rawId) : ''
   const bank = (o.bank ?? o.name ?? o.bank_name ?? '').toString().trim()
   if (!id) return null
+  const companyFromApi = [o.company, o.razon_social, o.company_name]
+    .map((v) => (v != null && v !== '' ? String(v).trim() : ''))
+    .find((s) => s.length > 0)
   return {
     id,
     bank: bank || id,
@@ -56,8 +59,7 @@ function parseBank(item: unknown): BankOption | null {
     country: o.country != null ? String(o.country) : '',
     account: o.account === undefined ? undefined : o.account === null ? null : String(o.account),
     pix: o.pix === undefined ? undefined : o.pix === null ? null : String(o.pix),
-    company:
-      o.company === undefined ? undefined : o.company === null ? null : String(o.company),
+    company: companyFromApi ?? (o.company === null ? null : undefined),
     image: o.image === undefined ? undefined : o.image === null ? null : String(o.image),
     currency_display:
       o.currency_display === undefined

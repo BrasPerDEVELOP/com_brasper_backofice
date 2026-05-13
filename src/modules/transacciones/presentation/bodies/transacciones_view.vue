@@ -24,6 +24,8 @@ import {
   TRANSACTION_STATUSES,
   TRANSACTION_STATUS_LABELS,
   isTransactionChecked,
+  normalizeTransactionStatus,
+  resolveTransactionStatusForDisplay,
   roundMoneyAmount,
 } from "../../domain/models";
 import AppDropdown from "@/interface/components/AppDropdown.vue";
@@ -342,7 +344,7 @@ function accountCompanyDisplayLine(a: BankAccount): string {
   return (isLegal ? (a.business_name ?? "").trim() : holderLine) || "—";
 }
 
-/** Cuenta destino: mínimo en lista; el bloque «Detalle» muestra bank_id / bank_name / company_name. */
+/** Cuenta destino: mínimo en lista; metadatos de banco vía `bankMetaFromDestinationAccount`. */
 function destinationBankAccountToOption(a: BankAccount): {
   value: string;
   label: string;
@@ -597,23 +599,6 @@ function normalizeSelectId(v: unknown): string {
   return String(v).trim();
 }
 
-const originAccountOptions = computed(() => {
-  const userId = form.user_id?.trim();
-  const currency = selectedAccountCurrencies.value.origin;
-  const base = cuentasStore.bankAccounts
-    .filter((a) => bankAccountMatchesSide(a, "origin"))
-    .filter((a) => bankAccountMatchesCurrency(a, currency))
-    .filter(
-      (a) => !userId || String(a.user_id ?? "").trim() === userId,
-    )
-    .map(bankAccountToOption);
-  return mergeMissingSelectedAccount(
-    base,
-    form.bank_account_origin_id,
-    currency,
-  );
-});
-
 const destinationAccountOptions = computed(() => {
   const userId = form.user_id?.trim();
   const currency = selectedAccountCurrencies.value.destination;
@@ -819,9 +804,11 @@ const commissionOptions = computed(() => {
   }));
 });
 
-/** Metadatos que se enviarán al API; reflejados en paso Datos junto a cuenta destino. */
-const destinationBankMetaDisplay = computed(() =>
-  bankMetaFromDestinationAccount(form.bank_account_destination_id),
+/** Cuenta destino elegida pero sin metadatos resueltos en catálogo local (aviso ámbar). */
+const showDestinationBankCatalogWarning = computed(
+  () =>
+    Boolean(form.bank_account_destination_id?.trim()) &&
+    bankMetaFromDestinationAccount(form.bank_account_destination_id) === null,
 );
 
 const statusFormOptions = TRANSACTION_STATUSES.map((s) => ({
@@ -863,10 +850,11 @@ const searchedTransactions = computed(() => {
 
   // Filtro por estado
   if (statusFilter.value && statusFilter.value !== "todos") {
-    list = list.filter(
-      (t) =>
-        (t.status ?? "").toLowerCase() === statusFilter.value.toLowerCase(),
-    );
+    list = list.filter((t) => {
+      const eff =
+        resolveTransactionStatusForDisplay(t) ?? t.status ?? "";
+      return eff.toLowerCase() === statusFilter.value.toLowerCase();
+    });
   }
 
   // Filtro por cliente
@@ -1500,7 +1488,9 @@ const editModalSummary = computed(() => {
   if (!t) return null;
   return {
     code: formatTransactionCodeShort(t.code),
-    status: getStatusLabel(t.status),
+    status: getStatusLabel(
+      resolveTransactionStatusForDisplay(t) ?? t.status,
+    ),
     checked: isTransactionChecked(t) ? "Sí" : "No",
   };
 });
@@ -1777,7 +1767,7 @@ function voucherMediaHref(path: unknown): string {
 
 function getStatusLabel(status: string | undefined): string {
   if (!status) return "-";
-  const s = status.toLowerCase();
+  const s = normalizeTransactionStatus(status);
   return (
     TRANSACTION_STATUS_LABELS[s as keyof typeof TRANSACTION_STATUS_LABELS] ??
     status
@@ -1785,7 +1775,7 @@ function getStatusLabel(status: string | undefined): string {
 }
 
 function statusRowBadgeClass(status: string | undefined): string {
-  const s = (status ?? "").toLowerCase();
+  const s = normalizeTransactionStatus(status ?? "");
   switch (s) {
     case "verification":
     case "pending":
@@ -1815,6 +1805,12 @@ function getBankCurrencyTableLabel(id: string | undefined): string {
   return bank.currency
     ? `${bank.bank} (${bank.currency})`
     : bank.bank;
+}
+
+/** Tabla: razón social de la empresa (`company_name` en API). */
+function transactionCompanyNameTable(t: Transaction): string {
+  const s = t.company_name != null ? String(t.company_name).trim() : "";
+  return s || "—";
 }
 
 function getClientLabel(id: string | undefined): string {
@@ -1892,6 +1888,11 @@ const activeCheckedImagePreviewSrc = computed(
   () => checkedImagePreviewSrc.value ?? persistedCheckedImagePreviewSrc.value,
 );
 
+/** Imagen de verificación (checklist) ya elegida o cargada en el formulario */
+const isCheckedImageVoucherPresent = computed(() =>
+  hasVoucherValue(form.checked_image),
+);
+
 function nowLocalDateTimeValue(): string {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -1930,6 +1931,11 @@ function syncStatusFromVoucherFiles() {
 
   form.checked = hasCheckedImage;
   if (hasSendVoucher && hasCheckedImage && hasPaymentVoucher) {
+    form.status = "verified";
+  } else if (
+    hasCheckedImage &&
+    (currentStatus === "verification" || currentStatus === "")
+  ) {
     form.status = "verified";
   }
 }
@@ -2343,7 +2349,7 @@ onMounted(() => {
             <th
               class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark"
             >
-              Cuenta de origen
+              Razón social
             </th>
             <th
               class="whitespace-nowrap px-4 py-3 text-center font-semibold text-brasper-indigoDark"
@@ -2446,9 +2452,9 @@ onMounted(() => {
             </td>
             <td
               class="max-w-[180px] truncate px-4 py-3 text-[#374151]"
-              :title="getBankCurrencyTableLabel(t.bank_account_origin_id)"
+              :title="transactionCompanyNameTable(t)"
             >
-              {{ getBankCurrencyTableLabel(t.bank_account_origin_id) }}
+              {{ transactionCompanyNameTable(t) }}
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-center tabular-nums text-[#374151]">
               {{ formatValue(t.origin_amount) }}
@@ -2465,9 +2471,17 @@ onMounted(() => {
             <td class="px-4 py-3">
               <span
                 class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium"
-                :class="statusRowBadgeClass(t.status)"
+                :class="
+                  statusRowBadgeClass(
+                    resolveTransactionStatusForDisplay(t) ?? t.status,
+                  )
+                "
               >
-                {{ getStatusLabel(t.status) }}
+                {{
+                  getStatusLabel(
+                    resolveTransactionStatusForDisplay(t) ?? t.status,
+                  )
+                }}
               </span>
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-[#374151]">
@@ -2714,7 +2728,15 @@ onMounted(() => {
                         <span
                           v-if="item.variant === 'status'"
                           class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold"
-                          :class="statusRowBadgeClass(previewTransaction?.status)"
+                          :class="
+                            statusRowBadgeClass(
+                              previewTransaction
+                                ? resolveTransactionStatusForDisplay(
+                                    previewTransaction,
+                                  ) ?? previewTransaction.status
+                                : undefined,
+                            )
+                          "
                         >
                           {{ item.value }}
                         </span>
@@ -3360,50 +3382,9 @@ onMounted(() => {
                                 class="min-w-0"
                               />
                             </div>
-                            <div class="space-y-1.5">
-                              <label class="block text-sm font-medium text-[#374151]"
-                                >Cuenta origen</label
-                              >
-                              <div class="flex gap-2">
-                                <AppDropdown
-                                  v-model="form.bank_account_origin_id"
-                                  :options="originAccountOptions"
-                                  placeholder="Cuenta de origen"
-                                  :searchable="originAccountOptions.length > 5"
-                                  class="min-w-0 flex-1"
-                                />
-                                <button
-                                  type="button"
-                                  class="flex shrink-0 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white p-2.5 text-[#6b7280] transition hover:border-[#d1d5db] hover:bg-[#f9fafb] hover:text-[#374151]"
-                                  title="Nueva cuenta bancaria (origen)"
-                                  @click="openBankAccountModalFromTransaction('origin')"
-                                >
-                                  <svg
-                                    class="h-5 w-5"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                    aria-hidden="true"
-                                  >
-                                    <path
-                                      stroke-linecap="round"
-                                      stroke-linejoin="round"
-                                      stroke-width="2"
-                                      d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                                    />
-                                    <path
-                                      stroke-linecap="round"
-                                      stroke-linejoin="round"
-                                      stroke-width="2"
-                                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                                    />
-                                  </svg>
-                                </button>
-                              </div>
-                            </div>
                             <div class="space-y-1.5 sm:col-span-2">
                               <label class="block text-sm font-medium text-[#374151]"
-                                >Banco</label
+                                >Razón social</label
                               >
                               <div class="flex gap-2">
                                 <AppDropdown
@@ -3484,37 +3465,7 @@ onMounted(() => {
                               </div>
                             </div>
                             <div
-                              v-if="destinationBankMetaDisplay"
-                              class="sm:col-span-2 rounded-xl border border-emerald-200/80 bg-emerald-50/60 p-4"
-                            >
-                              <p
-                                class="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-900"
-                              >
-                                Detalle
-                              </p>
-                              <dl class="grid gap-2 text-xs sm:grid-cols-3">
-                                <div>
-                                  <dt class="text-[#047857]">ID banco</dt>
-                                  <dd class="mt-0.5 break-all font-mono font-semibold text-[#064e3b]">
-                                    {{ destinationBankMetaDisplay.bank_id }}
-                                  </dd>
-                                </div>
-                                <div>
-                                  <dt class="text-[#047857]">Nombre</dt>
-                                  <dd class="mt-0.5 font-semibold text-[#064e3b]">
-                                    {{ destinationBankMetaDisplay.bank_name || "—" }}
-                                  </dd>
-                                </div>
-                                <div>
-                                  <dt class="text-[#047857]">Titular / empresa</dt>
-                                  <dd class="mt-0.5 font-semibold text-[#064e3b]">
-                                    {{ destinationBankMetaDisplay.company_name || "—" }}
-                                  </dd>
-                                </div>
-                              </dl>
-                            </div>
-                            <div
-                              v-else-if="form.bank_account_destination_id?.trim()"
+                              v-if="showDestinationBankCatalogWarning"
                               class="sm:col-span-2 rounded-lg border border-amber-200 bg-amber-50/90 px-3 py-2 text-xs text-amber-950"
                             >
                               No se resolvió el banco de la cuenta destino en el catálogo local.
@@ -3968,50 +3919,9 @@ onMounted(() => {
                       class="min-w-0"
                     />
                   </div>
-                  <div class="space-y-1.5">
-                    <label class="block text-sm font-medium text-[#374151]"
-                      >Cuenta origen</label
-                    >
-                    <div class="flex gap-2">
-                      <AppDropdown
-                        v-model="form.bank_account_origin_id"
-                        :options="originAccountOptions"
-                        placeholder="Cuenta de origen"
-                        :searchable="originAccountOptions.length > 5"
-                        class="min-w-0 flex-1"
-                      />
-                      <button
-                        type="button"
-                        class="flex shrink-0 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white p-2.5 text-[#6b7280] transition hover:border-[#d1d5db] hover:bg-[#f9fafb] hover:text-[#374151]"
-                        title="Nueva cuenta bancaria (origen)"
-                        @click="openBankAccountModalFromTransaction('origin')"
-                      >
-                        <svg
-                          class="h-5 w-5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                          aria-hidden="true"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                          />
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                          />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
                   <div class="space-y-1.5 sm:col-span-2">
                     <label class="block text-sm font-medium text-[#374151]"
-                      >Banco</label
+                      >Razón social</label
                     >
                     <div class="flex gap-2">
                       <AppDropdown
@@ -4092,41 +4002,7 @@ onMounted(() => {
                     </div>
                   </div>
                   <div
-                    v-if="destinationBankMetaDisplay"
-                    class="sm:col-span-2 rounded-xl border border-emerald-200/80 bg-emerald-50/60 p-4"
-                  >
-                    <p
-                      class="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-900"
-                    >
-                      Detalle
-                    </p>
-                    <dl
-                      class="grid gap-3 text-sm sm:grid-cols-3 sm:gap-4"
-                    >
-                      <div>
-                        <dt class="text-xs font-medium text-[#047857]">ID banco</dt>
-                        <dd
-                          class="mt-0.5 break-all font-mono text-xs font-semibold text-[#064e3b]"
-                        >
-                          {{ destinationBankMetaDisplay.bank_id }}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt class="text-xs font-medium text-[#047857]">Nombre del banco</dt>
-                        <dd class="mt-0.5 font-semibold text-[#064e3b]">
-                          {{ destinationBankMetaDisplay.bank_name || "—" }}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt class="text-xs font-medium text-[#047857]">Titular / empresa</dt>
-                        <dd class="mt-0.5 font-semibold text-[#064e3b]">
-                          {{ destinationBankMetaDisplay.company_name || "—" }}
-                        </dd>
-                      </div>
-                    </dl>
-                  </div>
-                  <div
-                    v-else-if="form.bank_account_destination_id?.trim()"
+                    v-if="showDestinationBankCatalogWarning"
                     class="sm:col-span-2 rounded-lg border border-amber-200 bg-amber-50/90 px-3 py-2 text-xs text-amber-950"
                   >
                     No se encontró el banco de esta cuenta en el catálogo local. Recarga la página
@@ -4474,9 +4350,31 @@ onMounted(() => {
                 >
                   <div class="mb-4 flex items-start gap-3">
                     <span
-                      class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-800"
+                      class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors"
+                      :class="
+                        isCheckedImageVoucherPresent
+                          ? 'bg-emerald-500 text-white'
+                          : 'bg-amber-50 text-amber-800'
+                      "
+                      :title="
+                        isCheckedImageVoucherPresent
+                          ? 'Imagen de verificación cargada'
+                          : 'Pendiente de imagen de verificación'
+                      "
                     >
                       <svg
+                        v-if="isCheckedImageVoucherPresent"
+                        class="h-6 w-6"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"
+                        />
+                      </svg>
+                      <svg
+                        v-else
                         class="h-5 w-5"
                         fill="none"
                         stroke="currentColor"

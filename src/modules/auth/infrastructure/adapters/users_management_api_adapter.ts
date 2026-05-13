@@ -90,7 +90,7 @@ export async function fetchAllUsers(): Promise<UserListItem[]> {
 }
 
 export interface CreateUserPayload {
-  email: string
+  email?: string
   names?: string
   lastnames?: string
   role?: string
