@@ -192,6 +192,9 @@ async function saveRate(rate: ExchangeRate): Promise<void> {
   if (ok) {
     draftTaxes.value[rate.id] = String(parsedTax)
     await calculatorStore.loadData()
+    if (calculatorStore.calculationMode === 'special' && calculatorStore.amountSend > 0) {
+      calculatorStore.recalcFromSend()
+    }
   }
 }
 

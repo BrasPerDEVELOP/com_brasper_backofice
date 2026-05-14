@@ -1,8 +1,13 @@
+import axios from 'axios'
 import { apiClient } from '@/interface/api/client'
+import { formatApiErrorBody } from '@/interface/api/format_api_error'
 import { Domain } from '@/interface/infrastructure/services'
 import { USER_ROLES } from '../../domain/models'
 
 export { USER_ROLES }
+
+export const DEFAULT_USER_TEMPORARY_PASSWORD = 'Pass123!'
+
 export interface UserListItem {
   id: string
   name: string
@@ -94,6 +99,7 @@ export interface CreateUserPayload {
   names?: string
   lastnames?: string
   role?: string
+  password?: string
   document_number?: string
   document_type?: string
   profile_image?: File | null
@@ -101,7 +107,7 @@ export interface CreateUserPayload {
   code_phone?: string
 }
 
-export interface UpdateUserPayload extends Omit<CreateUserPayload, 'email'> {
+export interface UpdateUserPayload extends Omit<CreateUserPayload, 'email' | 'password'> {
   id: string
   email?: string
 }
@@ -114,6 +120,7 @@ function appendUserFormFields(
   if (payload.names?.trim()) form.append('names', payload.names.trim())
   if (payload.lastnames?.trim()) form.append('lastnames', payload.lastnames.trim())
   if (payload.role?.trim()) form.append('role', payload.role.trim())
+  if ('password' in payload && payload.password?.trim()) form.append('password', payload.password.trim())
   if (payload.document_number?.trim()) form.append('document_number', payload.document_number.trim())
   if (payload.document_type?.trim()) form.append('document_type', payload.document_type.trim())
   const phoneVal = payload.phone
@@ -130,7 +137,10 @@ function appendUserFormFields(
 export async function createUser(payload: CreateUserPayload): Promise<UserListItem> {
   const url = Domain.http('user/')
   const form = new FormData()
-  appendUserFormFields(form, payload)
+  appendUserFormFields(form, {
+    ...payload,
+    password: payload.password?.trim() || DEFAULT_USER_TEMPORARY_PASSWORD
+  })
 
   const response = await apiClient.post<unknown>(url, form)
   const raw = response.data
@@ -195,12 +205,28 @@ export async function resetUserPassword(payload: ResetUserPasswordPayload): Prom
   const password = payload.new_password.trim()
   if (!id) throw new Error('ID de usuario inválido')
   if (!password) throw new Error('La contraseña temporal es obligatoria')
-  await apiClient.post(
-    Domain.http(`user/${id}/reset-password/`),
-    { new_password: password },
-    {
-      headers: { 'Content-Type': 'application/json' },
-      skipAuthRedirect: true
+  try {
+    await apiClient.post(
+      Domain.http(`user/${id}/reset-password/`),
+      { new_password: password },
+      {
+        headers: { 'Content-Type': 'application/json' },
+        skipAuthRedirect: true
+      }
+    )
+  } catch (e) {
+    if (axios.isAxiosError(e)) {
+      const apiMessage = formatApiErrorBody(e.response?.data)
+      const status = e.response?.status
+      if (apiMessage) throw new Error(apiMessage)
+      if (status === 403) {
+        throw new Error('No tienes permiso para resetear la contraseña de este usuario')
+      }
+      if (status && status >= 500) {
+        throw new Error('El servidor falló al resetear la contraseña. Revisa la regla de permisos del backend para usuarios admin.')
+      }
+      throw new Error(e.message || 'Error al resetear contraseña')
     }
-  )
+    throw e
+  }
 }

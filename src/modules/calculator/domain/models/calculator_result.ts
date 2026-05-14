@@ -10,7 +10,12 @@ export interface CalculatorResult {
   specialDiscountPercentage: number
   specialDiscountAmount: number
   finalCommission: number
+  specialBaseReceive: number
   specialTargetReceive: number
+  specialImprovementAmount: number
+  specialImprovementPercentage: number
+  specialImprovementValid: boolean
+  specialImprovementInvalidReason: string | null
   specialDiscountValid: boolean
   specialDiscountInvalidReason: string | null
 }

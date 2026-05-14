@@ -125,14 +125,21 @@ function close() {
 }
 
 function buildPayload(): CreateBankBody {
-  return {
+  const body: CreateBankBody = {
     bank: form.bank.trim(),
     currency: form.currency.trim().toUpperCase(),
-    country: form.country.trim().toLowerCase(),
-    company: form.company.trim() || null,
-    account: form.account.trim() || null,
-    pix: form.pix.trim() || null
+    country: form.country.trim().toLowerCase()
   }
+
+  const company = form.company.trim()
+  const account = form.account.trim()
+  const pix = form.pix.trim()
+
+  if (company) body.company = company
+  if (account) body.account = account
+  if (pix) body.pix = pix
+
+  return body
 }
 
 async function submitForm() {
@@ -328,7 +335,7 @@ watch(
               </div>
             </div>
             <div class="space-y-1.5">
-              <label class="block text-sm font-medium text-[#374151]">Razón social (empresa / titular cuenta)</label>
+              <label class="block text-sm font-medium text-[#374151]">Razón social (opcional)</label>
               <input
                 v-model="form.company"
                 type="text"
@@ -339,7 +346,7 @@ watch(
             </div>
             <div class="grid gap-4 sm:grid-cols-2">
               <div class="space-y-1.5">
-                <label class="block text-sm font-medium text-[#374151]">Cuenta</label>
+                <label class="block text-sm font-medium text-[#374151]">Cuenta (opcional)</label>
                 <input
                   v-model="form.account"
                   type="text"
@@ -348,7 +355,7 @@ watch(
                 />
               </div>
               <div class="space-y-1.5">
-                <label class="block text-sm font-medium text-[#374151]">PIX / texto PIX</label>
+                <label class="block text-sm font-medium text-[#374151]">PIX / texto PIX (opcional)</label>
                 <input
                   v-model="form.pix"
                   type="text"

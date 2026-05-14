@@ -37,6 +37,12 @@ function formatMoney(value: unknown): string {
   return String(value);
 }
 
+function formatMoneyWithCurrency(value: unknown, currency: string): string {
+  const amount = formatMoney(value);
+  const code = currency.trim().toUpperCase();
+  return code && amount !== "—" ? `${amount} ${code}` : amount;
+}
+
 function formatTransactionCodeShort(code: string | undefined): string {
   if (!code?.trim()) return "—";
   const digits = code.replace(/\D/g, "");
@@ -93,6 +99,27 @@ export function useTransactionPreviewController() {
     if (!id?.trim()) return "—";
     const acc = cuentasStore.bankAccounts.find((a) => a.id === id);
     return acc ? bankAccountToLabel(acc) : id;
+  }
+
+  function getBankAccountCurrency(id: string | undefined): string {
+    if (!id?.trim()) return "";
+    const acc = cuentasStore.bankAccounts.find((a) => a.id === id);
+    if (!acc?.bank_id?.trim()) return "";
+    const bank = cuentasStore.banks.find((b) => b.id === acc.bank_id);
+    return String(bank?.currency ?? "").trim().toUpperCase();
+  }
+
+  function getTransactionCurrencies(rec: Record<string, unknown>) {
+    const rateId = String(rec.tax_rate_id ?? "").trim();
+    const rate = tasasStore.taxRates.find((x) => x.id === rateId);
+    return {
+      origin:
+        String(rate?.coin_a ?? rec.origin_currency ?? "").trim().toUpperCase() ||
+        getBankAccountCurrency(rec.bank_account_origin_id as string),
+      destination:
+        String(rate?.coin_b ?? rec.destination_currency ?? "").trim().toUpperCase() ||
+        getBankAccountCurrency(rec.bank_account_destination_id as string),
+    };
   }
 
   function getClientLabel(id: string | undefined): string {
@@ -238,14 +265,18 @@ export function useTransactionPreviewController() {
       rec.coupon_id ||
         (rec.coupon_discount_code && String(rec.coupon_discount_code).trim()),
     );
+    const currencies = getTransactionCurrencies(rec);
     const amountItems: PreviewItem[] = [
       {
         label: hasCoupon ? "Monto origen (Base)" : "Monto origen",
-        value: formatMoney(rec.origin_amount),
+        value: formatMoneyWithCurrency(rec.origin_amount, currencies.origin),
       },
       {
         label: hasCoupon ? "Monto destino (Base)" : "Monto destino",
-        value: formatMoney(rec.destination_amount),
+        value: formatMoneyWithCurrency(
+          rec.destination_amount,
+          currencies.destination,
+        ),
       },
     ];
     const commissionRes =
@@ -253,14 +284,14 @@ export function useTransactionPreviewController() {
     if (commissionRes != null && commissionRes !== "")
       amountItems.push({
         label: hasCoupon ? "Comisión (Base)" : "Resultado comisión",
-        value: formatMoney(commissionRes),
+        value: formatMoneyWithCurrency(commissionRes, currencies.origin),
       });
 
     const totalEnviarBase = rec.total_a_enviar ?? rec.total_to_send ?? null;
     if (totalEnviarBase != null && totalEnviarBase !== "")
       amountItems.push({
         label: hasCoupon ? "Total a enviar (Base)" : "Total a enviar",
-        value: formatMoney(totalEnviarBase),
+        value: formatMoneyWithCurrency(totalEnviarBase, currencies.origin),
       });
 
     if (hasCoupon) {
@@ -270,13 +301,19 @@ export function useTransactionPreviewController() {
       )
         amountItems.push({
           label: "Descuento cupón",
-          value: `-${formatMoney(rec.coupon_discount_commission)}`,
+          value: `-${formatMoneyWithCurrency(
+            rec.coupon_discount_commission,
+            currencies.origin,
+          )}`,
         });
 
       if (rec.coupon_origin_amount != null && rec.coupon_origin_amount !== "")
         amountItems.push({
           label: "Monto origen (Final)",
-          value: formatMoney(rec.coupon_origin_amount),
+          value: formatMoneyWithCurrency(
+            rec.coupon_origin_amount,
+            currencies.origin,
+          ),
         });
 
       if (
@@ -285,7 +322,10 @@ export function useTransactionPreviewController() {
       )
         amountItems.push({
           label: "Monto destino (Final)",
-          value: formatMoney(rec.coupon_destination_amount),
+          value: formatMoneyWithCurrency(
+            rec.coupon_destination_amount,
+            currencies.destination,
+          ),
         });
 
       if (
@@ -294,7 +334,10 @@ export function useTransactionPreviewController() {
       )
         amountItems.push({
           label: "Total a enviar (Final)",
-          value: formatMoney(rec.coupon_discount_total_to_send),
+          value: formatMoneyWithCurrency(
+            rec.coupon_discount_total_to_send,
+            currencies.origin,
+          ),
         });
     }
 

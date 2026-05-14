@@ -159,14 +159,50 @@
           <div
             v-if="
               showCalculationModeToggle &&
-              calculatorStore.result.calculationMode === 'special' &&
-              Math.abs(calculatorStore.result.specialDiscountPercentage) > 0.0005
+              calculatorStore.result.calculationMode === 'special'
             "
             class="flex justify-between text-sm"
           >
-            <span class="text-gray-600">Recibir objetivo</span>
+            <span class="text-gray-600">Recibe base</span>
+            <span class="font-semibold text-gray-900">
+              {{ formatCurrency(calculatorStore.result.specialBaseReceive, calculatorStore.currencyTo) }}
+            </span>
+          </div>
+          <div
+            v-if="
+              showCalculationModeToggle &&
+              calculatorStore.result.calculationMode === 'special'
+            "
+            class="flex justify-between text-sm"
+          >
+            <span class="text-gray-600">Recibe objetivo</span>
             <span class="font-semibold text-gray-900">
               {{ formatCurrency(calculatorStore.result.specialTargetReceive, calculatorStore.currencyTo) }}
+            </span>
+          </div>
+          <div
+            v-if="
+              showCalculationModeToggle &&
+              calculatorStore.calculationMode === 'normal' &&
+              calculatorStore.result.calculationMode === 'normal'
+            "
+            class="flex justify-between text-sm"
+          >
+            <span class="text-gray-600">Mejora especial</span>
+            <span class="text-sm font-semibold text-gray-500">No aplica (cotización normal)</span>
+          </div>
+          <div
+            v-if="
+              showCalculationModeToggle &&
+              calculatorStore.result.calculationMode === 'special' &&
+              calculatorStore.result.specialDiscountValid
+            "
+            class="flex justify-between text-sm"
+          >
+            <span class="text-gray-600">Descuento especial</span>
+            <span class="font-semibold text-brasper-indigoStrong">
+              {{ formatNumber(calculatorStore.result.specialDiscountPercentage) }}%
+              ({{ formatCurrency(calculatorStore.result.specialDiscountAmount, calculatorStore.currencyFrom) }})
             </span>
           </div>
           <div
@@ -176,20 +212,6 @@
             <span class="text-gray-600">Comisión base</span>
             <span class="font-semibold text-gray-900">
               {{ formatCurrency(calculatorStore.result.baseCommission, calculatorStore.currencyFrom) }}
-            </span>
-          </div>
-          <div
-            v-if="
-              showCalculationModeToggle &&
-              calculatorStore.result.calculationMode === 'special' &&
-              Math.abs(calculatorStore.result.specialDiscountPercentage) > 0.0005
-            "
-            class="flex justify-between text-sm"
-          >
-            <span class="text-gray-600">Descuento especial</span>
-            <span class="font-semibold text-brasper-indigoStrong">
-              {{ formatNumber(calculatorStore.result.specialDiscountPercentage) }}%
-              ({{ formatCurrency(calculatorStore.result.specialDiscountAmount, calculatorStore.currencyFrom) }})
             </span>
           </div>
           <div class="flex justify-between text-sm">

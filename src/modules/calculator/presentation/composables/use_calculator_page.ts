@@ -72,6 +72,9 @@ export function useCalculatorPage(
     const normalized = normalizeTwoDecimals(amountReceiveLocal.value || 0)
     amountReceiveLocal.value = normalized
     calculatorStore.setAmountReceive(normalized)
+    if (calculatorStore.calculationMode === 'special') {
+      return
+    }
     calculatorStore.recalcFromReceive()
     amountSendLocal.value = normalizeTwoDecimals(calculatorStore.amountSend)
   }

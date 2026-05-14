@@ -15,6 +15,7 @@ import { useTasasStore } from "@modules/tasas/presentation/controllers/use_tasas
 import { useComisionesStore } from "@modules/comisiones/presentation/controllers/use_comisiones_store_controller";
 import { useCalculatorStore } from "@modules/calculator/presentation/controllers/use_calculator_store_controller";
 import { useCuponesStore } from "@modules/cupones/presentation/controllers/use_cupones_store_controller";
+import { useAuthStore } from "@modules/auth/presentation/controllers/use_auth_store_controller";
 import type { BankAccount } from "@modules/cuentas-bancarias/domain/models";
 import type { Coupon } from "@modules/cupones/domain/models";
 import type { Transaction } from "../../domain/models";
@@ -47,6 +48,7 @@ const tasasStore = useTasasStore();
 const comisionesStore = useComisionesStore();
 const calculatorStore = useCalculatorStore();
 const cuponesStore = useCuponesStore();
+const authStore = useAuthStore();
 
 /** Catálogo coin (trial) listo para el paso Cotización sin parpadeo de carga. */
 function transactionCatalogReadyForCurrentMode(): boolean {
@@ -411,6 +413,12 @@ function getBankAccountCurrency(a: BankAccount): string {
   return normalizeCurrencyCode(bank?.currency);
 }
 
+function getBankAccountCurrencyById(id: string | undefined): string {
+  if (!id?.trim()) return "";
+  const account = cuentasStore.bankAccounts.find((a) => a.id === id);
+  return account ? getBankAccountCurrency(account) : "";
+}
+
 const selectedAccountCurrencies = computed(() => {
   const selectedRate = tasasStore.taxRates.find(
     (item) => item.id === form.tax_rate_id,
@@ -424,6 +432,20 @@ const selectedAccountCurrencies = computed(() => {
     ),
   };
 });
+
+function getTransactionCurrencies(t: Transaction, fallbackToSelected = false) {
+  const rate = tasasStore.taxRates.find((item) => item.id === t.tax_rate_id);
+  return {
+    origin:
+      normalizeCurrencyCode(rate?.coin_a ?? t.origin_currency) ||
+      getBankAccountCurrencyById(t.bank_account_origin_id) ||
+      (fallbackToSelected ? selectedAccountCurrencies.value.origin : ""),
+    destination:
+      normalizeCurrencyCode(rate?.coin_b ?? t.destination_currency) ||
+      getBankAccountCurrencyById(t.bank_account_destination_id) ||
+      (fallbackToSelected ? selectedAccountCurrencies.value.destination : ""),
+  };
+}
 
 function couponCurrencyMatches(value: string | null | undefined, expected: string): boolean {
   const couponCurrency = normalizeCurrencyCode(value);
@@ -757,6 +779,46 @@ function getTransactionUserRoleLabel(role?: string | null): string {
   return "";
 }
 
+function isCurrentUserSalesAdvisor(): boolean {
+  const user = authStore.user;
+  if (!user) return false;
+  return isSalesAdvisorRole(user.role) || user.is_agent === true;
+}
+
+function getCurrentUserEditableOption():
+  | { id: string; name: string; email: string; role?: string }
+  | null {
+  const user = authStore.user;
+  if (!user || !isCurrentUserSalesAdvisor()) return null;
+  return {
+    id: user.id,
+    name:
+      user.name ||
+      [user.names, user.lastnames].filter(Boolean).join(" ") ||
+      user.email,
+    email: user.email,
+    role: user.role ?? "advisor",
+  };
+}
+
+function ensureCurrentSalesAdvisorOption() {
+  const currentUser = getCurrentUserEditableOption();
+  if (!currentUser) return;
+  if (editableUsers.value.some((u) => String(u.id) === currentUser.id)) return;
+  editableUsers.value = [...editableUsers.value, currentUser].sort((a, b) =>
+    a.name.localeCompare(b.name, "es"),
+  );
+}
+
+function applyDefaultAgentForCurrentUser(force = false) {
+  const currentUser = getCurrentUserEditableOption();
+  if (!currentUser) return;
+  ensureCurrentSalesAdvisorOption();
+  if (force || !form.agent_id?.trim()) {
+    form.agent_id = currentUser.id;
+  }
+}
+
 const salesAdvisorOptions = computed(() =>
   editableUsers.value
     .filter((u) => isSalesAdvisorRole(u.role))
@@ -1061,6 +1123,7 @@ function syncFromCalculatorIfSafe() {
 function openCreateModal() {
   transactionsStore.error = null;
   resetForm();
+  applyDefaultAgentForCurrentUser(true);
   createStepIndex.value = 0;
   showCreateModal.value = true;
   loadFormOptions();
@@ -1109,6 +1172,10 @@ async function loadEditableUsers() {
   editableUsers.value = Array.from(byId.values()).sort((a, b) =>
     a.name.localeCompare(b.name, "es"),
   );
+  ensureCurrentSalesAdvisorOption();
+  if (!isEditingMode.value) {
+    applyDefaultAgentForCurrentUser();
+  }
   editableUsersLoaded.value = true;
 }
 
@@ -1508,12 +1575,14 @@ const editModalCouponSummary = computed(() => {
   if (!t) return null;
   const code = t.coupon_discount_code ?? selectedCoupon.value?.code;
   const percentage = t.coupon_discount_percentage ?? selectedCoupon.value?.discount_percentage;
+  const currencies = getTransactionCurrencies(t, true);
   return {
     hasCoupon: Boolean(code?.trim() || t.coupon_id),
     code: code?.trim() || "Sin cupón aplicado",
     percentage,
     discount: t.coupon_discount_commission,
     total: t.coupon_discount_total_to_send,
+    originCurrency: currencies.origin,
   };
 });
 
@@ -1579,21 +1648,28 @@ const editHeroConditions = computed(() => {
 const editHeroAmounts = computed(() => {
   const t = editPreviewTransaction.value;
   if (!t) return [];
+  const currencies = getTransactionCurrencies(t, true);
   const hasCoupon = Boolean(
     t.coupon_id || (t.coupon_discount_code && t.coupon_discount_code.trim()),
   );
   const items = [
     {
       label: hasCoupon ? "Monto origen (Base)" : "Monto origen",
-      value: formatValue(t.origin_amount),
+      value: formatValueWithCurrency(t.origin_amount, currencies.origin),
     },
     {
       label: hasCoupon ? "Monto destino (Base)" : "Monto destino",
-      value: formatValue(t.destination_amount),
+      value: formatValueWithCurrency(
+        t.destination_amount,
+        currencies.destination,
+      ),
     },
     {
       label: hasCoupon ? "Comisión (Base)" : "Resultado comisión",
-      value: formatValue(t.resultado_comision ?? t.commission_result),
+      value: formatValueWithCurrency(
+        t.resultado_comision ?? t.commission_result,
+        currencies.origin,
+      ),
     },
   ];
 
@@ -1601,28 +1677,37 @@ const editHeroAmounts = computed(() => {
     if (t.coupon_discount_commission != null) {
       items.push({
         label: "Descuento cupón",
-        value: `-${formatValue(t.coupon_discount_commission)}`,
+        value: `-${formatValueWithCurrency(
+          t.coupon_discount_commission,
+          currencies.origin,
+        )}`,
       });
     }
 
     if (t.coupon_origin_amount != null) {
       items.push({
         label: "Monto origen (Final)",
-        value: formatValue(t.coupon_origin_amount),
+        value: formatValueWithCurrency(t.coupon_origin_amount, currencies.origin),
       });
     }
 
     if (t.coupon_destination_amount != null) {
       items.push({
         label: "Monto destino (Final)",
-        value: formatValue(t.coupon_destination_amount),
+        value: formatValueWithCurrency(
+          t.coupon_destination_amount,
+          currencies.destination,
+        ),
       });
     }
 
     if (t.coupon_discount_total_to_send != null) {
       items.push({
         label: "Total a enviar (Final)",
-        value: formatValue(t.coupon_discount_total_to_send),
+        value: formatValueWithCurrency(
+          t.coupon_discount_total_to_send,
+          currencies.origin,
+        ),
       });
     }
   }
@@ -1709,6 +1794,12 @@ function formatValue(value: unknown): string {
   if (typeof value === "number")
     return value.toLocaleString("es", { minimumFractionDigits: 2 });
   return String(value);
+}
+
+function formatValueWithCurrency(value: unknown, currency: string): string {
+  const amount = formatValue(value);
+  const code = currency.trim().toUpperCase();
+  return code && amount !== "-" ? `${amount} ${code}` : amount;
 }
 
 function formatTransactionCodeShort(code: string | undefined): string {
@@ -2052,7 +2143,11 @@ watch(
     if (isHydratingTransactionForm.value) return;
     form.bank_account_origin_id = "";
     form.bank_account_destination_id = "";
-    form.agent_id = "";
+    if (isCurrentUserSalesAdvisor()) {
+      applyDefaultAgentForCurrentUser();
+    } else {
+      form.agent_id = "";
+    }
     destinationBankFilterId.value = "";
   },
 );
@@ -2465,7 +2560,7 @@ onMounted(() => {
               {{ transactionCompanyNameTable(t) }}
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-center tabular-nums text-[#374151]">
-              {{ formatValue(t.origin_amount) }}
+              {{ formatValueWithCurrency(t.origin_amount, getTransactionCurrencies(t).origin) }}
             </td>
             <td
               class="max-w-[180px] truncate px-4 py-3 text-[#374151]"
@@ -2474,7 +2569,12 @@ onMounted(() => {
               {{ getBankCurrencyTableLabel(t.bank_account_destination_id) }}
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-center tabular-nums text-[#374151]">
-              {{ formatValue(t.destination_amount) }}
+              {{
+                formatValueWithCurrency(
+                  t.destination_amount,
+                  getTransactionCurrencies(t).destination,
+                )
+              }}
             </td>
             <td class="px-4 py-3">
               <span
@@ -3229,7 +3329,10 @@ onMounted(() => {
                           <template v-if="editModalCouponSummary?.hasCoupon">
                             {{ editModalCouponSummary.percentage != null ? `${formatValue(editModalCouponSummary.percentage)}%` : "—" }}
                             <template v-if="editModalCouponSummary.discount != null">
-                              · -{{ formatValue(editModalCouponSummary.discount) }}
+                              · -{{ formatValueWithCurrency(
+                                editModalCouponSummary.discount,
+                                editModalCouponSummary.originCurrency,
+                              ) }}
                             </template>
                           </template>
                           <template v-else>
@@ -3245,7 +3348,14 @@ onMounted(() => {
                           class="mt-2 block truncate text-[13px] font-semibold"
                           :class="editModalCouponSummary?.hasCoupon ? 'text-emerald-950' : 'text-[#64748b]'"
                         >
-                          {{ editModalCouponSummary?.total != null ? formatValue(editModalCouponSummary.total) : "—" }}
+                          {{
+                            editModalCouponSummary?.total != null
+                              ? formatValueWithCurrency(
+                                  editModalCouponSummary.total,
+                                  editModalCouponSummary.originCurrency,
+                                )
+                              : "—"
+                          }}
                         </span>
                       </div>
                     </div>
@@ -4077,9 +4187,15 @@ onMounted(() => {
                     />
                   </div>
                   <div class="space-y-1.5">
-                    <label class="block text-sm font-medium text-[#374151]"
-                      >Monto de envío</label
-                    >
+                    <label class="flex items-center justify-between gap-2 text-sm font-medium text-[#374151]">
+                      <span>Monto de envío</span>
+                      <span
+                        v-if="selectedAccountCurrencies.origin"
+                        class="rounded-md bg-[#eef2ff] px-2 py-0.5 text-[11px] font-semibold text-brasper-indigoStrong"
+                      >
+                        {{ selectedAccountCurrencies.origin }}
+                      </span>
+                    </label>
                     <input
                       v-model.number="form.origin_amount"
                       type="number"
@@ -4089,9 +4205,15 @@ onMounted(() => {
                     />
                   </div>
                   <div class="space-y-1.5">
-                    <label class="block text-sm font-medium text-[#374151]"
-                      >Monto a recibir</label
-                    >
+                    <label class="flex items-center justify-between gap-2 text-sm font-medium text-[#374151]">
+                      <span>Monto a recibir</span>
+                      <span
+                        v-if="selectedAccountCurrencies.destination"
+                        class="rounded-md bg-[#eef2ff] px-2 py-0.5 text-[11px] font-semibold text-brasper-indigoStrong"
+                      >
+                        {{ selectedAccountCurrencies.destination }}
+                      </span>
+                    </label>
                     <input
                       v-model.number="form.destination_amount"
                       type="number"
