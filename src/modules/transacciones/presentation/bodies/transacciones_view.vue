@@ -340,37 +340,18 @@ function bankAccountToOption(a: BankAccount) {
   return { value: a.id, label: `${bankName} - ${accNum} (${holder})` };
 }
 
-/** Titular o razón social; misma lógica que `company_name` en el POST. */
-function accountCompanyDisplayLine(a: BankAccount): string {
-  const holderType = (a.account_holder_type ?? "").toLowerCase();
-  const isLegal =
-    holderType.includes("juridica") ||
-    holderType.includes("jurídica") ||
-    holderType.includes("legal");
-  const holderLine = [a.holder_names, a.holder_surnames]
-    .filter(Boolean)
-    .join(" ")
-    .trim();
-  return (isLegal ? (a.business_name ?? "").trim() : holderLine) || "—";
-}
-
 /** Cuenta destino: mínimo en lista; metadatos de banco vía `bankMetaFromDestinationAccount`. */
 function destinationBankAccountToOption(a: BankAccount): {
   value: string;
   label: string;
 } {
-  const bankFilter = destinationBankFilterId.value?.trim();
   const bank = cuentasStore.banks.find((b) => b.id === a.bank_id);
   const bankName = (bank?.bank ?? "—").trim();
-  const company = accountCompanyDisplayLine(a);
   const nums = [];
   if (a.account_number?.trim()) nums.push(a.account_number.trim());
   if (a.cci_number?.trim()) nums.push(`CCI: ${a.cci_number.trim()}`);
   if (a.pix_key?.trim()) nums.push(`PIX: ${a.pix_key.trim()}`);
   const accNum = nums.length > 0 ? nums.join(" / ") : "—";
-  if (bankFilter) {
-    return { value: a.id, label: `${company} · ${accNum}` };
-  }
   return { value: a.id, label: `${bankName} · ${accNum}` };
 }
 
@@ -632,17 +613,12 @@ function normalizeSelectId(v: unknown): string {
 const destinationAccountOptions = computed(() => {
   const userId = form.user_id?.trim();
   const currency = selectedAccountCurrencies.value.destination;
-  const bankFilter = destinationBankFilterId.value?.trim();
   const base = cuentasStore.bankAccounts
     .filter((a) => bankAccountMatchesSide(a, "destination"))
     .filter((a) => bankAccountMatchesCurrency(a, currency))
     .filter(
       (a) => !userId || String(a.user_id ?? "").trim() === userId,
     )
-    .filter((a) => {
-      if (!bankFilter) return true;
-      return String(a.bank_id ?? "").trim() === bankFilter;
-    })
     .map(destinationBankAccountToOption);
   return mergeMissingSelectedAccount(
     base,
@@ -654,19 +630,24 @@ const destinationAccountOptions = computed(() => {
 
 function bankCatalogOptionLabel(b: BankOption): string {
   const parts: string[] = [];
+  const comp = (b.company ?? "").toString().trim();
+  if (comp) parts.push(comp);
   const name = (b.bank ?? "").trim();
   if (name) parts.push(name);
   const cur = (b.currency ?? "").trim();
   if (cur) parts.push(cur.toUpperCase());
   const ctry = (b.country ?? "").trim();
   if (ctry) parts.push(ctry.toUpperCase());
-  const comp = (b.company ?? "").toString().trim();
-  if (comp) parts.push(comp);
   return parts.length ? parts.join(" · ") : "—";
 }
 
+function bankCatalogCompanySortKey(b: BankOption): string {
+  const company = (b.company ?? "").toString().trim();
+  return company || bankCatalogOptionLabel(b);
+}
+
 const bancoCrudHintCountry = computed((): "pe" | "br" =>
-  (calculatorStore.currencyTo ?? "").toLowerCase() === "brl" ? "br" : "pe",
+  (calculatorStore.currencyFrom ?? "").toLowerCase() === "brl" ? "br" : "pe",
 );
 
 function openBancoCrudForCreate() {
@@ -681,13 +662,13 @@ function onBancoCrudSaved(payload?: { selectBankId?: string }) {
   void cuentasStore.loadBanks(true);
 }
 
-/** Bancos del catálogo que tienen al menos una cuenta destino elegible. */
+/** Bancos del catálogo que tienen al menos una cuenta origen elegible para la moneda de "Tú envías". */
 const destinationBankFilterOptions = computed(() => {
   const userId = form.user_id?.trim();
-  const currency = selectedAccountCurrencies.value.destination;
+  const currency = selectedAccountCurrencies.value.origin;
   const accountBankIds = new Set(
     cuentasStore.bankAccounts
-      .filter((a) => bankAccountMatchesSide(a, "destination"))
+      .filter((a) => bankAccountMatchesSide(a, "origin"))
       .filter((a) => bankAccountMatchesCurrency(a, currency))
       .filter((a) => !userId || String(a.user_id ?? "").trim() === userId)
       .map((a) => String(a.bank_id ?? "").trim())
@@ -695,11 +676,18 @@ const destinationBankFilterOptions = computed(() => {
   );
   const opts = cuentasStore.banks
     .filter((b) => accountBankIds.has(String(b.id).trim()))
+    .sort((a, b) => {
+      const byCompany = bankCatalogCompanySortKey(a).localeCompare(
+        bankCatalogCompanySortKey(b),
+        "es",
+      );
+      if (byCompany !== 0) return byCompany;
+      return bankCatalogOptionLabel(a).localeCompare(bankCatalogOptionLabel(b), "es");
+    })
     .map((b) => ({
       value: b.id,
       label: bankCatalogOptionLabel(b),
-    }))
-    .sort((a, b) => a.label.localeCompare(b.label, "es"));
+    }));
   return [{ value: "", label: "Todos" }, ...opts];
 });
 
@@ -1248,9 +1236,9 @@ async function hydrateEditForm(row: Transaction) {
     form.checked_image = null;
     editSourceTransaction.value = row;
     {
-      const destId = form.bank_account_destination_id?.trim();
-      const acc = destId
-        ? cuentasStore.bankAccounts.find((a) => String(a.id) === destId)
+      const originId = form.bank_account_origin_id?.trim();
+      const acc = originId
+        ? cuentasStore.bankAccounts.find((a) => String(a.id) === originId)
         : undefined;
       destinationBankFilterId.value =
         acc?.bank_id?.trim() ?? row.bank_id?.trim() ?? "";
@@ -2151,17 +2139,6 @@ watch(
     destinationBankFilterId.value = "";
   },
 );
-
-watch(destinationBankFilterId, () => {
-  if (isHydratingTransactionForm.value) return;
-  const id = form.bank_account_destination_id?.trim();
-  if (!id) return;
-  const acc = cuentasStore.bankAccounts.find((a) => String(a.id) === id);
-  const f = destinationBankFilterId.value?.trim();
-  if (f && acc && String(acc.bank_id ?? "").trim() !== f) {
-    form.bank_account_destination_id = "";
-  }
-});
 
 watch(showBancoCrudModal, (open) => {
   if (!open) bancoCrudOpenForCreate.value = false;
