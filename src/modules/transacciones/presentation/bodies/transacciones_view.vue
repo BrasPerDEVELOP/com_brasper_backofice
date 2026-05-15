@@ -662,20 +662,14 @@ function onBancoCrudSaved(payload?: { selectBankId?: string }) {
   void cuentasStore.loadBanks(true);
 }
 
-/** Bancos del catálogo que tienen al menos una cuenta origen elegible para la moneda de "Tú envías". */
+/** Bancos del catálogo filtrados solo por la moneda de "Tú envías". */
 const destinationBankFilterOptions = computed(() => {
-  const userId = form.user_id?.trim();
   const currency = selectedAccountCurrencies.value.origin;
-  const accountBankIds = new Set(
-    cuentasStore.bankAccounts
-      .filter((a) => bankAccountMatchesSide(a, "origin"))
-      .filter((a) => bankAccountMatchesCurrency(a, currency))
-      .filter((a) => !userId || String(a.user_id ?? "").trim() === userId)
-      .map((a) => String(a.bank_id ?? "").trim())
-      .filter(Boolean),
-  );
   const opts = cuentasStore.banks
-    .filter((b) => accountBankIds.has(String(b.id).trim()))
+    .filter((b) => {
+      const bankCurrency = normalizeCurrencyCode(b.currency);
+      return !currency || !bankCurrency || bankCurrency === currency;
+    })
     .sort((a, b) => {
       const byCompany = bankCatalogCompanySortKey(a).localeCompare(
         bankCatalogCompanySortKey(b),
