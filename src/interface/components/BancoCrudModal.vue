@@ -135,19 +135,18 @@ function close() {
 }
 
 function buildPayload(): CreateBankBody {
-  const body: CreateBankBody = {
-    bank: form.bank.trim(),
-    currency: form.currency.trim().toUpperCase(),
-    country: form.country.trim().toLowerCase()
-  }
-
   const company = form.company.trim()
   const account = form.account.trim()
   const pix = form.pix.trim()
 
-  if (company) body.company = company
-  if (account) body.account = account
-  if (pix) body.pix = pix
+  const body: CreateBankBody = {
+    bank: form.bank.trim(),
+    currency: form.currency.trim().toUpperCase(),
+    country: form.country.trim().toLowerCase(),
+    company: company || null,
+    account: account || null,
+    pix: pix || null
+  }
 
   return body
 }
@@ -238,7 +237,7 @@ watch(
                 <span v-if="listRefreshing" class="ml-2 font-medium text-[#0369a1]">· Sincronizando…</span>
               </template>
               <template v-else>
-                Completa los datos del banco y su razón social.
+                Completa nombre, moneda y país. Los demás datos son opcionales.
               </template>
             </p>
           </div>

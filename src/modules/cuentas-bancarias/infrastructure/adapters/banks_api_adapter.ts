@@ -23,9 +23,9 @@ export type CreateBankBody = {
   bank: string
   currency: string
   country: string
-  company?: string | null
-  account?: string | null
-  pix?: string | null
+  company: string | null
+  account: string | null
+  pix: string | null
   image?: string | null
   social_actor?: string | null
 }
