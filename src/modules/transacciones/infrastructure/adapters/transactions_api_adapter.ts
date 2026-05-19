@@ -309,13 +309,9 @@ function parseTransactions(data: unknown): Transaction[] {
 }
 
 export class TransactionsApiAdapter implements TransactionsRepository {
-  private base(): string {
-    return Domain.http('transactions')
-  }
-
   private endpoint(path: string): string {
-    const base = this.base()
-    return base.endsWith('/') ? `${base}${path}` : `${base}/${path}`
+    const p = path.replace(/^\/+/, '')
+    return p ? Domain.apiPath(`transactions/${p}`) : Domain.apiPath('transactions/')
   }
 
   async getTransactions(params?: GetTransactionsParams): Promise<Transaction[]> {
@@ -356,7 +352,6 @@ export class TransactionsApiAdapter implements TransactionsRepository {
   }
 
   async createTransaction(payload: CreateTransactionPayload): Promise<Transaction> {
-    const url = this.endpoint('')
     const formData = new FormData()
     if (payload.bank_account_origin?.trim()) {
       formData.append('bank_account_origin', payload.bank_account_origin.trim())
@@ -431,7 +426,7 @@ export class TransactionsApiAdapter implements TransactionsRepository {
      * `fetch` + FormData evita que axios 1.x deje `Content-Type: application/json`
      * y corrompa el multipart (400 del servidor al subir archivos).
      */
-    const res = await fetch(url, {
+    const res = await fetch(Domain.apiUrl(this.endpoint('')), {
       method: 'POST',
       body: formData,
       headers: getApiAuthHeaders()
@@ -518,7 +513,7 @@ export class TransactionsApiAdapter implements TransactionsRepository {
 
   async importFromExcel(file: File): Promise<unknown> {
     const path = env.transactionsImportPath
-    const url = path ? Domain.http(path) : this.endpoint('import/')
+    const url = path ? Domain.apiPath(path) : this.endpoint('import/')
     const ext = file.name.toLowerCase().split('.').pop() ?? ''
     let payload: { items: unknown[] }
 

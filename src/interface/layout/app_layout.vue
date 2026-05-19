@@ -34,7 +34,7 @@ watch(
 
 async function handleLogout() {
   await authStore.logout();
-  router.push("/");
+  await router.replace("/");
 }
 
 const showSidebar = computed(() => route.path.startsWith("/app"));

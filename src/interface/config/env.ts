@@ -27,6 +27,27 @@ export const env = {
     return getBoolEnv('VITE_SSL', true)
   },
 
+  /** URL base completa del API (opcional). Ej. https://apibras.finzeler.com */
+  get apiBaseUrl(): string {
+    const raw = getEnv('VITE_API_BASE_URL', '').trim()
+    if (!raw) return ''
+    // Normaliza protocolo aunque .env diga http:// (evita CORS en DELETE, etc.)
+    try {
+      const withProto = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`
+      const u = new URL(withProto)
+      const host = u.hostname.toLowerCase()
+      const isLocal =
+        host === 'localhost' ||
+        host === '127.0.0.1' ||
+        host.startsWith('0.0.0.0')
+      if (!isLocal) u.protocol = 'https:'
+      else if (this.ssl) u.protocol = 'https:'
+      return `${u.protocol}//${u.host}`
+    } catch {
+      return raw.replace(/\/$/, '')
+    }
+  },
+
   /** Dominio de la API, ej. api.demo.zefiron.com */
   get domain(): string {
     return getEnv('VITE_DOMAIN', '')

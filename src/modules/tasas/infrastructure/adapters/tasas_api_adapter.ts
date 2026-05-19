@@ -36,13 +36,9 @@ function parseTaxRateHistory(data: unknown): TaxRateHistoryEntry[] {
 export class TasasApiAdapter implements TasasRepository {
   constructor(private readonly useTrial = false) {}
 
-  private base(): string {
-    return Domain.http('coin')
-  }
-
   private endpoint(path: string): string {
-    const base = this.base()
-    return base.endsWith('/') ? `${base}${path}` : `${base}/${path}`
+    const p = path.replace(/^\/+/, '')
+    return Domain.apiPath(p ? `coin/${p}` : 'coin')
   }
 
   /** Colección `tax-rate` o `tax-rate-trial` (alineado con la calculadora en modo demo). */

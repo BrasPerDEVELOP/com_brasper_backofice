@@ -40,13 +40,9 @@ function parseCommissionHistory(data: unknown): CommissionHistoryEntry[] {
 }
 
 export class ComisionesApiAdapter implements ComisionesRepository {
-  private base(): string {
-    return Domain.http('coin')
-  }
-
   private endpoint(path: string): string {
-    const base = this.base()
-    return base.endsWith('/') ? `${base}${path}` : `${base}/${path}`
+    const p = path.replace(/^\/+/, '')
+    return Domain.apiPath(p ? `coin/${p}` : 'coin')
   }
 
   async getCommissions(): Promise<Commission[]> {

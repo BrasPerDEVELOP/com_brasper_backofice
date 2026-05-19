@@ -7,7 +7,7 @@ export interface CouponCurrencyOption {
 }
 
 export async function getCouponCurrencyOptions(): Promise<CouponCurrencyOption[]> {
-  const url = Domain.http('coin/currencies')
+  const url = Domain.apiPath('coin/currencies')
   const response = await apiClient.get<unknown>(url).catch(() => ({ data: [] }))
   if (!Array.isArray(response.data)) return []
 

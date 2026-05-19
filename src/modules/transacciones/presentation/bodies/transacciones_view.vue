@@ -655,7 +655,18 @@ function openBancoCrudForCreate() {
   showBancoCrudModal.value = true;
 }
 
-function onBancoCrudSaved(payload?: { selectBankId?: string }) {
+function onBancoCrudSaved(payload?: {
+  selectBankId?: string;
+  deletedBankId?: string;
+}) {
+  if (payload?.deletedBankId) {
+    const deletedId = payload.deletedBankId.trim();
+    cuentasStore.removeBankFromCatalog(deletedId);
+    if (destinationBankFilterId.value === deletedId) {
+      destinationBankFilterId.value = "";
+    }
+    return;
+  }
   if (payload?.selectBankId?.trim()) {
     destinationBankFilterId.value = payload.selectBankId.trim();
   }
@@ -1837,7 +1848,7 @@ function voucherMediaHref(path: unknown): string {
   if (path == null || typeof path !== "string") return "";
   const s = path.trim();
   if (!s) return "";
-  if (s.startsWith("http://") || s.startsWith("https://")) return s;
+  if (s.startsWith("http://") || s.startsWith("https://")) return Domain.ensureHttpsUrl(s);
   if (s.startsWith("/") || s.startsWith("media/") || s.includes("/")) {
     return Domain.mediaUrl(s);
   }

@@ -44,13 +44,11 @@ function parseBankAccounts(data: unknown): BankAccount[] {
 }
 
 export class CuentasBancariasApiAdapter implements CuentasBancariasRepository {
-  private base(): string {
-    return Domain.http('transactions/bank-accounts')
-  }
-
   private endpoint(path: string): string {
-    const base = this.base()
-    return base.endsWith('/') ? `${base}${path}` : `${base}/${path}`
+    const p = path.replace(/^\/+/, '')
+    return p
+      ? Domain.apiPath(`transactions/bank-accounts/${p}`)
+      : Domain.apiPath('transactions/bank-accounts/')
   }
 
   async getBankAccounts(params?: GetBankAccountsParams): Promise<BankAccount[]> {

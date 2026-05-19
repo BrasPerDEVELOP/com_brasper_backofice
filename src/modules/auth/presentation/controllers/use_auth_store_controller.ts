@@ -178,9 +178,9 @@ export const useAuthStore = defineStore('auth', {
     },
 
     async logout() {
+      this.clearSession()
       const repository = new AuthApiAdapter()
       await repository.logout()
-      this.clearSession()
     },
 
     restoreUser() {

@@ -1,6 +1,5 @@
 import axios from 'axios'
 import { apiClient } from '@/interface/api/client'
-import { Domain } from '@/interface/infrastructure/services'
 import { formatApiErrorBody } from '@/interface/api/format_api_error'
 
 export interface BankOption {
@@ -32,14 +31,35 @@ export type CreateBankBody = {
 
 export type UpdateBankBody = Partial<CreateBankBody>
 
-function banksBaseUrl(): string {
-  return Domain.http('transactions/banks/')
+const OPTIONAL_BANK_STRING_KEYS = [
+  'company',
+  'account',
+  'pix',
+  'image',
+  'social_actor'
+] as const satisfies ReadonlyArray<keyof CreateBankBody>
+
+/** El API (Pydantic) no acepta `null` en campos `str`; omitimos vacíos en POST/PATCH. */
+function omitEmptyOptionalBankFields<T extends CreateBankBody | UpdateBankBody>(body: T): T {
+  const out = { ...body } as T
+  for (const key of OPTIONAL_BANK_STRING_KEYS) {
+    const value = out[key]
+    if (value == null || (typeof value === 'string' && value.trim() === '')) {
+      delete out[key]
+    } else if (typeof value === 'string') {
+      out[key] = value.trim() as T[typeof key]
+    }
+  }
+  return out
 }
 
-function bankDetailUrl(id: string): string {
-  const base = banksBaseUrl()
-  const trimmed = id.replace(/\/$/, '')
-  return base.endsWith('/') ? `${base}${trimmed}/` : `${base}/${trimmed}/`
+/** Rutas relativas al `baseURL` de axios (evita http/https duplicado y 301 en DELETE). */
+const BANKS_COLLECTION_PATH = 'transactions/banks/'
+
+function bankDetailPath(id: string): string {
+  const trimmed = id.replace(/\/$/, '').trim()
+  if (!trimmed) throw new Error('Id de banco inválido')
+  return `${BANKS_COLLECTION_PATH}${encodeURIComponent(trimmed)}/`
 }
 
 function parseBank(item: unknown): BankOption | null {
@@ -126,21 +146,32 @@ function errorFromAxios(e: unknown, fallback: string): Error {
   return new Error(fallback)
 }
 
-export async function fetchBanks(): Promise<BankOption[]> {
-  const url = banksBaseUrl()
-  const response = await apiClient.get<unknown>(url)
+export type FetchBanksOptions = {
+  /** Evita respuesta GET en caché del navegador (tras borrar/crear). */
+  bypassCache?: boolean
+}
+
+export async function fetchBanks(options?: FetchBanksOptions): Promise<BankOption[]> {
+  const response = await apiClient.get<unknown>(BANKS_COLLECTION_PATH, {
+    ...(options?.bypassCache
+      ? {
+          params: { _: Date.now() },
+          headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' }
+        }
+      : {})
+  })
   const arr = extractArray(response.data)
   return arr.map(parseBank).filter((b): b is BankOption => b != null)
 }
 
 /** @deprecated Use fetchBanks; mantiene compatibilidad con código que llamaba /names. */
-export async function fetchBankNames(): Promise<BankOption[]> {
-  return fetchBanks()
+export async function fetchBankNames(options?: FetchBanksOptions): Promise<BankOption[]> {
+  return fetchBanks(options)
 }
 
 export async function createBank(body: CreateBankBody): Promise<BankOption> {
   try {
-    const response = await apiClient.post<unknown>(banksBaseUrl(), body)
+    const response = await apiClient.post<unknown>(BANKS_COLLECTION_PATH, omitEmptyOptionalBankFields(body))
     return assertBank(unwrapBankPayload(response.data))
   } catch (e) {
     throw errorFromAxios(e, 'Error al crear banco')
@@ -149,7 +180,7 @@ export async function createBank(body: CreateBankBody): Promise<BankOption> {
 
 export async function updateBank(id: string, body: UpdateBankBody): Promise<BankOption> {
   try {
-    const response = await apiClient.patch<unknown>(bankDetailUrl(id), body)
+    const response = await apiClient.patch<unknown>(bankDetailPath(id), omitEmptyOptionalBankFields(body))
     return assertBank(unwrapBankPayload(response.data))
   } catch (e) {
     throw errorFromAxios(e, 'Error al actualizar banco')
@@ -157,9 +188,19 @@ export async function updateBank(id: string, body: UpdateBankBody): Promise<Bank
 }
 
 export async function deleteBank(id: string): Promise<void> {
+  const path = bankDetailPath(id)
   try {
-    await apiClient.delete(bankDetailUrl(id))
+    const response = await apiClient.delete(path)
+    const status = response.status
+    if (status >= 400) {
+      throw new Error(`Error al eliminar banco (${status})`)
+    }
   } catch (e) {
+    if (axios.isAxiosError(e) && (e.code === 'ERR_NETWORK' || !e.response)) {
+      throw new Error(
+        'No se pudo eliminar (error de red o CORS). Comprueba que VITE_SSL=true y que el API use HTTPS.'
+      )
+    }
     throw errorFromAxios(e, 'Error al eliminar banco')
   }
 }

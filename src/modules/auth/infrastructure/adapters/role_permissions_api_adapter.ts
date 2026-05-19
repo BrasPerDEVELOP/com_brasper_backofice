@@ -43,7 +43,7 @@ export function getDefaultRolePermissions(): RolePermissions[] {
 }
 
 export async function fetchRolePermissions(): Promise<RolePermissions[]> {
-  const response = await apiClient.get<unknown>(Domain.http('roles/permissions/'), {
+  const response = await apiClient.get<unknown>(Domain.apiPath('roles/permissions/'), {
     headers: { Accept: 'application/json' },
     skipAuthRedirect: true
   })
@@ -62,7 +62,7 @@ export async function updateRolePermissions(
   permissions: PermissionKey[]
 ): Promise<RolePermissions> {
   const response = await apiClient.put<unknown>(
-    Domain.http(`roles/${role}/permissions/`),
+    Domain.apiPath(`roles/${role}/permissions/`),
     { permissions },
     {
       headers: { 'Content-Type': 'application/json' },

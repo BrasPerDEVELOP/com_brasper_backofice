@@ -33,7 +33,7 @@ export async function fetchClientUsers(): Promise<UserOption[]> {
   const byId = new Map<string, UserOption>()
   await Promise.all(
     CLIENT_ROLE_ALIASES.map(async (role) => {
-      const url = Domain.http('user/name-list/')
+      const url = Domain.apiPath('user/name-list/')
       const response = await apiClient.get<unknown>(url, {
         params: { role },
         headers: { Accept: 'application/json' },
@@ -72,7 +72,7 @@ export async function fetchUsersForTransactionForm(): Promise<UserOption[]> {
   const byId = new Map<string, UserOption>()
   await Promise.all(
     TRANSACTION_FORM_USER_ROLES.map(async (role) => {
-      const url = Domain.http('user/name-list/')
+      const url = Domain.apiPath('user/name-list/')
       const response = await apiClient.get<unknown>(url, {
         params: { role },
         headers: { Accept: 'application/json' },

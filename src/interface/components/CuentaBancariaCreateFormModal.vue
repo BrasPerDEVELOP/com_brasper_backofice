@@ -501,7 +501,7 @@ watch(
     @saved="
       (payload) => {
         if (payload?.selectBankId) form.bank_id = payload.selectBankId
-        void cuentasStore.loadBanks(true)
+        if (!payload?.deletedBankId) void cuentasStore.loadBanks(true)
       }
     "
   />

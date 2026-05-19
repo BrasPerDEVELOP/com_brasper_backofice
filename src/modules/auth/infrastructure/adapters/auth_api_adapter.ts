@@ -1,5 +1,4 @@
 import { apiClient } from '@/interface/api/client'
-import { Domain } from '@/interface/infrastructure/services'
 import { createLoggerWithContext } from '@/interface/infrastructure/logger'
 import type {
   AuthRepository,
@@ -12,8 +11,10 @@ import { normalizePermissions, normalizeStoredRole } from '../../domain/models'
 
 const log = createLoggerWithContext('auth')
 
-function authBase() {
-  return Domain.http('/auth')
+/** Rutas relativas al `baseURL` de axios (siempre HTTPS vía `.env` + interceptor). */
+function authPath(subpath: string): string {
+  const segment = subpath.replace(/^\/+/, '').replace(/\/+$/, '')
+  return segment ? `auth/${segment}/` : 'auth/'
 }
 
 /**
@@ -55,8 +56,7 @@ function parseUser(data: unknown): User | null {
 
 export class AuthApiAdapter implements AuthRepository {
   async login(username: string, password: string): Promise<LoginResponse> {
-    const url = `${authBase()}/login/`
-    const response = await apiClient.post<Record<string, unknown>>(url, { username, password }, {
+    const response = await apiClient.post<Record<string, unknown>>(authPath('login'), { username, password }, {
       headers: { 'Content-Type': 'application/json' }
     })
     let data = response.data
@@ -110,19 +110,21 @@ export class AuthApiAdapter implements AuthRepository {
   }
 
   async logout(): Promise<void> {
-    const url = `${authBase()}/logout`
-    await apiClient.post(url, {}, {
-      headers: { 'Content-Type': 'application/json' },
-      skipAuthRedirect: true
-    }).catch((err) => {
-      log.warn('Logout request failed', err)
-    })
+    // Sin barra final: POST auth/logout/ → 307 a http://apibras.../auth/logout (lento / bloqueado en el navegador).
+    await apiClient
+      .post('auth/logout', {}, {
+        headers: { 'Content-Type': 'application/json' },
+        skipAuthRedirect: true,
+        timeout: 8_000
+      })
+      .catch((err) => {
+        log.warn('Logout request failed', err)
+      })
   }
 
   async getCurrentUser(userId: string): Promise<User | null> {
     void userId
-    const url = `${authBase()}/me/`
-    const response = await apiClient.get<unknown>(url).catch(() => ({ data: null }))
+    const response = await apiClient.get<unknown>(authPath('me')).catch(() => ({ data: null }))
     const raw = response?.data ?? null
     const parsedPayload =
       raw != null && typeof raw === 'object'
@@ -132,12 +134,11 @@ export class AuthApiAdapter implements AuthRepository {
   }
 
   async updateProfile(payload: UpdateProfilePayload): Promise<User | null> {
-    const url = `${authBase()}/me/`
     let profileImage = typeof payload.profile_image === 'string' ? payload.profile_image : undefined
     if (payload.profile_image instanceof File) {
       const form = new FormData()
       form.append('profile_image', payload.profile_image)
-      const uploadResponse = await apiClient.post<unknown>(`${authBase()}/me/profile-image`, form, {
+      const uploadResponse = await apiClient.post<unknown>(authPath('me/profile-image'), form, {
         skipAuthRedirect: true
       })
       const rawUpload = uploadResponse.data
@@ -157,7 +158,7 @@ export class AuthApiAdapter implements AuthRepository {
     if (payload.phone != null) body.phone = payload.phone
     if (payload.code_phone != null && payload.code_phone !== '') body.code_phone = payload.code_phone
     if (profileImage) body.profile_image = profileImage
-    const response = await apiClient.put<unknown>(url, body, {
+    const response = await apiClient.put<unknown>(authPath('me'), body, {
       headers: { 'Content-Type': 'application/json' },
       skipAuthRedirect: true
     })
@@ -170,9 +171,8 @@ export class AuthApiAdapter implements AuthRepository {
   }
 
   async changePassword(payload: ChangePasswordPayload): Promise<void> {
-    const url = `${authBase()}/change-password/`
     await apiClient.post(
-      url,
+      authPath('change-password'),
       {
         current_password: payload.current_password,
         new_password: payload.new_password

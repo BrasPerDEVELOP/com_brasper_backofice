@@ -55,14 +55,9 @@ function parseCommissions(data: unknown): CommissionRange[] {
 export class CalculatorApiAdapter implements CalculatorRepository {
   constructor(private readonly useDemo = false) {}
 
-  private coinBase(): string {
-    return this.useDemo ? Domain.http('coin') : Domain.http('coin')
-  }
-
   private endpoint(suffix: string, useTrial = true): string {
-    const base = this.coinBase()
     const path = this.useDemo && useTrial ? `${suffix}-trial` : suffix
-    return base.endsWith('/') ? `${base}${path}` : `${base}/${path}`
+    return Domain.apiPath(`coin/${path}`)
   }
 
   async getCurrencies(): Promise<CurrencyReadDTO[]> {

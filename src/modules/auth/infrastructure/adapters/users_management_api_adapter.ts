@@ -74,7 +74,7 @@ export interface FetchUsersParams {
 
 /** Lista usuarios con filtros opcionales. GET /user/ */
 export async function fetchUsers(params?: FetchUsersParams): Promise<UserListItem[]> {
-  const url = Domain.http('user/')
+  const url = Domain.apiPath('user/')
   const query: Record<string, string> = {}
   if (params?.user_id?.trim()) query.user_id = params.user_id.trim()
   if (params?.role?.trim()) query.role = params.role.trim()
@@ -135,7 +135,7 @@ function appendUserFormFields(
 
 /** Crea un nuevo usuario. POST /user/ (multipart/form-data) */
 export async function createUser(payload: CreateUserPayload): Promise<UserListItem> {
-  const url = Domain.http('user/')
+  const url = Domain.apiPath('user/')
   const form = new FormData()
   appendUserFormFields(form, {
     ...payload,
@@ -157,7 +157,7 @@ export async function createUser(payload: CreateUserPayload): Promise<UserListIt
 
 /** Actualiza un usuario. PUT /user/ (multipart/form-data con id). */
 export async function updateUser(payload: UpdateUserPayload): Promise<UserListItem> {
-  const url = Domain.http('user/')
+  const url = Domain.apiPath('user/')
   const form = new FormData()
   form.append('id', payload.id)
   appendUserFormFields(form, payload)
@@ -182,10 +182,10 @@ export async function deleteUser(userId: string): Promise<void> {
   const id = userId.trim()
   if (!id) throw new Error('ID de usuario inválido')
   try {
-    await apiClient.delete(Domain.http(`user/${id}/`))
+    await apiClient.delete(Domain.apiPath(`user/${id}/`))
   } catch (firstError) {
     try {
-      await apiClient.delete(Domain.http('user/'), {
+      await apiClient.delete(Domain.apiPath('user/'), {
         data: { id },
         skipAuthRedirect: true
       })
@@ -207,7 +207,7 @@ export async function resetUserPassword(payload: ResetUserPasswordPayload): Prom
   if (!password) throw new Error('La contraseña temporal es obligatoria')
   try {
     await apiClient.post(
-      Domain.http(`user/${id}/reset-password/`),
+      Domain.apiPath(`user/${id}/reset-password/`),
       { new_password: password },
       {
         headers: { 'Content-Type': 'application/json' },

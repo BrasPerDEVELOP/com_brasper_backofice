@@ -68,7 +68,7 @@ export const useCuentasBancariasStore = defineStore('cuentasBancarias', {
     async loadBanks(force = false) {
       if (this._banksLoaded && !force) return
       try {
-        this.banks = await fetchBankNames()
+        this.banks = await fetchBankNames(force ? { bypassCache: true } : undefined)
         this._banksLoaded = true
       } catch (e) {
         console.warn('Error al cargar bancos:', e)
@@ -85,7 +85,9 @@ export const useCuentasBancariasStore = defineStore('cuentasBancarias', {
     },
 
     removeBankFromCatalog(id: string) {
-      this.banks = this.banks.filter((b) => b.id !== id)
+      const norm = String(id).trim()
+      if (!norm) return
+      this.banks = this.banks.filter((b) => String(b.id).trim() !== norm)
     },
 
     async loadClientUsers(force = false) {
