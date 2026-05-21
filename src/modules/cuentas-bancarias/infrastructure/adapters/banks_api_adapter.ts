@@ -59,7 +59,7 @@ const BANKS_COLLECTION_PATH = 'transactions/banks/'
 function bankDetailPath(id: string): string {
   const trimmed = id.replace(/\/$/, '').trim()
   if (!trimmed) throw new Error('Id de banco inválido')
-  return `${BANKS_COLLECTION_PATH}${encodeURIComponent(trimmed)}/`
+  return `${BANKS_COLLECTION_PATH}${encodeURIComponent(trimmed)}`
 }
 
 function parseBank(item: unknown): BankOption | null {
@@ -180,7 +180,8 @@ export async function createBank(body: CreateBankBody): Promise<BankOption> {
 
 export async function updateBank(id: string, body: UpdateBankBody): Promise<BankOption> {
   try {
-    const response = await apiClient.patch<unknown>(bankDetailPath(id), omitEmptyOptionalBankFields(body))
+    const payload = omitEmptyOptionalBankFields({ ...body, id } as UpdateBankBody & { id: string })
+    const response = await apiClient.put<unknown>(BANKS_COLLECTION_PATH, payload)
     return assertBank(unwrapBankPayload(response.data))
   } catch (e) {
     throw errorFromAxios(e, 'Error al actualizar banco')

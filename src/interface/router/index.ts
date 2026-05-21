@@ -14,6 +14,7 @@ function firstPermittedAppPath(authStore: ReturnType<typeof useAuthStore>): stri
     { path: '/app/comisiones', permission: 'commissions.view' },
     { path: '/app/tasas', permission: 'rates.view' },
     { path: '/app/home-banner', permission: 'home_banner.view' },
+    { path: '/app/blog', permission: 'blog.view' },
     { path: '/app/roles-permisos', permission: 'roles.permissions.view' },
     { path: '/app/perfil', permission: 'profile.view' }
   ]
@@ -92,6 +93,12 @@ const routes: RouteRecordRaw[] = [
         meta: { breadcrumb: 'Configuración > Banner Home', permission: 'home_banner.view' }
       },
       {
+        path: 'blog',
+        name: 'blog',
+        component: () => import('@modules/blog/presentation/bodies/blog_view.vue'),
+        meta: { breadcrumb: 'Configuración > Blog', permission: 'blog.view' }
+      },
+      {
         path: 'roles-permisos',
         name: 'roles-permisos',
         component: () => import('@modules/auth/presentation/bodies/roles_permissions_view.vue'),
@@ -118,6 +125,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/cuentas', redirect: '/app/cuentas' },
   { path: '/tasas', redirect: '/app/tasas' },
   { path: '/home-banner', redirect: '/app/home-banner' },
+  { path: '/blog', redirect: '/app/blog' },
   { path: '/roles-permisos', redirect: '/app/roles-permisos' },
   { path: '/calculator', redirect: '/app/calculator' },
   { path: '/cupones', redirect: '/app/cupones' },

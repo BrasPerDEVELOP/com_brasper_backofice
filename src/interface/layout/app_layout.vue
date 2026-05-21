@@ -50,6 +50,7 @@ const allNavItems = [
   { to: "/app/comisiones", label: "Comisiones", icon: "folder", permission: "commissions.view" },
   { to: "/app/tasas", label: "Tasas", icon: "exchange", permission: "rates.view" },
   { to: "/app/home-banner", label: "Banner Home", icon: "image", permission: "home_banner.view" },
+  { to: "/app/blog", label: "Blog", icon: "ledger", permission: "blog.view" },
 ];
 
 const allBottomNavItems = [
