@@ -58,11 +58,10 @@
               </button>
               <button
                 type="button"
-                class="rounded-md bg-gradient-to-r from-brasper-cyanLight to-brasper-indigoStrong px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-60"
-                :disabled="tasasStore.savingTrialId === rate.id"
+                class="rounded-md bg-gradient-to-r from-brasper-cyanLight to-brasper-indigoStrong px-2.5 py-1 text-xs font-semibold text-white"
                 @click="saveRate(rate)"
               >
-                {{ tasasStore.savingTrialId === rate.id ? 'Guardando...' : 'Guardar' }}
+                Guardar
               </button>
             </div>
           </div>
@@ -177,24 +176,23 @@ function onDraftInput(id: string, ev: Event): void {
   draftTaxes.value = { ...draftTaxes.value, [id]: v }
 }
 
-async function saveRate(rate: ExchangeRate): Promise<void> {
+function saveRate(rate: ExchangeRate): void {
   const draft = draftTaxes.value[rate.id]
   const parsedTax = parseTaxInput(
     draft !== undefined ? draft : String(rate.rate),
     rate.rate
   )
-  const ok = await tasasStore.validateAndUpdateTaxRateTrial(
-    rate.id,
-    parsedTax,
-    rate.from.toUpperCase(),
-    rate.to.toUpperCase()
-  )
-  if (ok) {
-    draftTaxes.value[rate.id] = String(parsedTax)
-    await calculatorStore.loadData()
-    if (calculatorStore.calculationMode === 'special' && calculatorStore.amountSend > 0) {
-      calculatorStore.recalcFromSend()
-    }
+  if (Number.isNaN(parsedTax) || parsedTax <= 0) {
+    tasasStore.error = 'Ingresa una tasa válida mayor a 0.'
+    return
+  }
+  tasasStore.error = null
+  draftTaxes.value[rate.id] = String(parsedTax)
+  calculatorStore.overrideLocalTaxRate(rate.id, parsedTax)
+  if (calculatorStore.inputMode === 'receive' && calculatorStore.amountReceive > 0) {
+    calculatorStore.recalcFromReceive()
+  } else if (calculatorStore.amountSend > 0) {
+    calculatorStore.recalcFromSend()
   }
 }
 

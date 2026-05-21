@@ -236,6 +236,8 @@ interface CalculatorState {
   specialReceiveManuallyEdited: boolean
   taxRates: ExchangeRate[]
   commissions: CommissionRange[]
+  /** Sobreescrituras locales de tasa (id → valor). Solo activas en modo especial; la calculadora normal nunca las lee. */
+  localTaxRateOverrides: Record<string, number>
   /** IDs para POST /transactions/ (tasa y comisión usadas en la calculadora). */
   selectedTaxRateId: string | null
   selectedCommissionId: string | null
@@ -276,6 +278,7 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
     specialReceiveManuallyEdited: false,
     taxRates: [],
     commissions: [],
+    localTaxRateOverrides: {},
     selectedTaxRateId: null,
     selectedCommissionId: null,
     isLoading: false,
@@ -298,9 +301,23 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
       return state.calculationMode === 'special' ? state.amountReceiveSpecial : state.amountReceiveNormal
     },
 
+    /**
+     * Tasas con sobreescrituras locales aplicadas solo en modo especial.
+     * La calculadora normal siempre lee `state.taxRates` puro desde el backend.
+     */
+    effectiveTaxRates(state): ExchangeRate[] {
+      if (state.calculationMode !== 'special' || Object.keys(state.localTaxRateOverrides).length === 0) {
+        return state.taxRates
+      }
+      return state.taxRates.map((r) => {
+        const override = state.localTaxRateOverrides[r.id]
+        return override !== undefined ? { ...r, rate: override } : r
+      })
+    },
+
     /** Tasa de cambio del par actual (directa o derivada del inverso en catálogo). */
     currentRate(state): number {
-      return effectiveExchangeRate(state.taxRates, state.currencyFrom, state.currencyTo)
+      return effectiveExchangeRate(this.effectiveTaxRates, state.currencyFrom, state.currencyTo)
     },
 
     /** Comisiones del par actual (puede haber varios rangos por par). */
@@ -315,7 +332,7 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
       const pairCommissions = this.commissionsForPair
       if (pairCommissions.length === 0) return null
 
-      const rate = effectiveExchangeRate(state.taxRates, state.currencyFrom, state.currencyTo)
+      const rate = effectiveExchangeRate(this.effectiveTaxRates, state.currencyFrom, state.currencyTo)
       let gross = 0
       const isSpecial = state.calculationMode === 'special'
       const send = isSpecial ? state.amountSendSpecial : state.amountSendNormal
@@ -359,7 +376,7 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
      * O indicás `amountReceive`: se infiere el bruto con neto = recibe/tasa y bruto = neto/(1-p).
      */
     result(state): CalculatorResult | null {
-      const rate = effectiveExchangeRate(state.taxRates, state.currencyFrom, state.currencyTo)
+      const rate = effectiveExchangeRate(this.effectiveTaxRates, state.currencyFrom, state.currencyTo)
       if (!rate || rate <= 0) return null
       const pairCommissions = this.commissionsForPair
 
@@ -375,7 +392,7 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
           inputMode: quoteInputMode,
           amountSend: send,
           amountReceive: receive,
-          taxRates: state.taxRates,
+          taxRates: this.effectiveTaxRates,
           commissions: state.commissions
         })
         if (!baseQuote) return null
@@ -527,6 +544,9 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
 
       // Especial: catálogo trial; normal: producción (misma fórmula de comisión/tasa en ambos).
       this.setDemoMode(mode === 'special')
+      if (mode === 'normal') {
+        this.localTaxRateOverrides = {}
+      }
 
       if (mode === 'special') {
         this.inputMode = snap.inputMode
@@ -640,6 +660,15 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
 
     resetCalculatorMode() {
       this.calculationMode = 'normal'
+    },
+
+    /**
+     * Registra una sobreescritura local de tasa para el modo especial.
+     * No toca `taxRates` (la calculadora normal nunca ve este mapa).
+     */
+    overrideLocalTaxRate(id: string, newRate: number) {
+      this.localTaxRateOverrides = { ...this.localTaxRateOverrides, [id]: newRate }
+      this.updateSelectedIds()
     }
   }
 }

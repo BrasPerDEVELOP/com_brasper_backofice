@@ -133,6 +133,52 @@ function appendUserFormFields(
   if (payload.profile_image instanceof File) form.append('profile_image', payload.profile_image)
 }
 
+function normalizeEmail(value: string | undefined): string {
+  return (value ?? '').trim().toLowerCase()
+}
+
+function isDuplicateEmailApiError(err: unknown): boolean {
+  if (!axios.isAxiosError(err)) return false
+  const status = err.response?.status
+  if (status !== 400 && status !== 409 && status !== 422) return false
+  const data = err.response?.data
+  if (data != null && typeof data === 'object' && 'email' in (data as Record<string, unknown>)) {
+    return true
+  }
+  const msg = (formatApiErrorBody(data) ?? '').toLowerCase()
+  return (
+    msg.includes('email') &&
+    (msg.includes('exist') ||
+      msg.includes('ya ') ||
+      msg.includes('duplic') ||
+      msg.includes('unique') ||
+      msg.includes('registrado') ||
+      msg.includes('taken'))
+  )
+}
+
+/** Busca un usuario por correo (insensible a mayúsculas). */
+export async function findUserByEmail(
+  email: string,
+  role?: string | null
+): Promise<UserListItem | null> {
+  const normalized = normalizeEmail(email)
+  if (!normalized) return null
+
+  const match = (list: UserListItem[]) =>
+    list.find((u) => {
+      const candidate = normalizeEmail(u.email === '-' ? '' : u.email)
+      return candidate === normalized
+    }) ?? null
+
+  if (role?.trim()) {
+    const byRole = await fetchUsers({ role: role.trim() })
+    const hit = match(byRole)
+    if (hit) return hit
+  }
+  return match(await fetchUsers())
+}
+
 /** Crea un nuevo usuario. POST /user/ (multipart/form-data) */
 export async function createUser(payload: CreateUserPayload): Promise<UserListItem> {
   const url = Domain.apiPath('user/')
@@ -142,17 +188,30 @@ export async function createUser(payload: CreateUserPayload): Promise<UserListIt
     password: payload.password?.trim() || DEFAULT_USER_TEMPORARY_PASSWORD
   })
 
-  const response = await apiClient.post<unknown>(url, form)
-  const raw = response.data
-  const user = parseUser(
-    (raw != null && typeof raw === 'object' && 'user' in raw)
-      ? (raw as Record<string, unknown>).user
-      : raw
-  )
-  if (!user) {
-    throw new Error('Respuesta de creación de usuario inválida')
+  try {
+    const response = await apiClient.post<unknown>(url, form)
+    const raw = response.data
+    const user = parseUser(
+      (raw != null && typeof raw === 'object' && 'user' in raw)
+        ? (raw as Record<string, unknown>).user
+        : raw
+    )
+    if (!user) {
+      throw new Error('Respuesta de creación de usuario inválida')
+    }
+    return user
+  } catch (e) {
+    const email = payload.email?.trim()
+    if (email && isDuplicateEmailApiError(e)) {
+      const existing = await findUserByEmail(email, payload.role)
+      if (existing) return existing
+    }
+    if (axios.isAxiosError(e)) {
+      const apiMessage = formatApiErrorBody(e.response?.data)
+      if (apiMessage) throw new Error(apiMessage)
+    }
+    throw e instanceof Error ? e : new Error('Error al crear usuario')
   }
-  return user
 }
 
 /** Actualiza un usuario. PUT /user/ (multipart/form-data con id). */

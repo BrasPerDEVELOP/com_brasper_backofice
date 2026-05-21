@@ -2526,8 +2526,8 @@ onMounted(() => {
                 </svg>
               </button>
             </td>
-            <td class="px-4 py-3 font-medium text-[#374151]">
-              {{ formatTransactionCodeShort(t.code) }}
+            <td class="whitespace-nowrap px-4 py-3 font-medium text-[#374151]">
+              {{ t.code?.trim() || "—" }}
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-[#374151]">
               {{ t.operation_number || "—" }}
@@ -3858,7 +3858,6 @@ onMounted(() => {
                 :filter-rates-to-selected-pair="true"
               />
               <section
-                v-if="calculatorStore.calculationMode !== 'special'"
                 class="rounded-2xl border border-[#d8e5fb] bg-white p-5 shadow-sm shadow-brasper-indigoStrong/5"
               >
                 <div class="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
