@@ -50,15 +50,61 @@ const isUploadingCover = ref(false)
 const CLOUD_NAME = 'dhkmdutec'
 const UPLOAD_PRESET = 'blog_brasper'
 
-// Historial de imágenes cargadas (herramienta secundaria de imágenes)
-interface SecondaryImage {
-  publicId: string
-  url: string
-  copiedUrl: boolean
-  copiedHtml: boolean
-}
-const secondaryImages = ref<SecondaryImage[]>([])
-const isUploadingSecondary = ref(false)
+const contentFileName = ref('')
+const contentViewMode = ref<'preview' | 'html'>('preview')
+const isImportingContent = ref(false)
+
+const contentPreviewHtml = computed(() => {
+  const raw = form.value.content.trim()
+  if (!raw) {
+    return '<div class="empty-preview">Sin contenido cargado.</div>'
+  }
+
+  return `
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body {
+        margin: 0;
+        padding: 24px;
+        color: #1f2937;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.65;
+        background: #ffffff;
+      }
+      img, video, iframe {
+        max-width: 100%;
+        height: auto;
+        border-radius: 12px;
+      }
+      h1, h2, h3 {
+        color: #232b4d;
+        line-height: 1.2;
+      }
+      a {
+        color: #3F51B5;
+      }
+      blockquote {
+        margin: 20px 0;
+        padding: 12px 18px;
+        border-left: 4px solid #3F51B5;
+        background: #f5f7ff;
+      }
+      .empty-preview {
+        display: grid;
+        min-height: 240px;
+        place-items: center;
+        color: #9ca3af;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>${raw}</body>
+</html>`
+})
 
 // Carga inicial
 onMounted(() => {
@@ -121,6 +167,15 @@ const uniqueCategories = computed<string[]>(() => {
   const cats = blogs.value.map((b: Blog) => b.category).filter((c: string | null | undefined): c is string => !!c)
   return Array.from(new Set(cats))
 })
+
+function getLanguageBadgeLabel(language: string): string {
+  const map: Record<string, string> = {
+    es: 'ES',
+    en: 'EN',
+    pr: 'PT'
+  }
+  return map[language] ?? language.toUpperCase()
+}
 
 // Generador de slug a partir del título
 function generateSlug(text: string): string {
@@ -193,62 +248,6 @@ async function handleCoverUpload(e: Event) {
   }
 }
 
-// Subir Imagen Secundaria/Contenido a Cloudinary
-async function handleSecondaryUpload(e: Event) {
-  const target = e.target as HTMLInputElement
-  const file = target.files?.[0]
-  if (!file) return
-
-  isUploadingSecondary.value = true
-  try {
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('upload_preset', UPLOAD_PRESET)
-
-    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
-      method: 'POST',
-      body: formData
-    })
-    if (!res.ok) throw new Error('Error al subir a Cloudinary')
-
-    const data = await res.json()
-    const url = getCloudinaryUrl(data.public_id)
-
-    secondaryImages.value.unshift({
-      publicId: data.public_id,
-      url,
-      copiedUrl: false,
-      copiedHtml: false
-    })
-    showToast('success', 'Imagen secundaria cargada')
-  } catch (error: any) {
-    showToast('error', 'Error al cargar: ' + error.message)
-  } finally {
-    isUploadingSecondary.value = false
-    target.value = ''
-  }
-}
-
-// Funciones para copiar al portapapeles
-async function copyToClipboard(text: string, index: number, type: 'url' | 'html') {
-  try {
-    await navigator.clipboard.writeText(text)
-    const img = secondaryImages.value[index]
-    if (img) {
-      if (type === 'url') {
-        img.copiedUrl = true
-        setTimeout(() => { img.copiedUrl = false }, 2000)
-      } else {
-        img.copiedHtml = true
-        setTimeout(() => { img.copiedHtml = false }, 2000)
-      }
-    }
-    showToast('success', '¡Enlace copiado al portapapeles!')
-  } catch {
-    showToast('error', 'Error al copiar al portapapeles')
-  }
-}
-
 // Mostrar Toasts rápidos
 function showToast(type: 'success' | 'error', msg: string) {
   if (type === 'success') {
@@ -257,6 +256,110 @@ function showToast(type: 'success' | 'error', msg: string) {
   } else {
     errorMessage.value = msg
     setTimeout(() => errorMessage.value = '', 5000)
+  }
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function plainTextToHtml(text: string): string {
+  return text
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, '<br>')}</p>`)
+    .join('\n')
+}
+
+function markdownToBasicHtml(text: string): string {
+  return text
+    .split('\n')
+    .map((line) => {
+      const trimmed = line.trim()
+      if (!trimmed) return ''
+      if (trimmed.startsWith('### ')) return `<h3>${escapeHtml(trimmed.slice(4))}</h3>`
+      if (trimmed.startsWith('## ')) return `<h2>${escapeHtml(trimmed.slice(3))}</h2>`
+      if (trimmed.startsWith('# ')) return `<h1>${escapeHtml(trimmed.slice(2))}</h1>`
+      return `<p>${escapeHtml(trimmed)}</p>`
+    })
+    .join('\n')
+}
+
+function inferTitleFromHtml(html: string): string {
+  const titleMatch = html.match(/<h1[^>]*>(.*?)<\/h1>/is) ?? html.match(/<title[^>]*>(.*?)<\/title>/is)
+  if (!titleMatch?.[1]) return ''
+  return titleMatch[1].replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
+}
+
+function inferExcerptFromHtml(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 180)
+}
+
+async function handleContentFileUpload(e: Event) {
+  const target = e.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file) return
+
+  const name = file.name.toLowerCase()
+  const isDocx = name.endsWith('.docx')
+  const isHtml = name.endsWith('.html') || name.endsWith('.htm')
+  const isText = name.endsWith('.txt')
+  const isMarkdown = name.endsWith('.md') || name.endsWith('.markdown')
+
+  if (!isDocx && !isHtml && !isText && !isMarkdown) {
+    showToast('error', 'Sube un archivo .docx, .html, .htm, .txt o .md para cargar el cuerpo del artículo.')
+    target.value = ''
+    return
+  }
+
+  isImportingContent.value = true
+  try {
+    const content = isDocx
+      ? (await import('mammoth').then(async (mammoth) =>
+          mammoth.default.convertToHtml(
+            { arrayBuffer: await file.arrayBuffer() },
+            { convertImage: mammoth.default.images.dataUri }
+          )
+        )).value
+      : ''
+    const textContent = isDocx ? '' : await file.text()
+    const normalizedContent = isDocx
+      ? content
+      : isHtml
+        ? textContent
+        : isMarkdown
+          ? markdownToBasicHtml(textContent)
+          : plainTextToHtml(textContent)
+    form.value.content = normalizedContent
+    contentFileName.value = file.name
+    contentViewMode.value = 'preview'
+
+    if (!form.value.title.trim()) {
+      const inferredTitle = inferTitleFromHtml(normalizedContent)
+      if (inferredTitle) form.value.title = inferredTitle
+    }
+    if (!form.value.excerpt?.trim()) {
+      form.value.excerpt = inferExcerptFromHtml(normalizedContent)
+    }
+
+    showToast('success', 'Contenido cargado desde archivo')
+  } catch (error: any) {
+    showToast('error', 'No se pudo leer el archivo: ' + (error?.message ?? 'error desconocido'))
+  } finally {
+    isImportingContent.value = false
+    target.value = ''
   }
 }
 
@@ -278,6 +381,8 @@ function openCreateModal() {
     language: 'es',
     enable: true
   }
+  contentFileName.value = ''
+  contentViewMode.value = 'preview'
 
   isModalOpen.value = true
 }
@@ -300,6 +405,8 @@ function openEditModal(blog: Blog) {
     language: blog.language,
     enable: blog.enable
   }
+  contentFileName.value = ''
+  contentViewMode.value = 'preview'
 
   isModalOpen.value = true
 }
@@ -330,19 +437,23 @@ async function handleSaveBlog() {
     }
 
     if (modalMode.value === 'create') {
-      await blogRepo.createBlog(payload)
+      const savedBlog = await blogRepo.createBlog(payload)
+      blogs.value = [savedBlog, ...blogs.value]
       showToast('success', 'Artículo creado correctamente')
     } else {
       if (!activeBlogId.value) return
-      await blogRepo.updateBlog({
+      const savedBlog = await blogRepo.updateBlog({
         ...payload,
         id: activeBlogId.value
       })
+      blogs.value = blogs.value.map((blog) =>
+        blog.id === savedBlog.id ? savedBlog : blog
+      )
       showToast('success', 'Artículo actualizado correctamente')
     }
 
     closeModal()
-    loadBlogs()
+    await loadBlogs()
   } catch (error: any) {
     errorMessage.value = error.response?.data?.detail || 'Ocurrió un error al guardar el artículo'
   } finally {
@@ -558,7 +669,7 @@ function setPage(page: number) {
                       'bg-purple-100 text-purple-800': blog.language === 'en'
                     }"
                   >
-                    {{ blog.language }}
+                    {{ getLanguageBadgeLabel(blog.language) }}
                   </span>
                 </td>
 
@@ -723,6 +834,9 @@ function setPage(page: number) {
                     <option value="pr">Portugués (PR)</option>
                     <option value="en">Inglés (EN)</option>
                   </select>
+                  <p class="mt-1 text-[10px] leading-snug text-neutral-500">
+                    Cambia la clasificación del artículo; el contenido debe subirse en ese idioma.
+                  </p>
                 </div>
               </div>
 
@@ -818,82 +932,93 @@ function setPage(page: number) {
 
             <!-- Sección Contenido e Herramienta Imagen (Derecha) -->
             <div class="space-y-5 lg:col-span-7 flex flex-col h-full">
-              <!-- Editor de Contenido HTML -->
-              <div class="flex-1 bg-white rounded-2xl border border-neutral-200 p-6 flex flex-col min-h-[350px]">
-                <div class="flex items-center justify-between border-b pb-2 mb-4">
-                  <h3 class="text-sm font-bold text-neutral-800 uppercase tracking-wider text-brasper-indigoStrong">
-                    Cuerpo del Artículo <span class="text-rose-500">*</span>
-                  </h3>
-                  <span class="text-[11px] text-neutral-400 font-mono">Formato HTML</span>
-                </div>
-                <textarea
-                  v-model="form.content"
-                  required
-                  placeholder="Escriba aquí el contenido del artículo en código HTML. Puede insertar enlaces de imágenes Cloudinary usando las herramientas..."
-                  class="flex-1 w-full p-4 rounded-xl border border-neutral-300 text-sm font-sans outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/15 resize-none min-h-[300px]"
-                />
-              </div>
-
-              <!-- Herramienta de Imágenes Secundarias para el Contenido -->
-              <div class="bg-white rounded-2xl border border-neutral-200 p-5 shadow-sm">
-                <div class="flex items-center justify-between border-b pb-2 mb-4">
+              <!-- Cargador y vista del contenido -->
+              <div class="flex-1 bg-white rounded-2xl border border-neutral-200 p-6 flex flex-col min-h-[460px]">
+                <div class="flex flex-wrap items-start justify-between gap-4 border-b pb-3 mb-4">
                   <div>
-                    <h4 class="text-xs font-bold text-neutral-800 uppercase tracking-wider">Cargador de Imágenes Secundarias</h4>
-                    <p class="text-[10px] text-neutral-400 mt-0.5">Sube imágenes para agregarlas al cuerpo del artículo.</p>
+                    <h3 class="text-sm font-bold text-neutral-800 uppercase tracking-wider text-brasper-indigoStrong">
+                      Cuerpo del Artículo <span class="text-rose-500">*</span>
+                    </h3>
+                    <p class="mt-1 text-xs text-neutral-500">
+                      Carga un archivo y revisa cómo se verá antes de guardar.
+                    </p>
                   </div>
-                  <label class="cursor-pointer">
-                    <span
-                      class="inline-flex items-center gap-1.5 rounded-lg bg-brasper-indigoStrong/10 px-3 py-1.5 text-xs font-bold text-brasper-indigoStrong transition hover:bg-brasper-indigoStrong/20"
-                      :class="{'pointer-events-none opacity-50': isUploadingSecondary}"
-                    >
-                      <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                      </svg>
-                      {{ isUploadingSecondary ? 'Subiendo...' : 'Subir Imagen' }}
-                    </span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      @change="handleSecondaryUpload"
-                      class="hidden"
-                    />
-                  </label>
-                </div>
 
-                <!-- Historial de imágenes subidas -->
-                <div v-if="secondaryImages.length > 0" class="flex gap-4 overflow-x-auto pb-2">
-                  <div
-                    v-for="(img, idx) in secondaryImages"
-                    :key="img.publicId"
-                    class="flex items-center gap-3 shrink-0 rounded-xl bg-neutral-50 p-2.5 border border-neutral-200"
-                  >
-                    <!-- Miniatura -->
-                    <img :src="img.url" class="h-10 w-10 rounded-lg object-cover border" />
-                    <!-- Acciones del enlace -->
-                    <div class="flex flex-col gap-1">
+                  <div class="flex items-center gap-2">
+                    <div class="inline-flex rounded-lg border border-neutral-200 bg-neutral-50 p-1">
                       <button
                         type="button"
-                        @click="copyToClipboard(img.url, idx, 'url')"
-                        class="text-[10px] font-bold text-neutral-600 bg-white hover:bg-neutral-100 hover:text-neutral-900 border rounded px-1.5 py-0.5 text-left flex items-center gap-1"
+                        class="rounded-md px-3 py-1.5 text-xs font-bold transition"
+                        :class="contentViewMode === 'preview' ? 'bg-white text-brasper-indigoStrong shadow-sm' : 'text-neutral-500 hover:text-neutral-800'"
+                        @click="contentViewMode = 'preview'"
                       >
-                        <span class="w-1.5 h-1.5 rounded-full" :class="img.copiedUrl ? 'bg-emerald-500' : 'bg-neutral-300'"></span>
-                        {{ img.copiedUrl ? '¡Copiado!' : 'Copiar URL' }}
+                        Vista
                       </button>
                       <button
                         type="button"
-                        @click="copyToClipboard(`<img src='${img.url}' alt='Imagen' class='mx-auto my-4 max-w-full rounded-xl shadow' />`, idx, 'html')"
-                        class="text-[10px] font-bold text-neutral-600 bg-white hover:bg-neutral-100 hover:text-neutral-900 border rounded px-1.5 py-0.5 text-left flex items-center gap-1"
+                        class="rounded-md px-3 py-1.5 text-xs font-bold transition"
+                        :class="contentViewMode === 'html' ? 'bg-white text-brasper-indigoStrong shadow-sm' : 'text-neutral-500 hover:text-neutral-800'"
+                        @click="contentViewMode = 'html'"
                       >
-                        <span class="w-1.5 h-1.5 rounded-full" :class="img.copiedHtml ? 'bg-emerald-500' : 'bg-neutral-300'"></span>
-                        {{ img.copiedHtml ? '¡Copiado!' : 'Copiar HTML' }}
+                        HTML
                       </button>
                     </div>
                   </div>
                 </div>
-                <div v-else class="text-center py-3 text-neutral-400 text-xs">
-                  Aún no has subido imágenes secundarias en esta sesión.
+
+                <div class="mb-4 rounded-xl border-2 border-dashed border-neutral-300 bg-neutral-50 p-4">
+                  <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div class="min-w-0">
+                      <p class="text-sm font-semibold text-neutral-700">
+                        {{ contentFileName || 'Subir cuerpo del artículo' }}
+                      </p>
+                      <p class="mt-0.5 text-xs text-neutral-500">
+                        Soporta DOCX, HTML, HTM, TXT o Markdown. El contenido cargado reemplaza el cuerpo actual.
+                      </p>
+                    </div>
+                    <label class="cursor-pointer">
+                      <span
+                        class="inline-flex items-center gap-2 rounded-xl bg-brasper-indigoStrong px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-brasper-indigoDark"
+                        :class="{ 'pointer-events-none opacity-60': isImportingContent }"
+                      >
+                        <svg
+                          class="h-4 w-4"
+                          :class="{ 'animate-spin': isImportingContent }"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                        </svg>
+                        {{ isImportingContent ? 'Procesando...' : 'Seleccionar Archivo' }}
+                      </span>
+                      <input
+                        type="file"
+                        accept=".docx,.html,.htm,.txt,.md,.markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/html,text/plain,text/markdown"
+                        class="hidden"
+                        @change="handleContentFileUpload"
+                      />
+                    </label>
+                  </div>
                 </div>
+
+                <iframe
+                  v-if="contentViewMode === 'preview'"
+                  title="Vista previa del artículo"
+                  sandbox=""
+                  :srcdoc="contentPreviewHtml"
+                  class="min-h-[320px] flex-1 w-full rounded-xl border border-neutral-300 bg-white"
+                />
+
+                <textarea
+                  v-else
+                  v-model="form.content"
+                  required
+                  placeholder="El HTML del artículo aparecerá aquí al subir el archivo. También puedes ajustar el código manualmente."
+                  class="flex-1 w-full p-4 rounded-xl border border-neutral-300 text-sm font-mono outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/15 resize-none min-h-[320px]"
+                />
               </div>
+
             </div>
           </div>
         </div>
