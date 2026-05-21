@@ -94,6 +94,16 @@ export const PERMISSION_MODULES = [
     ]
   },
   {
+    key: 'blog',
+    label: 'Blog',
+    permissions: [
+      { key: 'blog.view', label: 'Ver' },
+      { key: 'blog.create', label: 'Crear' },
+      { key: 'blog.update', label: 'Editar' },
+      { key: 'blog.delete', label: 'Eliminar' }
+    ]
+  },
+  {
     key: 'profile',
     label: 'Perfil',
     permissions: [
@@ -152,6 +162,10 @@ const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
     'coupons.update',
     'home_banner.view',
     'home_banner.update',
+    'blog.view',
+    'blog.create',
+    'blog.update',
+    'blog.delete',
     'profile.view',
     'profile.update',
     'profile.change_password'

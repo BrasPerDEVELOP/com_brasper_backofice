@@ -8,6 +8,10 @@ import { useComisionesStore } from "@modules/comisiones/presentation/controllers
 import { useTasasStore } from "@modules/tasas/presentation/controllers/use_tasas_store_controller";
 import { useAuthStore } from "@modules/auth/presentation/controllers/use_auth_store_controller";
 import { fetchUsers } from "@modules/auth/infrastructure/adapters/users_management_api_adapter";
+import { BlogApiAdapter } from "@modules/blog/infrastructure/adapters/blog_api_adapter";
+import type { Blog } from "@modules/blog/domain/models";
+import { HomeBannerApiAdapter } from "@modules/home-banner/infrastructure/adapters";
+import type { HomeBanner } from "@modules/home-banner/domain/models";
 import type { Transaction } from "@modules/transacciones/domain/models";
 import { TRANSACTION_STATUS_LABELS } from "@modules/transacciones/domain/models";
 
@@ -17,10 +21,20 @@ const cuponesStore = useCuponesStore();
 const comisionesStore = useComisionesStore();
 const tasasStore = useTasasStore();
 const authStore = useAuthStore();
+const blogRepo = new BlogApiAdapter();
+const homeBannerRepo = new HomeBannerApiAdapter();
 
 const loading = ref(true);
 const usersTotal = ref<number | null>(null);
 const usersLoadError = ref<string | null>(null);
+const marketingBlogs = ref<Blog[]>([]);
+const marketingBlogsTotal = ref(0);
+const marketingBanner = ref<HomeBanner | null>(null);
+const marketingLoadError = ref<string | null>(null);
+
+const isMarketingDashboard = computed(
+  () => (authStore.user?.role ?? "").toLowerCase() === "marketing",
+);
 
 function statusOf(t: Transaction): string {
   return (t.status ?? "").toLowerCase();
@@ -82,6 +96,44 @@ const couponsActive = computed(
   () => cuponesStore.coupons.filter((c) => c.is_active).length,
 );
 
+const marketingPublishedBlogs = computed(
+  () => marketingBlogs.value.filter((blog) => blog.enable).length,
+);
+
+const marketingDraftBlogs = computed(
+  () => marketingBlogs.value.filter((blog) => !blog.enable).length,
+);
+
+const marketingRecentBlogs = computed(() =>
+  [...marketingBlogs.value]
+    .sort((a, b) => new Date(b.updated_at ?? b.created_at ?? b.date ?? 0).getTime() - new Date(a.updated_at ?? a.created_at ?? a.date ?? 0).getTime())
+    .slice(0, 5),
+);
+
+const marketingLanguageRows = computed(() => {
+  const labels: Record<string, string> = { es: "Español", en: "Inglés", pr: "Portugués" };
+  const counts = marketingBlogs.value.reduce<Record<string, number>>((acc, blog) => {
+    const key = blog.language || "sin_idioma";
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {});
+  return Object.entries(counts)
+    .map(([key, n]) => ({ key, n, label: labels[key] ?? key.toUpperCase() }))
+    .sort((a, b) => b.n - a.n);
+});
+
+const marketingCategoryRows = computed(() => {
+  const counts = marketingBlogs.value.reduce<Record<string, number>>((acc, blog) => {
+    const key = blog.category || "Sin categoría";
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {});
+  return Object.entries(counts)
+    .map(([label, n]) => ({ label, n }))
+    .sort((a, b) => b.n - a.n)
+    .slice(0, 6);
+});
+
 const statusBreakdown = computed(() => {
   const entries = Object.entries(txByStatus.value).filter(
     ([k]) => k !== "sin_estado",
@@ -112,9 +164,54 @@ function formatInt(n: number): string {
   return n.toLocaleString("es");
 }
 
+function formatDate(value?: string | null): string {
+  if (!value) return "Sin fecha";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Sin fecha";
+  return date.toLocaleDateString("es", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 onMounted(async () => {
   loading.value = true;
   usersLoadError.value = null;
+  marketingLoadError.value = null;
+
+  if (isMarketingDashboard.value) {
+    const [blogsResult, couponsResult, bannerResult] = await Promise.allSettled([
+      blogRepo.listBlogs(0, 100),
+      cuponesStore.loadCoupons(),
+      homeBannerRepo.getBanner(),
+    ]);
+
+    if (blogsResult.status === "fulfilled") {
+      marketingBlogs.value = blogsResult.value.items;
+      marketingBlogsTotal.value = blogsResult.value.total;
+    } else {
+      marketingLoadError.value = "No se pudieron cargar los artículos del blog.";
+    }
+
+    if (couponsResult.status === "rejected") {
+      marketingLoadError.value = [marketingLoadError.value, "No se pudieron cargar los cupones."]
+        .filter(Boolean)
+        .join(" ");
+    }
+
+    if (bannerResult.status === "fulfilled") {
+      marketingBanner.value = bannerResult.value;
+    } else {
+      marketingLoadError.value = [marketingLoadError.value, "No se pudo cargar el banner home."]
+        .filter(Boolean)
+        .join(" ");
+    }
+
+    loading.value = false;
+    return;
+  }
+
   await Promise.all([
     transactionsStore.loadTransactions(),
     cuentasStore.loadBankAccounts(),
@@ -166,14 +263,17 @@ onMounted(async () => {
         <h1
           class="mt-4 max-w-3xl text-3xl font-bold tracking-tight text-white drop-shadow-sm sm:text-4xl"
         >
-          Resumen operativo
+          {{ isMarketingDashboard ? "Resumen de marketing" : "Resumen operativo" }}
         </h1>
         <p class="mt-3 max-w-xl text-sm leading-relaxed text-white/85">
-          KPIs en vivo: transacciones, cuentas, cupones, tasas, comisiones y
-          usuarios — mismos datos que el resto del backoffice.
+          {{
+            isMarketingDashboard
+              ? "Datos reales de publicaciones, cupones y banner principal para revisar el contenido visible."
+              : "KPIs en vivo: transacciones, cuentas, cupones, tasas, comisiones y usuarios — mismos datos que el resto del backoffice."
+          }}
         </p>
         <RouterLink
-          v-if="!loading"
+          v-if="!loading && !isMarketingDashboard"
           to="/app/transacciones"
           class="mt-6 inline-flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-brasper-indigoDark shadow-lg shadow-black/20 transition hover:scale-[1.02] hover:bg-brasper-cyanLight hover:text-brasper-indigoDark active:scale-[0.98]"
         >
@@ -196,6 +296,139 @@ onMounted(async () => {
     </div>
 
     <template v-else>
+      <template v-if="isMarketingDashboard">
+        <div class="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-brasper-indigoStrong/80">
+          Marketing
+        </div>
+        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <RouterLink
+            to="/app/blog"
+            class="group relative overflow-hidden rounded-2xl border border-white/80 bg-white/90 p-6 shadow-lg shadow-brasper-indigoStrong/10 ring-1 ring-brasper-indigoStrong/5 transition duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-brasper-indigoStrong/20"
+          >
+            <p class="text-xs font-bold uppercase tracking-wider text-[#64748b]">Artículos totales</p>
+            <p class="mt-2 bg-gradient-to-br from-brasper-indigoDark to-brasper-indigoStrong bg-clip-text text-4xl font-bold tabular-nums text-transparent">
+              {{ formatInt(marketingBlogsTotal) }}
+            </p>
+            <p class="mt-2 text-xs font-medium text-brasper-indigoStrong/70">Ir a blog →</p>
+          </RouterLink>
+
+          <div class="rounded-2xl border border-emerald-200/60 bg-gradient-to-br from-emerald-100/90 via-emerald-50 to-white p-6 shadow-lg shadow-emerald-500/15 ring-1 ring-emerald-400/20">
+            <p class="text-xs font-bold uppercase tracking-wider text-emerald-900/80">Publicados</p>
+            <p class="mt-2 text-4xl font-bold tabular-nums text-emerald-950">
+              {{ formatInt(marketingPublishedBlogs) }}
+            </p>
+            <p class="mt-2 text-xs font-medium text-emerald-800/70">Visibles en la web pública</p>
+          </div>
+
+          <div class="rounded-2xl border border-amber-200/60 bg-gradient-to-br from-amber-100/90 via-amber-50 to-white p-6 shadow-lg shadow-amber-500/15 ring-1 ring-amber-400/20">
+            <p class="text-xs font-bold uppercase tracking-wider text-amber-900/80">Borradores</p>
+            <p class="mt-2 text-4xl font-bold tabular-nums text-amber-950">
+              {{ formatInt(marketingDraftBlogs) }}
+            </p>
+            <p class="mt-2 text-xs font-medium text-amber-800/70">No visibles públicamente</p>
+          </div>
+
+          <RouterLink
+            to="/app/cupones"
+            class="rounded-2xl border border-violet-200/60 bg-gradient-to-br from-violet-100/90 via-violet-50 to-white p-6 shadow-lg shadow-violet-500/15 ring-1 ring-violet-400/20 transition duration-300 hover:-translate-y-1 hover:shadow-xl"
+          >
+            <p class="text-xs font-bold uppercase tracking-wider text-violet-900/80">Cupones activos</p>
+            <p class="mt-2 text-4xl font-bold tabular-nums text-violet-950">
+              {{ formatInt(couponsActive) }}
+            </p>
+            <p class="mt-2 text-xs font-medium text-violet-800/70">de {{ formatInt(cuponesStore.coupons.length) }} cupones</p>
+          </RouterLink>
+        </div>
+
+        <div class="mt-8 grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
+          <div class="rounded-2xl border border-slate-200/90 bg-white/95 p-7 shadow-lg shadow-slate-200/50 ring-1 ring-slate-100">
+            <div class="flex items-center justify-between gap-4">
+              <h2 class="text-base font-bold text-slate-900">Últimos artículos actualizados</h2>
+              <RouterLink to="/app/blog" class="text-sm font-semibold text-brasper-indigoStrong hover:underline">
+                Gestionar
+              </RouterLink>
+            </div>
+            <ul v-if="marketingRecentBlogs.length > 0" class="mt-5 divide-y divide-slate-100">
+              <li
+                v-for="blog in marketingRecentBlogs"
+                :key="blog.id"
+                class="flex items-start justify-between gap-4 py-3"
+              >
+                <div class="min-w-0">
+                  <p class="truncate text-sm font-semibold text-slate-800">{{ blog.title }}</p>
+                  <p class="mt-1 text-xs text-slate-500">
+                    /{{ blog.slug }} · {{ formatDate(blog.updated_at ?? blog.created_at ?? blog.date) }}
+                  </p>
+                </div>
+                <span
+                  class="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold"
+                  :class="blog.enable ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'"
+                >
+                  {{ blog.enable ? "Publicado" : "Borrador" }}
+                </span>
+              </li>
+            </ul>
+            <p v-else class="mt-5 rounded-xl border border-dashed border-slate-200 bg-slate-50 py-8 text-center text-sm text-slate-500">
+              No hay artículos para mostrar.
+            </p>
+          </div>
+
+          <div class="space-y-5">
+            <div class="rounded-2xl border border-slate-200/90 bg-white/95 p-7 shadow-lg shadow-slate-200/50 ring-1 ring-slate-100">
+              <h2 class="text-base font-bold text-slate-900">Banner home</h2>
+              <p class="mt-3 text-sm text-slate-600">
+                Estado:
+                <span
+                  class="font-bold"
+                  :class="marketingBanner?.enable ? 'text-emerald-700' : 'text-amber-700'"
+                >
+                  {{ marketingBanner?.enable ? "Activo" : "Inactivo" }}
+                </span>
+              </p>
+              <p class="mt-2 text-xs text-slate-500">
+                Versiones cargadas:
+                {{ formatInt([marketingBanner?.banner_es, marketingBanner?.banner_pr, marketingBanner?.banner_en].filter(Boolean).length) }}/3
+              </p>
+              <RouterLink to="/app/home-banner" class="mt-4 inline-flex text-sm font-semibold text-brasper-indigoStrong hover:underline">
+                Revisar banner →
+              </RouterLink>
+            </div>
+
+            <div class="rounded-2xl border border-slate-200/90 bg-white/95 p-7 shadow-lg shadow-slate-200/50 ring-1 ring-slate-100">
+              <h2 class="text-base font-bold text-slate-900">Idiomas y categorías</h2>
+              <ul class="mt-4 space-y-3 text-sm">
+                <li
+                  v-for="row in marketingLanguageRows"
+                  :key="row.key"
+                  class="flex justify-between rounded-xl bg-slate-50 px-4 py-2"
+                >
+                  <span class="text-slate-600">{{ row.label }}</span>
+                  <span class="font-bold text-slate-900">{{ formatInt(row.n) }}</span>
+                </li>
+              </ul>
+              <div class="mt-4 flex flex-wrap gap-2">
+                <span
+                  v-for="row in marketingCategoryRows"
+                  :key="row.label"
+                  class="rounded-full bg-brasper-cyanLight/30 px-3 py-1 text-xs font-semibold text-brasper-indigoDark"
+                >
+                  {{ row.label }} · {{ formatInt(row.n) }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <p
+          v-if="marketingLoadError || cuponesStore.error"
+          class="mt-8 rounded-xl border border-red-300/80 bg-gradient-to-r from-red-50 to-white px-5 py-4 text-sm font-medium text-red-900 shadow-md shadow-red-100"
+        >
+          Algunos datos pueden estar incompletos:
+          {{ [marketingLoadError, cuponesStore.error].filter(Boolean).join(" · ") }}
+        </p>
+      </template>
+
+      <template v-else>
       <div class="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-brasper-indigoStrong/80">
         Operación
       </div>
@@ -560,6 +793,7 @@ onMounted(async () => {
             .join(" · ")
         }}
       </p>
+      </template>
     </template>
   </div>
 </template>
