@@ -87,6 +87,32 @@ const contentPreviewHtml = computed(() => {
       a {
         color: #3F51B5;
       }
+      ol, ul {
+        margin: 14px 0 14px 24px;
+        padding-left: 20px;
+      }
+      ol {
+        list-style-type: decimal;
+      }
+      ol ol {
+        list-style-type: lower-alpha;
+      }
+      ol ol ol {
+        list-style-type: lower-roman;
+      }
+      ul {
+        list-style-type: disc;
+      }
+      ul ul {
+        list-style-type: circle;
+      }
+      li {
+        margin: 6px 0;
+        padding-left: 4px;
+      }
+      li > p {
+        margin: 4px 0;
+      }
       blockquote {
         margin: 20px 0;
         padding: 12px 18px;
