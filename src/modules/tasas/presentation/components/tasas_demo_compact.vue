@@ -153,7 +153,7 @@ const expandedHistoryId = ref<string | null>(null)
 const draftTaxes = ref<Record<string, string>>({})
 
 const sortedRates = computed(() =>
-  [...calculatorStore.taxRates].sort((a, b) => a.pair.localeCompare(b.pair))
+  [...calculatorStore.effectiveTaxRates].sort((a, b) => a.pair.localeCompare(b.pair))
 )
 
 const displayRates = computed(() => {
@@ -247,7 +247,7 @@ async function toggleHistory(taxRateId: string): Promise<void> {
 }
 
 watch(
-  () => calculatorStore.taxRates,
+  () => calculatorStore.effectiveTaxRates,
   (rates) => {
     for (const rate of rates) {
       if (!(rate.id in draftTaxes.value)) {

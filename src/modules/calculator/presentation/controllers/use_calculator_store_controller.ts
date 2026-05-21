@@ -302,11 +302,12 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
     },
 
     /**
-     * Tasas con sobreescrituras locales aplicadas solo en modo especial.
-     * La calculadora normal siempre lee `state.taxRates` puro desde el backend.
+     * Tasas con sobreescrituras locales aplicadas.
+     * La separación normal/especial se garantiza limpiando `localTaxRateOverrides`
+     * en `setCalculationMode('normal')`, no condicionando el getter al modo.
      */
     effectiveTaxRates(state): ExchangeRate[] {
-      if (state.calculationMode !== 'special' || Object.keys(state.localTaxRateOverrides).length === 0) {
+      if (Object.keys(state.localTaxRateOverrides).length === 0) {
         return state.taxRates
       }
       return state.taxRates.map((r) => {
