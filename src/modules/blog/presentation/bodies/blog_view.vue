@@ -414,22 +414,35 @@ function openCreateModal() {
 }
 
 // Abrir modal de edición
-function openEditModal(blog: Blog) {
+async function openEditModal(blog: Blog) {
   modalMode.value = 'edit'
   activeBlogId.value = blog.id
   isSlugManuallyEdited.value = true
+  isLoading.value = true
+  errorMessage.value = ''
+
+  let blogDetail = blog
+  try {
+    blogDetail = await blogRepo.getBlogById(blog.id)
+  } catch (error: any) {
+    errorMessage.value = error.response?.data?.detail || 'Error al cargar el artículo'
+    isLoading.value = false
+    return
+  } finally {
+    isLoading.value = false
+  }
 
   form.value = {
-    title: blog.title,
-    slug: blog.slug,
-    excerpt: blog.excerpt ?? '',
-    content: blog.content,
-    category: blog.category ?? '',
-    public_id: blog.public_id ?? '',
-    read_time: blog.read_time ?? 5,
-    date: formatDateTimeLocal(blog.date),
-    language: blog.language,
-    enable: blog.enable
+    title: blogDetail.title,
+    slug: blogDetail.slug,
+    excerpt: blogDetail.excerpt ?? '',
+    content: blogDetail.content,
+    category: blogDetail.category ?? '',
+    public_id: blogDetail.public_id ?? '',
+    read_time: blogDetail.read_time ?? 5,
+    date: formatDateTimeLocal(blogDetail.date),
+    language: blogDetail.language,
+    enable: blogDetail.enable
   }
   contentFileName.value = ''
   contentViewMode.value = 'preview'
