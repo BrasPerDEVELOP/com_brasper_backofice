@@ -135,6 +135,9 @@ const isClientPickerMode = computed(
   () => !props.lockedUserId?.trim()
 )
 
+/** Desde el alta de transacción el número de cuenta no es obligatorio en el modal. */
+const requireAccountNumber = computed(() => !props.lockedUserId?.trim())
+
 async function submitCreate() {
   const userId = props.lockedUserId?.trim() || form.user_id
   if (!userId) {
@@ -143,15 +146,24 @@ async function submitCreate() {
   }
   const accountNumber = form.account_number.trim()
   const accountNumberConfirmation = form.account_number_confirmation.trim()
-  if (!accountNumber) {
-    cuentasStore.error = 'Ingrese el número de cuenta'
-    return
-  }
-  if (!accountNumberConfirmation) {
-    cuentasStore.error = 'Confirme el número de cuenta'
-    return
-  }
-  if (accountNumber !== accountNumberConfirmation) {
+  if (requireAccountNumber.value) {
+    if (!accountNumber) {
+      cuentasStore.error = 'Ingrese el número de cuenta'
+      return
+    }
+    if (!accountNumberConfirmation) {
+      cuentasStore.error = 'Confirme el número de cuenta'
+      return
+    }
+    if (accountNumber !== accountNumberConfirmation) {
+      cuentasStore.error = 'El número de cuenta y su confirmación no coinciden'
+      return
+    }
+  } else if (
+    accountNumber &&
+    accountNumberConfirmation &&
+    accountNumber !== accountNumberConfirmation
+  ) {
     cuentasStore.error = 'El número de cuenta y su confirmación no coinciden'
     return
   }
@@ -413,11 +425,13 @@ watch(
             </h3>
             <div class="grid gap-6 sm:grid-cols-2">
               <div class="space-y-1.5">
-                <label class="block text-sm font-medium text-[#374151]">Número de cuenta *</label>
+                <label class="block text-sm font-medium text-[#374151]">
+                  Número de cuenta<span v-if="requireAccountNumber"> *</span>
+                </label>
                 <input
                   :value="form.account_number"
                   type="text"
-                  required
+                  :required="requireAccountNumber"
                   class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
                   inputmode="numeric"
                   @keydown="onNumericKeydown"
@@ -425,13 +439,13 @@ watch(
                 />
               </div>
               <div class="space-y-1.5">
-                <label class="block text-sm font-medium text-[#374151]"
-                  >Confirmar número de cuenta *</label
-                >
+                <label class="block text-sm font-medium text-[#374151]">
+                  Confirmar número de cuenta<span v-if="requireAccountNumber"> *</span>
+                </label>
                 <input
                   :value="form.account_number_confirmation"
                   type="text"
-                  required
+                  :required="requireAccountNumber"
                   class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
                   inputmode="numeric"
                   @keydown="onNumericKeydown"

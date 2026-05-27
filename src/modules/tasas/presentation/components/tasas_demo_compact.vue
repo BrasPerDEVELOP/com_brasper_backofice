@@ -2,9 +2,9 @@
   <section class="rounded-xl border border-[#d8e5fb] bg-white p-4 shadow-md shadow-brasper-indigoStrong/10">
     <div class="mb-4">
       <p class="text-[10px] font-semibold uppercase tracking-[0.18em] text-brasper-indigoStrong">
-        Configuración demo
+        {{ panelEyebrow }}
       </p>
-      <h2 class="text-xl font-semibold text-[#232b4d]">Tasas de Cambio (Demo)</h2>
+      <h2 class="text-xl font-semibold text-[#232b4d]">{{ panelTitle }}</h2>
       <p
         v-if="filterRatesToSelectedPair"
         class="mt-1 text-xs font-medium text-[#5b6b8c]"
@@ -16,7 +16,7 @@
     </div>
 
     <div v-if="calculatorStore.isLoading" class="mt-2 text-sm text-[#666]">
-      Cargando tasas demo...
+      {{ loadingMessage }}
     </div>
     <div v-else-if="calculatorStore.error" class="mt-2 rounded-lg bg-[#dc3545]/10 px-3 py-2 text-sm text-[#dc3545]">
       {{ calculatorStore.error }}
@@ -26,7 +26,7 @@
         {{ tasasStore.error }}
       </p>
       <div v-if="displayRates.length === 0" class="mt-3 rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs text-amber-950">
-        No hay fila de tasa trial para este par en el catálogo. Revisa en admin o cambia el par en la calculadora.
+        {{ emptyRatesMessage }}
       </div>
       <div v-else class="mt-3 space-y-2">
         <div
@@ -50,6 +50,7 @@
             </div>
             <div class="flex items-center gap-1.5 whitespace-nowrap">
               <button
+                v-if="showHistoryButton"
                 type="button"
                 class="rounded-md border border-[#bcd7ff] bg-[#eef5ff] px-2.5 py-1 text-xs font-medium text-brasper-indigoStrong hover:bg-[#e2eeff]"
                 @click="toggleHistory(rate.id)"
@@ -136,7 +137,7 @@ import type { ExchangeRate } from '@modules/calculator/domain/models'
 
 const props = withDefaults(
   defineProps<{
-    /** Si true, sincroniza con la calculadora principal (p. ej. modal de transacciones en API trial). */
+    /** Si true, sincroniza con la calculadora principal y guarda overrides locales para modo especial. */
     useMainCalculatorStore?: boolean
     /** Si true: solo la fila del par actual (origen → destino) de la calculadora. */
     filterRatesToSelectedPair?: boolean
@@ -151,6 +152,21 @@ const tasasStore = useTasasStore()
 
 const expandedHistoryId = ref<string | null>(null)
 const draftTaxes = ref<Record<string, string>>({})
+const showHistoryButton = computed(() => !props.useMainCalculatorStore)
+const panelEyebrow = computed(() =>
+  props.useMainCalculatorStore ? 'Configuración local' : 'Configuración demo'
+)
+const panelTitle = computed(() =>
+  props.useMainCalculatorStore ? 'Tasas de cambio (local)' : 'Tasas de cambio (demo)'
+)
+const loadingMessage = computed(() =>
+  props.useMainCalculatorStore ? 'Cargando tasas reales...' : 'Cargando tasas demo...'
+)
+const emptyRatesMessage = computed(() =>
+  props.useMainCalculatorStore
+    ? 'No hay fila de tasa para este par en el catálogo real. Revisa en admin o cambia el par en la calculadora.'
+    : 'No hay fila de tasa trial para este par en el catálogo. Revisa en admin o cambia el par en la calculadora.'
+)
 
 const sortedRates = computed(() =>
   [...calculatorStore.effectiveTaxRates].sort((a, b) => a.pair.localeCompare(b.pair))
@@ -238,6 +254,7 @@ function formatHistoryDate(value: unknown): string {
 }
 
 async function toggleHistory(taxRateId: string): Promise<void> {
+  if (!showHistoryButton.value) return
   if (expandedHistoryId.value === taxRateId) {
     expandedHistoryId.value = null
     return

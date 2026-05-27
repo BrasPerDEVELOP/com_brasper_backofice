@@ -151,6 +151,16 @@ describe('setCalculationMode conserva overrides especiales sin afectar normal', 
 
     expect(store.localTaxRateOverrides['tr-1']).toBe(1.550)
   })
+
+  it('cambiar a especial mantiene el catálogo real en el store principal', async () => {
+    const store = useCalculatorStore()
+    seed(store, { calculationMode: 'normal' })
+    vi.spyOn(store, 'loadData').mockResolvedValue(undefined)
+
+    await store.setCalculationMode('special')
+
+    expect(store.demoMode).toBe(false)
+  })
 })
 
 describe('aislamiento entre useCalculatorStore y useCalculatorDemoStore', () => {

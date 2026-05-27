@@ -610,8 +610,10 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
 
       this.calculationMode = mode
 
-      // Especial: catálogo trial; normal: producción (misma fórmula de comisión/tasa en ambos).
-      this.setDemoMode(mode === 'special')
+      // Especial usa el mismo catálogo real; solo aplica sobrescrituras locales.
+      if (!lockTrial) {
+        this.setDemoMode(false)
+      }
 
       if (mode === 'special') {
         this.inputMode = snap.inputMode

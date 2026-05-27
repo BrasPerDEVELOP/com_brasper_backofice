@@ -58,7 +58,7 @@
           v-if="showCoinCatalogReload"
           class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#e8eef8] bg-[#fbfdff] px-3 py-2"
         >
-          <span class="text-xs text-[#64748b]">Catálogo trial (tasas y comisiones)</span>
+          <span class="text-xs text-[#64748b]">{{ catalogReloadLabel }}</span>
           <button
             type="button"
             class="inline-flex items-center gap-1.5 rounded-lg border border-[#bcd7ff] bg-white px-3 py-1.5 text-xs font-semibold text-brasper-indigoStrong shadow-sm transition hover:bg-[#eef5ff] disabled:cursor-not-allowed disabled:opacity-50"
@@ -315,6 +315,12 @@ const props = withDefaults(
     couponAdjustedAmountSend: null,
     couponAdjustedAmountReceive: null
   }
+)
+
+const catalogReloadLabel = computed(() =>
+  props.variant === 'demo' || props.useTrialCoinApi
+    ? 'Catálogo trial (tasas y comisiones)'
+    : 'Catálogo real (tasas y comisiones)'
 )
 
 const {

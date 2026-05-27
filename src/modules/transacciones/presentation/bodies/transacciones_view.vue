@@ -50,7 +50,7 @@ const calculatorStore = useCalculatorStore();
 const cuponesStore = useCuponesStore();
 const authStore = useAuthStore();
 
-/** Catálogo coin (trial) listo para el paso Cotización sin parpadeo de carga. */
+/** Catálogo coin listo para el paso Cotización sin parpadeo de carga. */
 function transactionCatalogReadyForCurrentMode(): boolean {
   return (
     calculatorStore.taxRates.length > 0 &&
@@ -826,7 +826,7 @@ const salesAdvisorOptions = computed(() =>
     }),
 );
 
-/** Par de cotización (calculadora trial) para acotar listas de tasa/comisión en paso Datos. */
+/** Par de cotización para acotar listas de tasa/comisión en paso Datos. */
 function transactionQuoteCoinPair(): { from: string; to: string } {
   const from = (calculatorStore.currencyFrom ?? "").toLowerCase();
   const to = (calculatorStore.currencyTo ?? "").toLowerCase();
@@ -1314,6 +1314,11 @@ async function submitForm() {
       editingId.value
         ? "La transacción debe conservar tasa y comisión válidas para guardar"
         : "Tasa y comisión son obligatorios (usa la calculadora primero)";
+    return;
+  }
+  if (!editingId.value && !form.operation_number.trim()) {
+    transactionsStore.error =
+      "Indica el número de operación antes de guardar.";
     return;
   }
   const bankMeta = bankMetaFromDestinationAccount(
@@ -3856,11 +3861,10 @@ onMounted(() => {
               <p
                 class="text-center text-[10px] font-semibold uppercase tracking-[0.22em] text-brasper-indigoStrong"
               >
-                Cotización (prueba / trial)
+                Cotización
               </p>
               <CalculatorConversionCard
                 variant="production"
-                :use-trial-coin-api="true"
                 :show-send-cta="false"
                 :show-calculation-mode-toggle="true"
                 :show-coin-catalog-reload="true"
@@ -4555,11 +4559,12 @@ onMounted(() => {
 
               <div class="space-y-1.5 rounded-xl border border-[#d8e5fb] bg-white p-5 shadow-sm shadow-brasper-indigoStrong/5">
                 <label class="block text-sm font-medium text-[#374151]">
-                  Número de operación
+                  Número de operación *
                 </label>
                 <input
                   v-model.trim="form.operation_number"
                   type="text"
+                  required
                   class="w-full rounded-xl border border-[#dce3ef] bg-white px-3 py-2.5 text-sm text-[#374151] outline-none transition focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/15"
                   placeholder="Escribe el número de operación"
                   autocomplete="off"
