@@ -38,6 +38,12 @@ function seed(
   })
 }
 
+beforeEach(() => {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.clear()
+  }
+})
+
 // ─── tests ───────────────────────────────────────────────────────────────────
 
 describe('effectiveTaxRates getter', () => {
@@ -51,14 +57,14 @@ describe('effectiveTaxRates getter', () => {
 
   it('aplica el override cuando existe', () => {
     const store = useCalculatorStore()
-    seed(store)
+    seed(store, { calculationMode: 'special' })
     store.overrideLocalTaxRate('tr-1', 1.500)
     expect(store.effectiveTaxRates[0]?.rate).toBe(1.500)
   })
 
   it('NO muta taxRates al setear un override', () => {
     const store = useCalculatorStore()
-    seed(store)
+    seed(store, { calculationMode: 'special' })
     store.overrideLocalTaxRate('tr-1', 1.999)
     expect(store.taxRates[0]?.rate).toBe(1.438)   // intacto
     expect(store.effectiveTaxRates[0]?.rate).toBe(1.999)  // override aplicado
@@ -91,22 +97,21 @@ describe('result.rate usa effectiveTaxRates', () => {
     expect(store.result?.rate).toBe(1.600)
   })
 
-  it('modo normal no se ve afectado por overrides anteriores que fueron limpiados', () => {
+  it('modo normal ignora overrides especiales guardados', () => {
     const store = useCalculatorStore()
     seed(store, { calculationMode: 'normal' })
 
-    // Simula lo que hace setCalculationMode('normal'): limpia overrides
-    store.$patch({ localTaxRateOverrides: {} })
+    store.overrideLocalTaxRate('tr-1', 1.999)
     store.setAmountSend(1000)
 
     expect(store.result?.rate).toBe(1.438)
   })
 })
 
-describe('setCalculationMode limpia overrides al volver a normal', () => {
+describe('setCalculationMode conserva overrides especiales sin afectar normal', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
-  it('al cambiar a modo normal se limpia localTaxRateOverrides', async () => {
+  it('al cambiar a modo normal conserva localTaxRateOverrides', async () => {
     const store = useCalculatorStore()
     seed(store, { calculationMode: 'special' })
 
@@ -118,7 +123,7 @@ describe('setCalculationMode limpia overrides al volver a normal', () => {
 
     await store.setCalculationMode('normal')
 
-    expect(store.localTaxRateOverrides).toEqual({})
+    expect(store.localTaxRateOverrides['tr-1']).toBe(1.800)
   })
 
   it('al volver a normal, result.rate usa taxRates original (no el override)', async () => {
@@ -132,6 +137,7 @@ describe('setCalculationMode limpia overrides al volver a normal', () => {
 
     await store.setCalculationMode('normal')
     store.setAmountSend(1000)
+    expect(store.localTaxRateOverrides['tr-1']).toBe(1.999)
     expect(store.result?.rate).toBe(1.438)  // en normal: tasa original
   })
 
@@ -198,7 +204,7 @@ describe('aislamiento entre useCalculatorStore y useCalculatorDemoStore', () => 
   it('múltiples overrides: solo el id correcto es sobreescrito', () => {
     const store = useCalculatorStore()
     const rate2: ExchangeRate = { id: 'tr-2', pair: 'pen-usd', rate: 0.27, from: 'pen', to: 'usd' }
-    store.$patch({ taxRates: [RATE_PEN_BRL, rate2] })
+    store.$patch({ taxRates: [RATE_PEN_BRL, rate2], calculationMode: 'special' })
 
     store.overrideLocalTaxRate('tr-1', 1.600)
 

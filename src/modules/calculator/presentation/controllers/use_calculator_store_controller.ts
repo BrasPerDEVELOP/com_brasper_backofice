@@ -236,6 +236,7 @@ interface CalculatorState {
   specialReceiveManuallyEdited: boolean
   taxRates: ExchangeRate[]
   commissions: CommissionRange[]
+  catalogCache: Record<CalculatorCatalogMode, CalculatorCatalogCache | null>
   /** Sobreescrituras locales de tasa (id → valor). Solo activas en modo especial; la calculadora normal nunca las lee. */
   localTaxRateOverrides: Record<string, number>
   /** IDs para POST /transactions/ (tasa y comisión usadas en la calculadora). */
@@ -252,6 +253,50 @@ interface CalculatorState {
 
 const DEFAULT_FROM: CurrencyCode = 'pen'
 const DEFAULT_TO: CurrencyCode = 'brl'
+type CalculatorCatalogMode = 'normal' | 'trial'
+
+interface CalculatorCatalogCache {
+  currencies: CurrencyReadDTO[]
+  taxRates: ExchangeRate[]
+  commissions: CommissionRange[]
+}
+
+function localTaxRateOverridesStorageKey(lockTrial: boolean): string {
+  return lockTrial
+    ? 'calculator-demo.localTaxRateOverrides'
+    : 'calculator.localTaxRateOverrides'
+}
+
+function readLocalTaxRateOverrides(lockTrial: boolean): Record<string, number> {
+  if (typeof localStorage === 'undefined') return {}
+  try {
+    const raw = localStorage.getItem(localTaxRateOverridesStorageKey(lockTrial))
+    if (!raw) return {}
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    return Object.fromEntries(
+      Object.entries(parsed)
+        .filter(([, value]) => typeof value === 'number' && Number.isFinite(value))
+    ) as Record<string, number>
+  } catch {
+    return {}
+  }
+}
+
+function writeLocalTaxRateOverrides(
+  lockTrial: boolean,
+  overrides: Record<string, number>
+): void {
+  if (typeof localStorage === 'undefined') return
+  try {
+    localStorage.setItem(
+      localTaxRateOverridesStorageKey(lockTrial),
+      JSON.stringify(overrides)
+    )
+  } catch {
+    // localStorage puede fallar en modo privado o SSR; el estado Pinia sigue funcionando.
+  }
+}
 
 /** Evita peticiones duplicadas si varios componentes llaman `loadData` al mismo tiempo. */
 const calculatorLoadDataInflight = new Map<string, Promise<void>>()
@@ -278,7 +323,11 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
     specialReceiveManuallyEdited: false,
     taxRates: [],
     commissions: [],
-    localTaxRateOverrides: {},
+    catalogCache: {
+      normal: null,
+      trial: null
+    },
+    localTaxRateOverrides: readLocalTaxRateOverrides(lockTrial),
     selectedTaxRateId: null,
     selectedCommissionId: null,
     isLoading: false,
@@ -302,11 +351,13 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
     },
 
     /**
-     * Tasas con sobreescrituras locales aplicadas.
-     * La separación normal/especial se garantiza limpiando `localTaxRateOverrides`
-     * en `setCalculationMode('normal')`, no condicionando el getter al modo.
+     * Tasas con sobreescrituras locales aplicadas solo donde corresponde.
+     * El modo normal conserva el mapa, pero nunca lo lee.
      */
     effectiveTaxRates(state): ExchangeRate[] {
+      if (!lockTrial && state.calculationMode !== 'special') {
+        return state.taxRates
+      }
       if (Object.keys(state.localTaxRateOverrides).length === 0) {
         return state.taxRates
       }
@@ -455,6 +506,17 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
       }
 
       const useTrial = lockTrial || this.demoMode
+      const cacheKey: CalculatorCatalogMode = useTrial ? 'trial' : 'normal'
+      const cachedCatalog = this.catalogCache[cacheKey]
+      if (options?.background && cachedCatalog) {
+        this.currencies = cachedCatalog.currencies
+        this.taxRates = cachedCatalog.taxRates
+        this.commissions = cachedCatalog.commissions
+        this.lastCoinCatalogWasTrial = useTrial
+        this.updateSelectedIds()
+        return
+      }
+
       const catalogMatchesEndpoint =
         this.taxRates.length > 0 &&
         this.commissions.length > 0 &&
@@ -474,6 +536,11 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
           this.currencies = data.currencies
           this.taxRates = data.taxRates
           this.commissions = data.commissions
+          this.catalogCache[cacheKey] = {
+            currencies: data.currencies,
+            taxRates: data.taxRates,
+            commissions: data.commissions
+          }
           this.lastCoinCatalogWasTrial = useTrial
           this.updateSelectedIds()
         } catch (e) {
@@ -545,9 +612,6 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
 
       // Especial: catálogo trial; normal: producción (misma fórmula de comisión/tasa en ambos).
       this.setDemoMode(mode === 'special')
-      if (mode === 'normal') {
-        this.localTaxRateOverrides = {}
-      }
 
       if (mode === 'special') {
         this.inputMode = snap.inputMode
@@ -669,6 +733,7 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
      */
     overrideLocalTaxRate(id: string, newRate: number) {
       this.localTaxRateOverrides = { ...this.localTaxRateOverrides, [id]: newRate }
+      writeLocalTaxRateOverrides(lockTrial, this.localTaxRateOverrides)
       this.updateSelectedIds()
     }
   }

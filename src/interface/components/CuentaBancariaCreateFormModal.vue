@@ -141,6 +141,20 @@ async function submitCreate() {
     cuentasStore.error = 'Seleccione un cliente'
     return
   }
+  const accountNumber = form.account_number.trim()
+  const accountNumberConfirmation = form.account_number_confirmation.trim()
+  if (!accountNumber) {
+    cuentasStore.error = 'Ingrese el número de cuenta'
+    return
+  }
+  if (!accountNumberConfirmation) {
+    cuentasStore.error = 'Confirme el número de cuenta'
+    return
+  }
+  if (accountNumber !== accountNumberConfirmation) {
+    cuentasStore.error = 'El número de cuenta y su confirmación no coinciden'
+    return
+  }
   try {
     const payload: Parameters<typeof cuentasStore.createBankAccount>[0] = {
       bank_id: form.bank_id,
@@ -156,8 +170,8 @@ async function submitCreate() {
       ruc_number: toIntOrNull(form.ruc_number),
       legal_representative_name: form.legal_representative_name || null,
       legal_representative_document: toIntOrNull(form.legal_representative_document),
-      account_number: toIntOrNull(form.account_number),
-      account_number_confirmation: toIntOrNull(form.account_number_confirmation),
+      account_number: toIntOrNull(accountNumber),
+      account_number_confirmation: toIntOrNull(accountNumberConfirmation),
       cci_number: toIntOrNull(form.cci_number),
       cci_number_confirmation: toIntOrNull(form.cci_number_confirmation),
       pix_key: form.pix_key || null,
@@ -399,10 +413,11 @@ watch(
             </h3>
             <div class="grid gap-6 sm:grid-cols-2">
               <div class="space-y-1.5">
-                <label class="block text-sm font-medium text-[#374151]">Número de cuenta</label>
+                <label class="block text-sm font-medium text-[#374151]">Número de cuenta *</label>
                 <input
                   :value="form.account_number"
                   type="text"
+                  required
                   class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
                   inputmode="numeric"
                   @keydown="onNumericKeydown"
@@ -411,11 +426,12 @@ watch(
               </div>
               <div class="space-y-1.5">
                 <label class="block text-sm font-medium text-[#374151]"
-                  >Confirmar número de cuenta</label
+                  >Confirmar número de cuenta *</label
                 >
                 <input
                   :value="form.account_number_confirmation"
                   type="text"
+                  required
                   class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
                   inputmode="numeric"
                   @keydown="onNumericKeydown"

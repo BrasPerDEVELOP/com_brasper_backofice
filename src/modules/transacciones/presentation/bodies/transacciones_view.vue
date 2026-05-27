@@ -613,9 +613,11 @@ function normalizeSelectId(v: unknown): string {
 const destinationAccountOptions = computed(() => {
   const userId = form.user_id?.trim();
   const currency = selectedAccountCurrencies.value.destination;
+  const bankId = destinationBankFilterId.value?.trim();
   const base = cuentasStore.bankAccounts
     .filter((a) => bankAccountMatchesSide(a, "destination"))
     .filter((a) => bankAccountMatchesCurrency(a, currency))
+    .filter((a) => !bankId || String(a.bank_id ?? "").trim() === bankId)
     .filter(
       (a) => !userId || String(a.user_id ?? "").trim() === userId,
     )
@@ -673,9 +675,9 @@ function onBancoCrudSaved(payload?: {
   void cuentasStore.loadBanks(true);
 }
 
-/** Bancos del catálogo filtrados solo por la moneda de "Tú envías". */
+/** Bancos del catálogo filtrados por la moneda de destino de la cotización. */
 const destinationBankFilterOptions = computed(() => {
-  const currency = selectedAccountCurrencies.value.origin;
+  const currency = selectedAccountCurrencies.value.destination;
   const opts = cuentasStore.banks
     .filter((b) => {
       const bankCurrency = normalizeCurrencyCode(b.currency);
@@ -1241,9 +1243,9 @@ async function hydrateEditForm(row: Transaction) {
     form.checked_image = null;
     editSourceTransaction.value = row;
     {
-      const originId = form.bank_account_origin_id?.trim();
-      const acc = originId
-        ? cuentasStore.bankAccounts.find((a) => String(a.id) === originId)
+      const destinationId = form.bank_account_destination_id?.trim();
+      const acc = destinationId
+        ? cuentasStore.bankAccounts.find((a) => String(a.id) === destinationId)
         : undefined;
       destinationBankFilterId.value =
         acc?.bank_id?.trim() ?? row.bank_id?.trim() ?? "";
@@ -2142,6 +2144,21 @@ watch(
       form.agent_id = "";
     }
     destinationBankFilterId.value = "";
+  },
+);
+
+watch(
+  destinationBankFilterId,
+  (bankId) => {
+    if (isHydratingTransactionForm.value) return;
+    const selectedId = form.bank_account_destination_id?.trim();
+    if (!selectedId || !bankId?.trim()) return;
+    const selectedAccount = cuentasStore.bankAccounts.find(
+      (a) => String(a.id) === selectedId,
+    );
+    if (String(selectedAccount?.bank_id ?? "").trim() !== bankId.trim()) {
+      form.bank_account_destination_id = "";
+    }
   },
 );
 
