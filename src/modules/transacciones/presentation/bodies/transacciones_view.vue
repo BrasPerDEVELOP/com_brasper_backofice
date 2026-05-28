@@ -76,7 +76,6 @@ const showBancoCrudModal = ref(false);
 /** Abre `BancoCrudModal` directo en formulario de alta (tuerca junto a Banco). */
 const bancoCrudOpenForCreate = ref(false);
 const bankAccountCreateFlow = ref<"origin" | "destination">("origin");
-const TRANSACTION_BANK_MODAL_COUNTRY = "pe" as const;
 const transactionBankModalHolder = ref<"natural" | "juridica">("natural");
 const previewTransaction = ref<Transaction | null>(null);
 const previewLoading = ref(false);
@@ -313,11 +312,18 @@ function openBankAccountModalFromTransaction(flow: "origin" | "destination") {
   showBankAccountCreateModal.value = true;
 }
 
-function onTransactionBankAccountCreated(account: BankAccount) {
+async function onTransactionBankAccountCreated(account: BankAccount) {
+  const userId = form.user_id?.trim();
+  if (userId) {
+    await cuentasStore.loadBankAccountsForTransactionUser(userId);
+  }
   if (bankAccountCreateFlow.value === "origin") {
     form.bank_account_origin_id = account.id;
   } else {
     form.bank_account_destination_id = account.id;
+    if (account.bank_id?.trim()) {
+      destinationBankFilterId.value = account.bank_id.trim();
+    }
   }
 }
 
@@ -412,6 +418,15 @@ const selectedAccountCurrencies = computed(() => {
       selectedRate?.coin_b ?? calculatorStore.currencyTo,
     ),
   };
+});
+
+/** País del modal de cuenta según moneda de destino de la cotización (BR para BRL, PE para PEN). */
+const transactionBankModalCountry = computed((): "pe" | "br" => {
+  const dest = selectedAccountCurrencies.value.destination;
+  if (dest === "BRL") return "br";
+  if (dest === "PEN") return "pe";
+  const to = (calculatorStore.currencyTo ?? "").trim().toLowerCase();
+  return to === "brl" ? "br" : "pe";
 });
 
 function getTransactionCurrencies(t: Transaction, fallbackToSelected = false) {
@@ -583,6 +598,17 @@ function mergeMissingSelectedAccount(
   return [...options, mapAccount(acc)];
 }
 
+function bankAccountsForSelectedClient(): BankAccount[] {
+  const userId = form.user_id?.trim();
+  if (!userId) return [];
+  if (cuentasStore.transactionFormBankAccounts.length > 0) {
+    return cuentasStore.transactionFormBankAccounts;
+  }
+  return cuentasStore.bankAccounts.filter(
+    (a) => String(a.user_id ?? "").trim() === userId,
+  );
+}
+
 function isBankAccountSelectable(
   id: string,
   flow: "origin" | "destination",
@@ -591,12 +617,16 @@ function isBankAccountSelectable(
   const accountId = id?.trim();
   if (!accountId) return true;
   const userId = form.user_id?.trim();
-  const account = cuentasStore.bankAccounts.find(
-    (a) => String(a.id) === accountId,
-  );
+  const account =
+    bankAccountsForSelectedClient().find((a) => String(a.id) === accountId) ??
+    cuentasStore.bankAccounts.find((a) => String(a.id) === accountId);
   if (!account) return false;
-  if (!bankAccountMatchesSide(account, flow)) return false;
+  if (flow === "origin" && !bankAccountMatchesSide(account, flow)) return false;
   if (userId && String(account.user_id ?? "").trim() !== userId) return false;
+  if (flow === "destination") {
+    const bankId = destinationBankFilterId.value?.trim();
+    if (bankId && String(account.bank_id ?? "").trim() !== bankId) return false;
+  }
   return bankAccountMatchesCurrency(account, expectedCurrency);
 }
 
@@ -612,15 +642,12 @@ function normalizeSelectId(v: unknown): string {
 
 const destinationAccountOptions = computed(() => {
   const userId = form.user_id?.trim();
+  if (!userId) return [];
   const currency = selectedAccountCurrencies.value.destination;
   const bankId = destinationBankFilterId.value?.trim();
-  const base = cuentasStore.bankAccounts
-    .filter((a) => bankAccountMatchesSide(a, "destination"))
+  const base = bankAccountsForSelectedClient()
     .filter((a) => bankAccountMatchesCurrency(a, currency))
     .filter((a) => !bankId || String(a.bank_id ?? "").trim() === bankId)
-    .filter(
-      (a) => !userId || String(a.user_id ?? "").trim() === userId,
-    )
     .map(destinationBankAccountToOption);
   return mergeMissingSelectedAccount(
     base,
@@ -628,6 +655,11 @@ const destinationAccountOptions = computed(() => {
     currency,
     destinationBankAccountToOption,
   );
+});
+
+const showDestinationAccountsEmptyHint = computed(() => {
+  if (!form.user_id?.trim()) return false;
+  return destinationAccountOptions.value.length === 0;
 });
 
 function bankCatalogOptionLabel(b: BankOption): string {
@@ -1003,6 +1035,7 @@ function resetForm() {
   editingId.value = null;
   editSourceTransaction.value = null;
   destinationBankFilterId.value = "";
+  void cuentasStore.loadBankAccountsForTransactionUser(undefined);
   calculatorStore.resetCalculatorMode();
   calculatorStore.resetAmounts();
   calculatorStore.updateSelectedIds();
@@ -1204,6 +1237,9 @@ async function hydrateEditForm(row: Transaction) {
   isHydratingTransactionForm.value = true;
   try {
     form.user_id = resolvedUserId;
+    if (resolvedUserId) {
+      await cuentasStore.loadBankAccountsForTransactionUser(resolvedUserId);
+    }
     form.agent_id = resolvedAgentId;
     form.bank_account_origin_id = normalizeSelectId(
       row.bank_account_origin_id ??
@@ -2139,7 +2175,7 @@ function loadTransactions() {
 
 watch(
   () => form.user_id,
-  () => {
+  (userId) => {
     if (isHydratingTransactionForm.value) return;
     form.bank_account_origin_id = "";
     form.bank_account_destination_id = "";
@@ -2149,6 +2185,7 @@ watch(
       form.agent_id = "";
     }
     destinationBankFilterId.value = "";
+    void cuentasStore.loadBankAccountsForTransactionUser(userId?.trim() || undefined);
   },
 );
 
@@ -2178,13 +2215,14 @@ watch(
     () => form.user_id,
     () => selectedAccountCurrencies.value.origin,
     () => selectedAccountCurrencies.value.destination,
+    () => cuentasStore.transactionFormBankAccounts.length,
     () => cuentasStore.bankAccounts.length,
     () => cuentasStore.banks.length,
+    () => destinationBankFilterId.value,
   ],
   () => {
     if (isHydratingTransactionForm.value) return;
-    if (cuentasStore.bankAccounts.length === 0 || cuentasStore.banks.length === 0)
-      return;
+    if (cuentasStore.banks.length === 0) return;
 
     if (
       form.bank_account_origin_id &&
@@ -4128,6 +4166,22 @@ onMounted(() => {
                     No se encontró el banco de esta cuenta en el catálogo local. Recarga la página
                     o revisa la cuenta en Cuentas bancarias.
                   </div>
+                  <p
+                    v-if="showDestinationAccountsEmptyHint"
+                    class="sm:col-span-2 rounded-lg border border-amber-200 bg-amber-50/90 px-3 py-2 text-xs text-amber-950"
+                  >
+                    No hay cuentas de este cliente para la moneda de destino
+                    <template v-if="selectedAccountCurrencies.destination">
+                      ({{ selectedAccountCurrencies.destination }})
+                    </template>
+                    <template v-if="destinationBankFilterId">
+                      y la razón social seleccionada. Prueba «Todos» en razón social o crea una
+                      cuenta con el botón +.
+                    </template>
+                    <template v-else>
+                      . Crea una con el botón + junto a cuenta destino.
+                    </template>
+                  </p>
                 </div>
               </section>
 
@@ -4817,7 +4871,7 @@ onMounted(() => {
     <CuentaBancariaCreateFormModal
       v-model="showBankAccountCreateModal"
       :account-flow="bankAccountCreateFlow"
-      :bank-country="TRANSACTION_BANK_MODAL_COUNTRY"
+      :bank-country="transactionBankModalCountry"
       :holder-type="transactionBankModalHolder"
       :locked-user-id="form.user_id?.trim() || undefined"
       @created="onTransactionBankAccountCreated"

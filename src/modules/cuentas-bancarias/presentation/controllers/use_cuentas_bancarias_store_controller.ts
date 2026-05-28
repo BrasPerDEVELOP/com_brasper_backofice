@@ -15,6 +15,8 @@ import { useAuthStore } from '@modules/auth/presentation/controllers/use_auth_st
 
 interface CuentasBancariasState {
   bankAccounts: BankAccount[]
+  /** Cuentas del cliente seleccionado en el formulario de transacciones (no sustituye `bankAccounts`). */
+  transactionFormBankAccounts: BankAccount[]
   banks: BankOption[]
   clientUsers: UserOption[]
   /** Cliente + comercial + admin (selector transacciones / etiquetas). */
@@ -39,6 +41,7 @@ function mergeUserOption(list: UserOption[], user: UserOption): UserOption[] {
 export const useCuentasBancariasStore = defineStore('cuentasBancarias', {
   state: (): CuentasBancariasState => ({
     bankAccounts: [],
+    transactionFormBankAccounts: [],
     banks: [],
     clientUsers: [],
     transactionFormUsers: [],
@@ -62,6 +65,22 @@ export const useCuentasBancariasStore = defineStore('cuentasBancarias', {
         this.error = e instanceof Error ? e.message : 'Error al cargar cuentas bancarias'
       } finally {
         this.isLoading = false
+      }
+    },
+
+    async loadBankAccountsForTransactionUser(userId?: string) {
+      const id = userId?.trim()
+      if (!id) {
+        this.transactionFormBankAccounts = []
+        return
+      }
+      try {
+        const repo = getRepository()
+        const useCase = new GetBankAccountsUseCase(repo)
+        this.transactionFormBankAccounts = await useCase.execute({ userId: id })
+      } catch (e) {
+        console.warn('Error al cargar cuentas del cliente (transacción):', e)
+        this.transactionFormBankAccounts = []
       }
     },
 
@@ -159,6 +178,7 @@ export const useCuentasBancariasStore = defineStore('cuentasBancarias', {
         const repo = getRepository()
         const created = await repo.createBankAccount(fullPayload)
         await this.loadBankAccounts()
+        await this.loadBankAccountsForTransactionUser(userId)
         return created
       } catch (e) {
         this.error = e instanceof Error ? e.message : 'Error al crear cuenta bancaria'
