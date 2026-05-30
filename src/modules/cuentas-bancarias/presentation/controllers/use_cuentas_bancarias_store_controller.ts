@@ -17,6 +17,9 @@ interface CuentasBancariasState {
   bankAccounts: BankAccount[]
   /** Cuentas del cliente seleccionado en el formulario de transacciones (no sustituye `bankAccounts`). */
   transactionFormBankAccounts: BankAccount[]
+  /** `user_id` al que pertenecen `transactionFormBankAccounts` (evita mezclar clientes al cambiar). */
+  transactionFormBankAccountsUserId: string | null
+  transactionFormBankAccountsLoading: boolean
   banks: BankOption[]
   clientUsers: UserOption[]
   /** Cliente + comercial + admin (selector transacciones / etiquetas). */
@@ -42,6 +45,8 @@ export const useCuentasBancariasStore = defineStore('cuentasBancarias', {
   state: (): CuentasBancariasState => ({
     bankAccounts: [],
     transactionFormBankAccounts: [],
+    transactionFormBankAccountsUserId: null,
+    transactionFormBankAccountsLoading: false,
     banks: [],
     clientUsers: [],
     transactionFormUsers: [],
@@ -72,15 +77,24 @@ export const useCuentasBancariasStore = defineStore('cuentasBancarias', {
       const id = userId?.trim()
       if (!id) {
         this.transactionFormBankAccounts = []
+        this.transactionFormBankAccountsUserId = null
+        this.transactionFormBankAccountsLoading = false
         return
       }
+      this.transactionFormBankAccountsLoading = true
+      this.transactionFormBankAccounts = []
+      this.transactionFormBankAccountsUserId = null
       try {
         const repo = getRepository()
         const useCase = new GetBankAccountsUseCase(repo)
         this.transactionFormBankAccounts = await useCase.execute({ userId: id })
+        this.transactionFormBankAccountsUserId = id
       } catch (e) {
         console.warn('Error al cargar cuentas del cliente (transacción):', e)
         this.transactionFormBankAccounts = []
+        this.transactionFormBankAccountsUserId = id
+      } finally {
+        this.transactionFormBankAccountsLoading = false
       }
     },
 

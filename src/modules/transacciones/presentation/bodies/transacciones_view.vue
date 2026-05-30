@@ -89,7 +89,7 @@ const userFilter = ref<string>("");
 const bankAccountFilter = ref<string>("");
 const createdAtFrom = ref<string>("");
 const createdAtTo = ref<string>("");
-/** Filtro opcional por `bank_id` antes de elegir cuenta destino (paso Datos). */
+/** Razón social (catálogo de bancos); independiente del selector de cuenta destino. */
 const destinationBankFilterId = ref("");
 const perPage = ref(10);
 const currentPage = ref(1);
@@ -358,7 +358,17 @@ function destinationBankAccountToOption(a: BankAccount): {
   if (a.cci_number?.trim()) nums.push(`CCI: ${a.cci_number.trim()}`);
   if (a.pix_key?.trim()) nums.push(`PIX: ${a.pix_key.trim()}`);
   const accNum = nums.length > 0 ? nums.join(" / ") : "—";
-  return { value: a.id, label: `${bankName} · ${accNum}` };
+  return { value: String(a.id).trim(), label: `${bankName} · ${accNum}` };
+}
+
+function findBankAccountById(accountId: string): BankAccount | undefined {
+  const id = accountId?.trim();
+  if (!id) return undefined;
+  return (
+    bankAccountsForSelectedClient().find((a) => String(a.id).trim() === id) ??
+    cuentasStore.transactionFormBankAccounts.find((a) => String(a.id).trim() === id) ??
+    cuentasStore.bankAccounts.find((a) => String(a.id).trim() === id)
+  );
 }
 
 /** Metadatos de banco para POST/PUT, alineados con cuenta destino y catálogo `banks`. */
@@ -367,7 +377,7 @@ function bankMetaFromDestinationAccount(
 ): { bank_id: string; bank_name: string; company_name: string } | null {
   const trimmed = accountId?.trim();
   if (!trimmed) return null;
-  const account = cuentasStore.bankAccounts.find((a) => a.id === trimmed);
+  const account = findBankAccountById(trimmed);
   if (!account?.bank_id?.trim()) return null;
   const bank = cuentasStore.banks.find((b) => b.id === account.bank_id);
   const bank_name = (bank?.bank ?? "").trim();
@@ -402,7 +412,7 @@ function getBankAccountCurrency(a: BankAccount): string {
 
 function getBankAccountCurrencyById(id: string | undefined): string {
   if (!id?.trim()) return "";
-  const account = cuentasStore.bankAccounts.find((a) => a.id === id);
+  const account = findBankAccountById(id);
   return account ? getBankAccountCurrency(account) : "";
 }
 
@@ -592,7 +602,7 @@ function mergeMissingSelectedAccount(
   const id = selectedId?.trim();
   if (!id) return options;
   if (options.some((o) => String(o.value) === id)) return options;
-  const acc = cuentasStore.bankAccounts.find((a) => String(a.id) === id);
+  const acc = findBankAccountById(id);
   if (!acc) return options;
   if (!bankAccountMatchesCurrency(acc, expectedCurrency)) return options;
   return [...options, mapAccount(acc)];
@@ -601,12 +611,10 @@ function mergeMissingSelectedAccount(
 function bankAccountsForSelectedClient(): BankAccount[] {
   const userId = form.user_id?.trim();
   if (!userId) return [];
-  if (cuentasStore.transactionFormBankAccounts.length > 0) {
+  if (cuentasStore.transactionFormBankAccountsUserId?.trim() === userId) {
     return cuentasStore.transactionFormBankAccounts;
   }
-  return cuentasStore.bankAccounts.filter(
-    (a) => String(a.user_id ?? "").trim() === userId,
-  );
+  return [];
 }
 
 function isBankAccountSelectable(
@@ -617,15 +625,14 @@ function isBankAccountSelectable(
   const accountId = id?.trim();
   if (!accountId) return true;
   const userId = form.user_id?.trim();
-  const account =
-    bankAccountsForSelectedClient().find((a) => String(a.id) === accountId) ??
-    cuentasStore.bankAccounts.find((a) => String(a.id) === accountId);
+  const account = findBankAccountById(accountId);
   if (!account) return false;
   if (flow === "origin" && !bankAccountMatchesSide(account, flow)) return false;
-  if (userId && String(account.user_id ?? "").trim() !== userId) return false;
-  if (flow === "destination") {
-    const bankId = destinationBankFilterId.value?.trim();
-    if (bankId && String(account.bank_id ?? "").trim() !== bankId) return false;
+  if (flow === "destination" && userId) {
+    const fromClientList = bankAccountsForSelectedClient().some(
+      (a) => String(a.id).trim() === accountId,
+    );
+    if (!fromClientList) return false;
   }
   return bankAccountMatchesCurrency(account, expectedCurrency);
 }
@@ -644,10 +651,9 @@ const destinationAccountOptions = computed(() => {
   const userId = form.user_id?.trim();
   if (!userId) return [];
   const currency = selectedAccountCurrencies.value.destination;
-  const bankId = destinationBankFilterId.value?.trim();
   const base = bankAccountsForSelectedClient()
+    .filter((a) => String(a.id ?? "").trim())
     .filter((a) => bankAccountMatchesCurrency(a, currency))
-    .filter((a) => !bankId || String(a.bank_id ?? "").trim() === bankId)
     .map(destinationBankAccountToOption);
   return mergeMissingSelectedAccount(
     base,
@@ -1280,9 +1286,7 @@ async function hydrateEditForm(row: Transaction) {
     editSourceTransaction.value = row;
     {
       const destinationId = form.bank_account_destination_id?.trim();
-      const acc = destinationId
-        ? cuentasStore.bankAccounts.find((a) => String(a.id) === destinationId)
-        : undefined;
+      const acc = destinationId ? findBankAccountById(destinationId) : undefined;
       destinationBankFilterId.value =
         acc?.bank_id?.trim() ?? row.bank_id?.trim() ?? "";
     }
@@ -2208,21 +2212,6 @@ watch(
   },
 );
 
-watch(
-  destinationBankFilterId,
-  (bankId) => {
-    if (isHydratingTransactionForm.value) return;
-    const selectedId = form.bank_account_destination_id?.trim();
-    if (!selectedId || !bankId?.trim()) return;
-    const selectedAccount = cuentasStore.bankAccounts.find(
-      (a) => String(a.id) === selectedId,
-    );
-    if (String(selectedAccount?.bank_id ?? "").trim() !== bankId.trim()) {
-      form.bank_account_destination_id = "";
-    }
-  },
-);
-
 watch(showBancoCrudModal, (open) => {
   if (!open) bancoCrudOpenForCreate.value = false;
 });
@@ -2235,12 +2224,14 @@ watch(
     () => selectedAccountCurrencies.value.origin,
     () => selectedAccountCurrencies.value.destination,
     () => cuentasStore.transactionFormBankAccounts.length,
+    () => cuentasStore.transactionFormBankAccountsUserId,
+    () => cuentasStore.transactionFormBankAccountsLoading,
     () => cuentasStore.bankAccounts.length,
     () => cuentasStore.banks.length,
-    () => destinationBankFilterId.value,
   ],
   () => {
     if (isHydratingTransactionForm.value) return;
+    if (cuentasStore.transactionFormBankAccountsLoading) return;
     if (cuentasStore.banks.length === 0) return;
 
     if (
@@ -4144,7 +4135,7 @@ onMounted(() => {
                       Cliente y cuentas
                     </h3>
                     <p class="text-xs text-[#6b7280]">
-                      Filtradas por el cliente seleccionado
+                      La cuenta destino se filtra por el cliente seleccionado
                     </p>
                   </div>
                 </div>
@@ -4299,13 +4290,7 @@ onMounted(() => {
                     <template v-if="selectedAccountCurrencies.destination">
                       ({{ selectedAccountCurrencies.destination }})
                     </template>
-                    <template v-if="destinationBankFilterId">
-                      y la razón social seleccionada. Prueba «Todos» en razón social o crea una
-                      cuenta con el botón +.
-                    </template>
-                    <template v-else>
-                      . Crea una con el botón + junto a cuenta destino.
-                    </template>
+                    . Crea una con el botón + junto a cuenta destino.
                   </p>
                 </div>
               </section>
