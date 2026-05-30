@@ -9,7 +9,7 @@ import { useComisionesStore } from "@modules/comisiones/presentation/controllers
 import { useCuentasBancariasStore } from "@modules/cuentas-bancarias/presentation/controllers/use_cuentas_bancarias_store_controller";
 import type { BankAccount } from "@modules/cuentas-bancarias/domain/models";
 
-export type PreviewItemVariant = "default" | "mono" | "status";
+export type PreviewItemVariant = "default" | "mono" | "status" | "separator";
 
 export type PreviewItem = {
   label: string;
@@ -98,7 +98,7 @@ export function useTransactionPreviewController() {
   function getBankLabel(id: string | undefined): string {
     if (!id?.trim()) return "—";
     const acc = cuentasStore.bankAccounts.find((a) => a.id === id);
-    return acc ? bankAccountToLabel(acc) : id;
+    return acc ? bankAccountToLabel(acc) : "—";
   }
 
   function getBankAccountCurrency(id: string | undefined): string {
@@ -127,7 +127,7 @@ export function useTransactionPreviewController() {
     const u =
       cuentasStore.transactionFormUsers.find((x) => x.id === id) ??
       cuentasStore.clientUsers.find((x) => x.id === id);
-    return u?.name ?? id;
+    return u?.name ?? "—";
   }
 
   function getStatusLabel(status: string | undefined): string {
@@ -156,13 +156,13 @@ export function useTransactionPreviewController() {
   function getTaxRateLabel(id: string | undefined): string {
     if (!id?.trim()) return "—";
     const r = tasasStore.taxRates.find((x) => x.id === id);
-    return r ? `${r.coin_a}-${r.coin_b} (${r.tax})` : id;
+    return r ? `${r.coin_a}-${r.coin_b} (${r.tax})` : "—";
   }
 
   function getCommissionLabel(id: string | undefined): string {
     if (!id?.trim()) return "—";
     const c = comisionesStore.commissions.find((x) => x.id === id);
-    return c ? `${c.coin_a}-${c.coin_b} (${c.percentage}%)` : id;
+    return c ? `${c.coin_a}-${c.coin_b} (${c.percentage}%)` : "—";
   }
 
   async function ensurePreviewCatalogLoaded(): Promise<void> {
@@ -223,6 +223,8 @@ export function useTransactionPreviewController() {
       ],
     });
 
+    const razonSocial = typeof rec.company_name === "string" ? rec.company_name.trim() : "";
+
     sections.push({
       id: "participantes",
       title: "Participantes",
@@ -230,10 +232,7 @@ export function useTransactionPreviewController() {
       items: [
         { label: "Cliente", value: getClientLabel(rec.user_id as string) },
         { label: "Ventas / asesor", value: getClientLabel(rec.agent_id as string) },
-        {
-          label: "Cuenta origen",
-          value: getBankLabel(rec.bank_account_origin_id as string),
-        },
+        { label: "Razón social", value: razonSocial || "—" },
         {
           label: "Cuenta destino",
           value: getBankLabel(rec.bank_account_destination_id as string),
@@ -254,10 +253,6 @@ export function useTransactionPreviewController() {
           label: "Comisión",
           value: getCommissionLabel(rec.commission_id as string),
         },
-        {
-          label: "Tipo de cambio",
-          value: formatMoney(rec.tax_amount),
-        },
       ],
     });
 
@@ -266,80 +261,67 @@ export function useTransactionPreviewController() {
         (rec.coupon_discount_code && String(rec.coupon_discount_code).trim()),
     );
     const currencies = getTransactionCurrencies(rec);
+
+    // Montos finales: si hay cupón se usan los valores ajustados
+    const displayOrigin = hasCoupon && rec.coupon_origin_amount != null && rec.coupon_origin_amount !== ""
+      ? rec.coupon_origin_amount
+      : rec.origin_amount;
+    const displayDestination = hasCoupon && rec.coupon_destination_amount != null && rec.coupon_destination_amount !== ""
+      ? rec.coupon_destination_amount
+      : rec.destination_amount;
+
+    const from = currencies.origin || "?";
+    const to = currencies.destination || "?";
+
+    // Flujo de remesa: envías → tipo de cambio → recibe | comisión → cupón → total
     const amountItems: PreviewItem[] = [
       {
-        label: hasCoupon ? "Monto origen (Base)" : "Monto origen",
-        value: formatMoneyWithCurrency(rec.origin_amount, currencies.origin),
-      },
-      {
-        label: hasCoupon ? "Monto destino (Base)" : "Monto destino",
-        value: formatMoneyWithCurrency(
-          rec.destination_amount,
-          currencies.destination,
-        ),
+        label: "Envías",
+        value: formatMoneyWithCurrency(displayOrigin, currencies.origin),
       },
     ];
-    const commissionRes =
-      rec.resultado_comision ?? rec.commission_result ?? null;
+
+    if (rec.tax_amount != null && rec.tax_amount !== "") {
+      amountItems.push({
+        label: "Tipo de cambio",
+        value: `1 ${from} = ${formatMoney(rec.tax_amount)} ${to}`,
+      });
+    }
+
+    amountItems.push({
+      label: "El destinatario recibe",
+      value: formatMoneyWithCurrency(displayDestination, currencies.destination),
+    });
+
+    // Separador visual entre el bloque de conversión y el bloque de fees
+    amountItems.push({ label: "", value: "", variant: "separator" });
+
+    // Comisión (base si hay cupón)
+    const commissionRes = rec.resultado_comision ?? rec.commission_result ?? null;
     if (commissionRes != null && commissionRes !== "")
       amountItems.push({
-        label: hasCoupon ? "Comisión (Base)" : "Resultado comisión",
+        label: hasCoupon ? "Comisión (base)" : "Comisión",
         value: formatMoneyWithCurrency(commissionRes, currencies.origin),
       });
 
-    const totalEnviarBase = rec.total_a_enviar ?? rec.total_to_send ?? null;
-    if (totalEnviarBase != null && totalEnviarBase !== "")
+    // Descuento cupón
+    if (hasCoupon && rec.coupon_discount_commission != null && rec.coupon_discount_commission !== "") {
+      const code = rec.coupon_discount_code ? ` ${String(rec.coupon_discount_code).trim()}` : "";
       amountItems.push({
-        label: hasCoupon ? "Total a enviar (Base)" : "Total a enviar",
-        value: formatMoneyWithCurrency(totalEnviarBase, currencies.origin),
+        label: `Cupón${code}`,
+        value: `-${formatMoneyWithCurrency(rec.coupon_discount_commission, currencies.origin)}`,
       });
-
-    if (hasCoupon) {
-      if (
-        rec.coupon_discount_commission != null &&
-        rec.coupon_discount_commission !== ""
-      )
-        amountItems.push({
-          label: "Descuento cupón",
-          value: `-${formatMoneyWithCurrency(
-            rec.coupon_discount_commission,
-            currencies.origin,
-          )}`,
-        });
-
-      if (rec.coupon_origin_amount != null && rec.coupon_origin_amount !== "")
-        amountItems.push({
-          label: "Monto origen (Final)",
-          value: formatMoneyWithCurrency(
-            rec.coupon_origin_amount,
-            currencies.origin,
-          ),
-        });
-
-      if (
-        rec.coupon_destination_amount != null &&
-        rec.coupon_destination_amount !== ""
-      )
-        amountItems.push({
-          label: "Monto destino (Final)",
-          value: formatMoneyWithCurrency(
-            rec.coupon_destination_amount,
-            currencies.destination,
-          ),
-        });
-
-      if (
-        rec.coupon_discount_total_to_send != null &&
-        rec.coupon_discount_total_to_send !== ""
-      )
-        amountItems.push({
-          label: "Total a enviar (Final)",
-          value: formatMoneyWithCurrency(
-            rec.coupon_discount_total_to_send,
-            currencies.origin,
-          ),
-        });
     }
+
+    // Total a pagar
+    const totalToSend = hasCoupon && rec.coupon_discount_total_to_send != null && rec.coupon_discount_total_to_send !== ""
+      ? rec.coupon_discount_total_to_send
+      : (rec.total_a_enviar ?? rec.total_to_send ?? null);
+    if (totalToSend != null && totalToSend !== "")
+      amountItems.push({
+        label: "Total a pagar",
+        value: formatMoneyWithCurrency(totalToSend, currencies.origin),
+      });
 
     sections.push({
       id: "importes",
@@ -371,31 +353,20 @@ export function useTransactionPreviewController() {
       ],
     });
 
-    const registroItems: PreviewItem[] = [
-      {
-        label: "ID transacción",
-        value: (rec.id as string) || "—",
-        variant: "mono",
-      },
-    ];
-    if (rec.created_by != null && rec.created_by !== "")
-      registroItems.push({
-        label: "Creado por",
-        value: String(rec.created_by),
-        variant: "mono",
-      });
+    const registroItems: PreviewItem[] = [];
     if (rec.coupon_discount_code != null && rec.coupon_discount_code !== "")
       registroItems.push({
         label: "Cupón aplicado",
         value: String(rec.coupon_discount_code),
       });
 
-    sections.push({
-      id: "registro",
-      title: "Registro",
-      subtitle: "Identificadores internos",
-      items: registroItems,
-    });
+    if (registroItems.length > 0) {
+      sections.push({
+        id: "registro",
+        title: "Registro",
+        items: registroItems,
+      });
+    }
 
     const seen = new Set<string>([
       "code",
