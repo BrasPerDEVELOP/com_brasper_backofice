@@ -1613,6 +1613,7 @@ const editModalSummary = computed(() => {
       resolveTransactionStatusForDisplay(t) ?? t.status,
     ),
     checked: isTransactionChecked(t) ? "Sí" : "No",
+    agent: getSalesAdvisorLabel(t.agent_id),
   };
 });
 
@@ -1964,6 +1965,14 @@ function getClientLabel(id: string | undefined): string {
     cuentasStore.transactionFormUsers.find((u) => u.id === id) ??
     cuentasStore.clientUsers.find((u) => u.id === id);
   return u?.name ?? id;
+}
+
+function getSalesAdvisorLabel(id: string | undefined): string {
+  if (!id?.trim()) return "—";
+  const u =
+    editableUsers.value.find((u) => u.id === id) ??
+    cuentasStore.transactionFormUsers.find((u) => u.id === id);
+  return u?.name ?? "—";
 }
 
 function getVoucherLabel(v: unknown): string {
@@ -2887,6 +2896,13 @@ onMounted(() => {
                       {{ previewSectionGroups.resumen.items.find(i => i.label === 'Verificada')?.value ?? '—' }}
                     </span>
                   </div>
+                  <div class="hidden h-10 w-px bg-[#d1d5db] sm:block" />
+                  <div>
+                    <p class="text-[10px] font-semibold uppercase tracking-widest text-[#9ca3af]">Ventas / asesor</p>
+                    <p class="mt-1 text-sm font-semibold text-[#111827]">
+                      {{ previewSectionGroups.resumen.items.find(i => i.label === 'Ventas / asesor')?.value ?? '—' }}
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -3417,7 +3433,7 @@ onMounted(() => {
                   <div
                     class="hidden min-h-0 flex-col gap-4 text-[#1f2937] xl:flex"
                   >
-                    <div class="grid grid-cols-3 gap-3 rounded-2xl border border-[#e6ebf4] bg-white p-4">
+                    <div class="grid grid-cols-2 gap-3 rounded-2xl border border-[#e6ebf4] bg-white p-4 sm:grid-cols-4">
                       <div class="min-w-0">
                         <span class="block text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7b88a1]">
                           Código
@@ -3442,6 +3458,14 @@ onMounted(() => {
                         </span>
                         <span class="mt-2 block text-sm font-semibold text-[#1f2937]">
                           {{ editModalSummary?.checked }}
+                        </span>
+                      </div>
+                      <div class="min-w-0">
+                        <span class="block text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7b88a1]">
+                          Ventas / asesor
+                        </span>
+                        <span class="mt-2 block truncate text-sm font-semibold text-[#1f2937]">
+                          {{ editModalSummary?.agent }}
                         </span>
                       </div>
                     </div>

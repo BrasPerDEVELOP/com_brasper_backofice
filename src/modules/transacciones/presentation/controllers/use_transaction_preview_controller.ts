@@ -220,6 +220,10 @@ export function useTransactionPreviewController() {
           label: "Verificada",
           value: isVerified ? "Sí" : "No",
         },
+        {
+          label: "Ventas / asesor",
+          value: getClientLabel(rec.agent_id as string),
+        },
       ],
     });
 
@@ -231,7 +235,6 @@ export function useTransactionPreviewController() {
       subtitle: "Cliente y cuentas vinculadas",
       items: [
         { label: "Cliente", value: getClientLabel(rec.user_id as string) },
-        { label: "Ventas / asesor", value: getClientLabel(rec.agent_id as string) },
         { label: "Razón social", value: razonSocial || "—" },
         {
           label: "Cuenta destino",
@@ -312,16 +315,6 @@ export function useTransactionPreviewController() {
         value: `-${formatMoneyWithCurrency(rec.coupon_discount_commission, currencies.origin)}`,
       });
     }
-
-    // Total a pagar
-    const totalToSend = hasCoupon && rec.coupon_discount_total_to_send != null && rec.coupon_discount_total_to_send !== ""
-      ? rec.coupon_discount_total_to_send
-      : (rec.total_a_enviar ?? rec.total_to_send ?? null);
-    if (totalToSend != null && totalToSend !== "")
-      amountItems.push({
-        label: "Total a pagar",
-        value: formatMoneyWithCurrency(totalToSend, currencies.origin),
-      });
 
     sections.push({
       id: "importes",
