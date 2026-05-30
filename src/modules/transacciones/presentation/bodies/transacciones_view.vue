@@ -1556,6 +1556,16 @@ const previewSections = computed(() => {
   return buildPreviewSections(t);
 });
 
+const previewSectionGroups = computed(() => {
+  const s = previewSections.value;
+  return {
+    resumen: s.find((sec) => sec.id === "resumen") ?? null,
+    left: s.filter((sec) => ["participantes", "condiciones"].includes(sec.id)),
+    right: s.filter((sec) => ["importes", "fechas"].includes(sec.id)),
+    bottom: s.filter((sec) => ["registro", "extra"].includes(sec.id)),
+  };
+});
+
 const editPreviewTransaction = computed<Transaction | null>(() => {
   if (!isEditingMode.value) return null;
   const base = (editSourceTransaction.value ?? {}) as Transaction;
@@ -2790,8 +2800,9 @@ onMounted(() => {
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
       >
         <div
-          class="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-[#d8e5fb] bg-white shadow-xl"
+          class="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-[#d8e5fb] bg-white shadow-xl"
         >
+          <!-- Cabecera -->
           <div
             class="flex items-center justify-between border-b border-[#e5e7eb] bg-[#fafbfc] px-6 py-4"
           >
@@ -2809,202 +2820,302 @@ onMounted(() => {
               aria-label="Cerrar"
               @click="closePreviewModal"
             >
-              <svg
-                class="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M6 18L18 6M6 6l12 12"
-                />
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
-          <div class="flex-1 overflow-y-auto px-6 py-5">
+
+          <!-- Cuerpo -->
+          <div class="flex-1 overflow-y-auto">
             <p
               v-if="previewLoading"
               class="flex items-center justify-center gap-2 py-12 text-sm text-[#6b7280]"
             >
-              <span
-                class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-brasper-indigoStrong border-t-transparent"
-              />
+              <span class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-brasper-indigoStrong border-t-transparent" />
               Cargando catálogo (tasas, comisiones, cuentas)…
             </p>
+
             <template v-else-if="previewTransaction">
-              <div class="space-y-5">
-                <section
-                  v-for="section in previewSections"
-                  :key="section.id"
-                  class="rounded-xl border border-[#e8eef8] bg-[#fbfdff] p-5 shadow-sm"
-                >
-                  <div class="mb-4 border-b border-[#e5e7eb]/80 pb-3">
-                    <h3
-                      class="text-[11px] font-semibold uppercase tracking-[0.14em] text-brasper-indigoStrong"
+              <!-- Hero: código, estado y verificación -->
+              <div
+                v-if="previewSectionGroups.resumen"
+                class="border-b border-[#e8eef8] bg-gradient-to-r from-[#f0f4ff] to-[#f8faff] px-6 py-5"
+              >
+                <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
+                  <div>
+                    <p class="text-[10px] font-semibold uppercase tracking-widest text-[#9ca3af]">Código</p>
+                    <p class="font-mono text-2xl font-bold text-brasper-indigoStrong leading-tight">
+                      {{ previewSectionGroups.resumen.items.find(i => i.label === 'Código')?.value ?? '—' }}
+                    </p>
+                  </div>
+                  <div class="hidden h-10 w-px bg-[#d1d5db] sm:block" />
+                  <div>
+                    <p class="text-[10px] font-semibold uppercase tracking-widest text-[#9ca3af]">Estado</p>
+                    <span
+                      class="mt-1 inline-flex rounded-full px-3 py-1 text-sm font-semibold"
+                      :class="statusRowBadgeClass(resolveTransactionStatusForDisplay(previewTransaction) ?? previewTransaction.status)"
                     >
+                      {{ previewSectionGroups.resumen.items.find(i => i.label === 'Estado')?.value ?? '—' }}
+                    </span>
+                  </div>
+                  <div class="hidden h-10 w-px bg-[#d1d5db] sm:block" />
+                  <div>
+                    <p class="text-[10px] font-semibold uppercase tracking-widest text-[#9ca3af]">Verificada</p>
+                    <span
+                      class="mt-1 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold"
+                      :class="previewSectionGroups.resumen.items.find(i => i.label === 'Verificada')?.value === 'Sí' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-600'"
+                    >
+                      <svg
+                        v-if="previewSectionGroups.resumen.items.find(i => i.label === 'Verificada')?.value === 'Sí'"
+                        class="h-3.5 w-3.5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                      </svg>
+                      {{ previewSectionGroups.resumen.items.find(i => i.label === 'Verificada')?.value ?? '—' }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Grid principal: izquierda / derecha -->
+              <div class="grid grid-cols-1 lg:grid-cols-2 lg:divide-x lg:divide-[#e8eef8]">
+                <!-- Columna izquierda: Participantes + Condiciones -->
+                <div class="space-y-4 p-5">
+                  <section
+                    v-for="section in previewSectionGroups.left"
+                    :key="section.id"
+                    class="rounded-xl border border-[#e8eef8] bg-[#fbfdff] p-4 shadow-sm"
+                  >
+                    <div class="mb-3 border-b border-[#e5e7eb]/80 pb-2">
+                      <h3 class="text-[11px] font-semibold uppercase tracking-[0.14em] text-brasper-indigoStrong">
+                        {{ section.title }}
+                      </h3>
+                      <p v-if="section.subtitle" class="mt-1 text-xs text-[#6b7280]">
+                        {{ section.subtitle }}
+                      </p>
+                    </div>
+                    <dl class="space-y-2.5">
+                      <div
+                        v-for="(item, i) in section.items"
+                        :key="`${section.id}-${i}-${item.label}`"
+                        class="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4"
+                      >
+                        <dt class="shrink-0 text-xs font-medium uppercase tracking-wide text-[#6b7280] sm:min-w-[8rem]">
+                          {{ item.label }}
+                        </dt>
+                        <dd class="min-w-0 text-right text-sm font-medium">
+                          <span
+                            v-if="item.variant === 'mono'"
+                            class="break-all text-xs text-[#374151]"
+                          >{{ item.value }}</span>
+                          <span v-else class="text-[#111827]">{{ item.value }}</span>
+                        </dd>
+                      </div>
+                    </dl>
+                  </section>
+                </div>
+
+                <!-- Columna derecha: Importes + Fechas -->
+                <div class="space-y-4 border-t border-[#e8eef8] p-5 lg:border-t-0">
+                  <!-- Importes con énfasis en valores monetarios -->
+                  <section
+                    v-for="section in previewSectionGroups.right.filter(s => s.id === 'importes')"
+                    :key="section.id"
+                    class="rounded-xl border border-[#d8e5fb] bg-[#f5f8ff] p-4 shadow-sm"
+                  >
+                    <div class="mb-3 border-b border-[#d8e5fb]/80 pb-2">
+                      <h3 class="text-[11px] font-semibold uppercase tracking-[0.14em] text-brasper-indigoStrong">
+                        {{ section.title }}
+                      </h3>
+                    </div>
+                    <dl class="space-y-2.5">
+                      <template
+                        v-for="(item, i) in section.items"
+                        :key="`${section.id}-${i}-${item.label}`"
+                      >
+                        <div v-if="item.variant === 'separator'" class="-mx-1 my-1 border-t border-[#d8e5fb]" />
+                        <div v-else class="flex items-baseline justify-between gap-4">
+                          <dt class="text-xs font-medium text-[#6b7280]">{{ item.label }}</dt>
+                          <dd class="tabular-nums text-sm font-semibold text-[#111827]">{{ item.value }}</dd>
+                        </div>
+                      </template>
+                    </dl>
+                  </section>
+
+                  <!-- Fechas -->
+                  <section
+                    v-for="section in previewSectionGroups.right.filter(s => s.id === 'fechas')"
+                    :key="section.id"
+                    class="rounded-xl border border-[#e8eef8] bg-[#fbfdff] p-4 shadow-sm"
+                  >
+                    <div class="mb-3 border-b border-[#e5e7eb]/80 pb-2">
+                      <h3 class="text-[11px] font-semibold uppercase tracking-[0.14em] text-brasper-indigoStrong">
+                        {{ section.title }}
+                      </h3>
+                      <p v-if="section.subtitle" class="mt-1 text-xs text-[#6b7280]">
+                        {{ section.subtitle }}
+                      </p>
+                    </div>
+                    <dl class="space-y-2.5">
+                      <div
+                        v-for="(item, i) in section.items"
+                        :key="`${section.id}-${i}-${item.label}`"
+                        class="flex items-baseline justify-between gap-4"
+                      >
+                        <dt class="text-xs font-medium text-[#6b7280]">{{ item.label }}</dt>
+                        <dd class="text-sm font-medium text-[#111827]">{{ item.value }}</dd>
+                      </div>
+                    </dl>
+                  </section>
+                </div>
+              </div>
+
+              <!-- Registro + Extra: full width, compacto en 2 columnas -->
+              <div
+                v-if="previewSectionGroups.bottom.length > 0"
+                class="border-t border-[#e8eef8] px-5 pb-5 pt-4 space-y-4"
+              >
+                <section
+                  v-for="section in previewSectionGroups.bottom"
+                  :key="section.id"
+                  class="rounded-xl border border-[#e8eef8] bg-[#fbfdff] p-4 shadow-sm"
+                >
+                  <div class="mb-3 border-b border-[#e5e7eb]/80 pb-2">
+                    <h3 class="text-[11px] font-semibold uppercase tracking-[0.14em] text-brasper-indigoStrong">
                       {{ section.title }}
                     </h3>
-                    <p
-                      v-if="section.subtitle"
-                      class="mt-1 text-xs text-[#6b7280]"
-                    >
+                    <p v-if="section.subtitle" class="mt-1 text-xs text-[#6b7280]">
                       {{ section.subtitle }}
                     </p>
                   </div>
-                  <dl class="space-y-3">
+                  <dl class="grid grid-cols-1 gap-x-8 gap-y-2.5 sm:grid-cols-2">
                     <div
                       v-for="(item, i) in section.items"
                       :key="`${section.id}-${i}-${item.label}`"
-                      class="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6"
+                      class="flex flex-col gap-0.5"
                     >
-                      <dt
-                        class="shrink-0 text-xs font-medium uppercase tracking-wide text-[#6b7280] sm:min-w-[9rem]"
-                      >
-                        {{ item.label }}
-                      </dt>
-                      <dd class="min-w-0 text-right text-sm font-medium sm:flex-1">
-                        <span
-                          v-if="item.variant === 'status'"
-                          class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold"
-                          :class="
-                            statusRowBadgeClass(
-                              previewTransaction
-                                ? resolveTransactionStatusForDisplay(
-                                    previewTransaction,
-                                  ) ?? previewTransaction.status
-                                : undefined,
-                            )
-                          "
-                        >
-                          {{ item.value }}
-                        </span>
-                          <span
-                            v-else-if="item.variant === 'mono'"
-                            class="break-all text-xs text-[#374151]"
-                          >
-                          {{ item.value }}
-                        </span>
-                        <span v-else class="text-[#111827]">
-                          {{ item.value }}
-                        </span>
+                      <dt class="text-[10px] font-semibold uppercase tracking-wide text-[#9ca3af]">{{ item.label }}</dt>
+                      <dd class="text-xs font-medium text-[#374151]">
+                        <span v-if="item.variant === 'mono'" class="break-all font-mono">{{ item.value }}</span>
+                        <span v-else>{{ item.value }}</span>
                       </dd>
                     </div>
                   </dl>
                 </section>
+              </div>
 
-                <section
-                  v-if="
-                    previewTransaction.send_voucher ||
-                    previewTransaction.payment_voucher
-                  "
-                  class="rounded-xl border border-[#d8e5fb] bg-white p-5 shadow-sm"
-                >
-                  <div class="mb-4 border-b border-[#e5e7eb]/80 pb-3">
-                    <h3
-                      class="text-[11px] font-semibold uppercase tracking-[0.14em] text-brasper-indigoStrong"
-                    >
-                      Comprobantes
-                    </h3>
-                    <p class="mt-1 text-xs text-[#6b7280]">
-                      Vista previa e imagen a tamaño completo en nueva pestaña
-                    </p>
-                  </div>
-                  <div class="grid gap-5 sm:grid-cols-2">
-                    <div
-                      v-if="previewTransaction.send_voucher"
-                      class="flex flex-col overflow-hidden rounded-xl border border-[#e5e7eb] bg-[#f9fafb]"
-                    >
-                      <div
-                        class="flex items-center justify-between border-b border-[#e5e7eb] bg-white px-3 py-2"
-                      >
-                        <span class="text-xs font-semibold text-[#374151]"
-                          >Envío</span
-                        >
-                        <a
-                          :href="voucherMediaHref(previewTransaction.send_voucher)"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          class="text-xs font-medium text-brasper-indigoStrong hover:underline"
-                        >
-                          Abrir imagen
-                        </a>
-                      </div>
+              <!-- Comprobantes: 3 columnas, incluye checked_image -->
+              <div
+                v-if="previewTransaction.send_voucher || previewTransaction.payment_voucher || previewTransaction.checked_image"
+                class="border-t border-[#e8eef8] px-5 pb-5 pt-4"
+              >
+                <div class="mb-3">
+                  <h3 class="text-[11px] font-semibold uppercase tracking-[0.14em] text-brasper-indigoStrong">
+                    Comprobantes
+                  </h3>
+                  <p class="mt-1 text-xs text-[#6b7280]">
+                    Vista previa · clic para abrir en tamaño completo
+                  </p>
+                </div>
+                <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <div
+                    v-if="previewTransaction.send_voucher"
+                    class="flex flex-col overflow-hidden rounded-xl border border-[#e5e7eb] bg-[#f9fafb]"
+                  >
+                    <div class="flex items-center justify-between border-b border-[#e5e7eb] bg-white px-3 py-2">
+                      <span class="text-xs font-semibold text-[#374151]">Voucher envío</span>
                       <a
                         :href="voucherMediaHref(previewTransaction.send_voucher)"
                         target="_blank"
                         rel="noopener noreferrer"
-                        class="block bg-[#f3f4f6]"
-                      >
-                        <img
-                          :src="voucherMediaHref(previewTransaction.send_voucher)"
-                          alt="Comprobante envío"
-                          class="mx-auto max-h-56 w-full object-contain"
-                          @error="
-                            ($event.target as HTMLImageElement).classList.add(
-                              'hidden',
-                            )
-                          "
-                        />
-                      </a>
+                        class="text-xs font-medium text-brasper-indigoStrong hover:underline"
+                      >Abrir</a>
                     </div>
-                    <div
-                      v-if="previewTransaction.payment_voucher"
-                      class="flex flex-col overflow-hidden rounded-xl border border-[#e5e7eb] bg-[#f9fafb]"
+                    <a
+                      :href="voucherMediaHref(previewTransaction.send_voucher)"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="block bg-[#f3f4f6]"
                     >
-                      <div
-                        class="flex items-center justify-between border-b border-[#e5e7eb] bg-white px-3 py-2"
-                      >
-                        <span class="text-xs font-semibold text-[#374151]"
-                          >Pago</span
-                        >
-                        <a
-                          :href="
-                            voucherMediaHref(previewTransaction.payment_voucher)
-                          "
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          class="text-xs font-medium text-brasper-indigoStrong hover:underline"
-                        >
-                          Abrir imagen
-                        </a>
-                      </div>
+                      <img
+                        :src="voucherMediaHref(previewTransaction.send_voucher)"
+                        alt="Comprobante envío"
+                        class="mx-auto max-h-48 w-full object-contain"
+                        @error="($event.target as HTMLImageElement).classList.add('hidden')"
+                      />
+                    </a>
+                  </div>
+                  <div
+                    v-if="previewTransaction.payment_voucher"
+                    class="flex flex-col overflow-hidden rounded-xl border border-[#e5e7eb] bg-[#f9fafb]"
+                  >
+                    <div class="flex items-center justify-between border-b border-[#e5e7eb] bg-white px-3 py-2">
+                      <span class="text-xs font-semibold text-[#374151]">Voucher pago</span>
                       <a
-                        :href="
-                          voucherMediaHref(previewTransaction.payment_voucher)
-                        "
+                        :href="voucherMediaHref(previewTransaction.payment_voucher)"
                         target="_blank"
                         rel="noopener noreferrer"
-                        class="block bg-[#f3f4f6]"
-                      >
-                        <img
-                          :src="
-                            voucherMediaHref(previewTransaction.payment_voucher)
-                          "
-                          alt="Comprobante pago"
-                          class="mx-auto max-h-56 w-full object-contain"
-                          @error="
-                            ($event.target as HTMLImageElement).classList.add(
-                              'hidden',
-                            )
-                          "
-                        />
-                      </a>
+                        class="text-xs font-medium text-brasper-indigoStrong hover:underline"
+                      >Abrir</a>
                     </div>
+                    <a
+                      :href="voucherMediaHref(previewTransaction.payment_voucher)"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="block bg-[#f3f4f6]"
+                    >
+                      <img
+                        :src="voucherMediaHref(previewTransaction.payment_voucher)"
+                        alt="Comprobante pago"
+                        class="mx-auto max-h-48 w-full object-contain"
+                        @error="($event.target as HTMLImageElement).classList.add('hidden')"
+                      />
+                    </a>
                   </div>
-                </section>
+                  <div
+                    v-if="previewTransaction.checked_image"
+                    class="flex flex-col overflow-hidden rounded-xl border border-[#e5e7eb] bg-[#f9fafb]"
+                  >
+                    <div class="flex items-center justify-between border-b border-[#e5e7eb] bg-white px-3 py-2">
+                      <span class="text-xs font-semibold text-[#374151]">Checklist verificación</span>
+                      <a
+                        :href="voucherMediaHref(previewTransaction.checked_image)"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="text-xs font-medium text-brasper-indigoStrong hover:underline"
+                      >Abrir</a>
+                    </div>
+                    <a
+                      :href="voucherMediaHref(previewTransaction.checked_image)"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="block bg-[#f3f4f6]"
+                    >
+                      <img
+                        :src="voucherMediaHref(previewTransaction.checked_image)"
+                        alt="Imagen verificación"
+                        class="mx-auto max-h-48 w-full object-contain"
+                        @error="($event.target as HTMLImageElement).classList.add('hidden')"
+                      />
+                    </a>
+                  </div>
+                </div>
               </div>
             </template>
           </div>
+
+          <!-- Pie -->
           <div
             v-if="previewTransaction && !previewLoading"
             class="flex flex-wrap items-center justify-end gap-2 border-t border-[#e5e7eb] bg-[#fafbfc] px-6 py-4"
           >
             <button
               type="button"
-              class="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2.5 text-sm font-medium text-[#6b7280] hover:bg-white"
+              class="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2.5 text-sm font-medium text-[#6b7280] hover:bg-[#f9fafb]"
               @click="closePreviewModal"
             >
               Cerrar
@@ -3015,18 +3126,8 @@ onMounted(() => {
               class="inline-flex items-center gap-2 rounded-lg bg-brasper-indigoStrong px-4 py-2.5 text-sm font-semibold text-white hover:bg-brasper-indigoDark"
               @click="openEditFromPreview"
             >
-              <svg
-                class="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-                />
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
               </svg>
               Editar
             </button>

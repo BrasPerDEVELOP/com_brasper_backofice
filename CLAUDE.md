@@ -8,9 +8,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm run dev       # Start dev server (Vite + PWA)
 npm run build     # Type-check with vue-tsc, then Vite build
 npm run preview   # Preview production build locally
+npx vitest        # Run all tests (watch mode)
+npx vitest run    # Run tests once (CI mode)
+npx vitest run src/modules/calculator/presentation/controllers/use_calculator_store_controller.test.ts  # Run single test file
 ```
 
-There is no test suite configured.
+Vitest is configured in `vitest.config.ts` with `environment: 'node'`. Tests use `@pinia/testing` via `setActivePinia(createPinia())` in `beforeEach`. There is no `test` npm script — invoke via `npx vitest`.
 
 ## Architecture
 
@@ -79,6 +82,18 @@ Key `.env` variables (all prefixed `VITE_`):
 | `VITE_AUTH_PROFILE_METHOD` | `put` or `patch` for profile updates |
 | `VITE_ADMIN_REDIRECT_SECRET` | Shared secret for SSO admin redirect |
 | `VITE_USERNAME` / `VITE_PASSWORD` | Dev-only login prefill |
+
+## Module inventory
+
+Active modules (fully implemented): `auth`, `transacciones`, `tasas`, `comisiones`, `cupones`, `cuentas-bancarias`, `calculator`, `dashboard`, `contabilidad`, `home-banner`, `blog`.
+
+Stub modules (scaffolded but empty — only `.gitkeep` files): `transactions/`, `accounts/`, `user/`. Do not add code to these unless intentionally implementing them.
+
+The `auth` module is larger than typical — it handles login, user management (`usuarios`), profile, and role/permission management across four view files and two API adapters.
+
+The `calculator` module exports two Pinia stores from the same factory: `useCalculatorStore` (id: `calculator`) and `useCalculatorDemoStore` (id: `calculator-demo`). The demo store renders the public-facing embed without backend calls. The `calculationMode` field (`'normal'` | `'special'`) controls whether `localTaxRateOverrides` are applied to `effectiveTaxRates`.
+
+Domain helper functions (pure, no store dependencies) live in `transaction_domain.ts` alongside the models — e.g., `normalizeTransactionStatus`, `resolveTransactionStatusForDisplay`, `roundMoneyAmount`. New pure transaction logic belongs here, not in the adapter or store.
 
 ## Naming conventions
 
