@@ -20,6 +20,7 @@ interface CuentasBancariasState {
   /** `user_id` al que pertenecen `transactionFormBankAccounts` (evita mezclar clientes al cambiar). */
   transactionFormBankAccountsUserId: string | null
   transactionFormBankAccountsLoading: boolean
+  _transactionFormBankAccountsLoadSeq: number
   banks: BankOption[]
   clientUsers: UserOption[]
   /** Cliente + comercial + admin (selector transacciones / etiquetas). */
@@ -41,12 +42,19 @@ function mergeUserOption(list: UserOption[], user: UserOption): UserOption[] {
   return [...list, user].sort((a, b) => a.name.localeCompare(b.name, 'es'))
 }
 
+function filterBankAccountsByUserId(accounts: BankAccount[], userId: string): BankAccount[] {
+  const uid = userId.trim()
+  if (!uid) return []
+  return accounts.filter((a) => String(a.user_id ?? '').trim() === uid)
+}
+
 export const useCuentasBancariasStore = defineStore('cuentasBancarias', {
   state: (): CuentasBancariasState => ({
     bankAccounts: [],
     transactionFormBankAccounts: [],
     transactionFormBankAccountsUserId: null,
     transactionFormBankAccountsLoading: false,
+    _transactionFormBankAccountsLoadSeq: 0,
     banks: [],
     clientUsers: [],
     transactionFormUsers: [],
@@ -75,6 +83,7 @@ export const useCuentasBancariasStore = defineStore('cuentasBancarias', {
 
     async loadBankAccountsForTransactionUser(userId?: string) {
       const id = userId?.trim()
+      const requestSeq = ++this._transactionFormBankAccountsLoadSeq
       if (!id) {
         this.transactionFormBankAccounts = []
         this.transactionFormBankAccountsUserId = null
@@ -87,14 +96,19 @@ export const useCuentasBancariasStore = defineStore('cuentasBancarias', {
       try {
         const repo = getRepository()
         const useCase = new GetBankAccountsUseCase(repo)
-        this.transactionFormBankAccounts = await useCase.execute({ userId: id })
+        const raw = await useCase.execute({ userId: id })
+        if (requestSeq !== this._transactionFormBankAccountsLoadSeq) return
+        this.transactionFormBankAccounts = filterBankAccountsByUserId(raw, id)
         this.transactionFormBankAccountsUserId = id
       } catch (e) {
+        if (requestSeq !== this._transactionFormBankAccountsLoadSeq) return
         console.warn('Error al cargar cuentas del cliente (transacción):', e)
         this.transactionFormBankAccounts = []
         this.transactionFormBankAccountsUserId = id
       } finally {
-        this.transactionFormBankAccountsLoading = false
+        if (requestSeq === this._transactionFormBankAccountsLoadSeq) {
+          this.transactionFormBankAccountsLoading = false
+        }
       }
     },
 

@@ -42,6 +42,7 @@ function appendFileToForm(form: FormData, key: string, file: File): void {
 
 function appendFormValue(form: FormData, key: string, value: unknown): void {
   if (value === undefined) return
+
   if (value instanceof File) {
     appendFileToForm(form, key, value)
     return

@@ -163,6 +163,44 @@ describe('setCalculationMode conserva overrides especiales sin afectar normal', 
   })
 })
 
+describe('calculadora especial con descuento negativo', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('permite guardar el descuento especial como monto negativo', () => {
+    const store = useCalculatorStore()
+    seed(store, { calculationMode: 'special' })
+
+    store.$patch({
+      amountSendSpecial: 1000,
+      amountReceiveSpecial: 1300,
+      specialReceiveManuallyEdited: true,
+      inputMode: 'send'
+    })
+
+    expect(store.result?.specialDiscountValid).toBe(true)
+    expect(store.result?.specialDiscountAmount).toBeLessThan(0)
+    expect(store.result?.specialDiscountPercentage).toBeLessThan(0)
+    expect(store.result?.specialDiscountInvalidReason).toBeNull()
+  })
+
+  it('mantiene bloqueado el descuento mayor al 100%', () => {
+    const store = useCalculatorStore()
+    seed(store, { calculationMode: 'special' })
+
+    store.$patch({
+      amountSendSpecial: 1000,
+      amountReceiveSpecial: 2000,
+      specialReceiveManuallyEdited: true,
+      inputMode: 'send'
+    })
+
+    expect(store.result?.specialDiscountValid).toBe(false)
+    expect(store.result?.specialDiscountInvalidReason).toBe(
+      'El monto a enviar es insuficiente para sostener el monto a recibir aun con 100% de descuento.'
+    )
+  })
+})
+
 describe('aislamiento entre useCalculatorStore y useCalculatorDemoStore', () => {
   beforeEach(() => setActivePinia(createPinia()))
 

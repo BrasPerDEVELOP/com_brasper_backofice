@@ -183,15 +183,11 @@ function buildSpecialResult(
   let specialDiscountInvalidReason: string | null = null
 
   if (baseQuote.commission <= 0) {
-    specialDiscountValid = Math.abs(finalCommission) < 0.005
+    specialDiscountValid = finalCommission >= -0.005
     if (!specialDiscountValid) {
       specialDiscountInvalidReason =
-        'La comisión base es 0%; no se puede aplicar un descuento especial para sostener este monto.'
+        'El monto a enviar es insuficiente para sostener el monto a recibir aun con 100% de descuento.'
     }
-  } else if (specialDiscountAmount < -0.005) {
-    specialDiscountValid = false
-    specialDiscountInvalidReason =
-      'El monto objetivo no puede ser menor al recibe base para mostrar una mejora especial.'
   } else if (specialDiscountPercentage > 100) {
     specialDiscountValid = false
     specialDiscountInvalidReason =
@@ -212,8 +208,8 @@ function buildSpecialResult(
     specialImprovementPercentage: improvementPercentage,
     specialImprovementValid: specialDiscountValid,
     specialImprovementInvalidReason: specialDiscountInvalidReason,
-    specialDiscountPercentage: Math.max(0, specialDiscountPercentage),
-    specialDiscountAmount: Math.max(0, specialDiscountAmount),
+    specialDiscountPercentage,
+    specialDiscountAmount,
     specialDiscountValid,
     specialDiscountInvalidReason
   }

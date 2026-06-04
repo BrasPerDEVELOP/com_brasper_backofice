@@ -31,6 +31,7 @@ import {
 } from "../../domain/models";
 import AppDropdown from "@/interface/components/AppDropdown.vue";
 import AppDateInput from "@/interface/components/AppDateInput.vue";
+import { blockNumberInputWheel } from "@/interface/helpers/block_number_input_wheel";
 import UsuarioCreateFormModal from "@/interface/components/UsuarioCreateFormModal.vue";
 import CuentaBancariaCreateFormModal from "@/interface/components/CuentaBancariaCreateFormModal.vue";
 import BancoCrudModal from "@/interface/components/BancoCrudModal.vue";
@@ -89,7 +90,7 @@ const userFilter = ref<string>("");
 const bankAccountFilter = ref<string>("");
 const createdAtFrom = ref<string>("");
 const createdAtTo = ref<string>("");
-/** Razón social (catálogo de bancos); independiente del selector de cuenta destino. */
+/** Razón social Brasper (catálogo): filtrada por moneda de envío; independiente de cuenta destino del cliente. */
 const destinationBankFilterId = ref("");
 const perPage = ref(10);
 const currentPage = ref(1);
@@ -234,6 +235,7 @@ const CREATE_FLOW_STEPS = [
 ] as const;
 
 const createStepIndex = ref(0);
+const confirmedNegativeSpecialDiscountSignature = ref<string | null>(null);
 
 const isLastCreateStep = computed(
   () => createStepIndex.value === CREATE_FLOW_STEPS.length - 1,
@@ -244,6 +246,47 @@ function goToCreateStep(index: number) {
   if (index > createStepIndex.value) return;
   createStepIndex.value = index;
   if (transactionsStore.error) transactionsStore.error = null;
+}
+
+function negativeSpecialDiscountSignature(): string | null {
+  const res = calculatorStore.result;
+  if (
+    calculatorStore.calculationMode !== "special" ||
+    !res ||
+    res.specialDiscountAmount >= -0.005
+  ) {
+    return null;
+  }
+
+  return [
+    calculatorStore.currencyFrom,
+    calculatorStore.currencyTo,
+    roundMoneyAmount(res.amountSend),
+    roundMoneyAmount(res.specialTargetReceive),
+    roundMoneyAmount(res.specialDiscountAmount),
+  ].join("|");
+}
+
+function confirmNegativeSpecialDiscountIfNeeded(): boolean {
+  const signature = negativeSpecialDiscountSignature();
+  if (!signature || confirmedNegativeSpecialDiscountSignature.value === signature) {
+    return true;
+  }
+
+  const res = calculatorStore.result;
+  if (!res) return true;
+
+  const confirmed = window.confirm(
+    `El descuento especial calculado es negativo (${formatValue(
+      res.specialDiscountAmount,
+    )}). ¿Deseas consignar este monto negativo?`,
+  );
+
+  if (confirmed) {
+    confirmedNegativeSpecialDiscountSignature.value = signature;
+  }
+
+  return confirmed;
 }
 
 function goCreateNext() {
@@ -262,6 +305,11 @@ function goCreateNext() {
     ) {
       transactionsStore.error =
         "Completa la cotización: montos y tasa/comisión antes de continuar.";
+      return;
+    }
+    if (!confirmNegativeSpecialDiscountIfNeeded()) {
+      transactionsStore.error =
+        "Confirma si deseas consignar el descuento especial en negativo para continuar.";
       return;
     }
     transactionsStore.error = null;
@@ -321,9 +369,6 @@ async function onTransactionBankAccountCreated(account: BankAccount) {
     form.bank_account_origin_id = account.id;
   } else {
     form.bank_account_destination_id = account.id;
-    if (account.bank_id?.trim()) {
-      destinationBankFilterId.value = account.bank_id.trim();
-    }
   }
 }
 
@@ -364,14 +409,41 @@ function destinationBankAccountToOption(a: BankAccount): {
 function findBankAccountById(accountId: string): BankAccount | undefined {
   const id = accountId?.trim();
   if (!id) return undefined;
-  return (
-    bankAccountsForSelectedClient().find((a) => String(a.id).trim() === id) ??
-    cuentasStore.transactionFormBankAccounts.find((a) => String(a.id).trim() === id) ??
-    cuentasStore.bankAccounts.find((a) => String(a.id).trim() === id)
+  const userId = form.user_id?.trim();
+  const fromClient = bankAccountsForSelectedClient().find(
+    (a) => String(a.id).trim() === id,
   );
+  if (fromClient) return fromClient;
+  const fromGlobal = cuentasStore.bankAccounts.find(
+    (a) => String(a.id).trim() === id,
+  );
+  if (fromGlobal && userId && bankAccountBelongsToClient(fromGlobal, userId)) {
+    return fromGlobal;
+  }
+  const fromTxn = cuentasStore.transactionFormBankAccounts.find(
+    (a) => String(a.id).trim() === id,
+  );
+  if (fromTxn && userId && bankAccountBelongsToClient(fromTxn, userId)) {
+    return fromTxn;
+  }
+  return undefined;
 }
 
-/** Metadatos de banco para POST/PUT, alineados con cuenta destino y catálogo `banks`. */
+/** Metadatos de banco desde el catálogo (razón social / empresa que recibe el envío). */
+function bankMetaFromCatalogBankId(
+  bankId: string,
+): { bank_id: string; bank_name: string; company_name: string } | null {
+  const trimmed = bankId?.trim();
+  if (!trimmed) return null;
+  const bank = cuentasStore.banks.find((b) => String(b.id).trim() === trimmed);
+  if (!bank) return null;
+  const bank_name = (bank.bank ?? "").trim();
+  const company_name =
+    (bank.company ?? "").toString().trim() || bank_name || trimmed;
+  return { bank_id: trimmed, bank_name, company_name };
+}
+
+/** Metadatos de banco para POST/PUT desde la cuenta destino del cliente. */
 function bankMetaFromDestinationAccount(
   accountId: string,
 ): { bank_id: string; bank_name: string; company_name: string } | null {
@@ -399,6 +471,32 @@ function bankMetaFromDestinationAccount(
     bank_name,
     company_name,
   };
+}
+
+/**
+ * Metadatos para POST/PUT. El API exige que `bank_id` sea el de `bank_account_destination`.
+ * La razón social (catálogo en moneda de envío) solo aporta `company_name`.
+ */
+function resolveTransactionBankMeta(): {
+  bank_id: string;
+  bank_name: string;
+  company_name: string;
+} | null {
+  const fromAccount = bankMetaFromDestinationAccount(
+    form.bank_account_destination_id,
+  );
+  const razonSocial = bankMetaFromCatalogBankId(destinationBankFilterId.value);
+  if (fromAccount) {
+    if (razonSocial) {
+      return {
+        bank_id: fromAccount.bank_id,
+        bank_name: fromAccount.bank_name,
+        company_name: razonSocial.company_name,
+      };
+    }
+    return fromAccount;
+  }
+  return razonSocial;
 }
 
 function normalizeCurrencyCode(value: unknown): string {
@@ -451,6 +549,39 @@ function getTransactionCurrencies(t: Transaction, fallbackToSelected = false) {
       getBankAccountCurrencyById(t.bank_account_destination_id) ||
       (fallbackToSelected ? selectedAccountCurrencies.value.destination : ""),
   };
+}
+
+function getTransactionExchangeRate(t: Transaction): number | null {
+  const rec = t as Record<string, unknown>;
+  const raw = t.tax_amount ?? rec.tipo_cambio ?? rec.rate;
+  if (raw == null || raw === "") return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Tabla: solo el valor numérico del tipo de cambio (p. ej. `0,653`). */
+function getTransactionExchangeLabel(t: Transaction): string {
+  const rate = getTransactionExchangeRate(t);
+  if (rate == null) return "—";
+  return formatValue(rate);
+}
+
+function getTransactionExchangeTitle(t: Transaction): string {
+  const { origin, destination } = getTransactionCurrencies(t);
+  const from = origin || "—";
+  const to = destination || "—";
+  const rate = getTransactionExchangeRate(t);
+  const conversion =
+    rate != null && from !== "—" && to !== "—"
+      ? `1 ${from} = ${formatValue(rate)} ${to}`
+      : from !== "—" && to !== "—"
+        ? `${from} → ${to}`
+        : "—";
+  const rateCatalog = getTaxRatePreviewLabel(t.tax_rate_id);
+  if (!rateCatalog || rateCatalog === "—" || rateCatalog === t.tax_rate_id) {
+    return conversion;
+  }
+  return `${conversion} · Catálogo ${rateCatalog}`;
 }
 
 function couponCurrencyMatches(value: string | null | undefined, expected: string): boolean {
@@ -604,17 +735,41 @@ function mergeMissingSelectedAccount(
   if (options.some((o) => String(o.value) === id)) return options;
   const acc = findBankAccountById(id);
   if (!acc) return options;
+  const userId = form.user_id?.trim();
+  if (userId && !bankAccountBelongsToClient(acc, userId)) return options;
   if (!bankAccountMatchesCurrency(acc, expectedCurrency)) return options;
   return [...options, mapAccount(acc)];
+}
+
+function bankAccountBelongsToClient(account: BankAccount, userId: string): boolean {
+  const uid = userId.trim();
+  if (!uid) return false;
+  return String(account.user_id ?? "").trim() === uid;
+}
+
+function bankAccountsBelongingToClient(
+  userId: string,
+  accounts: BankAccount[],
+): BankAccount[] {
+  return accounts.filter((a) => bankAccountBelongsToClient(a, userId));
 }
 
 function bankAccountsForSelectedClient(): BankAccount[] {
   const userId = form.user_id?.trim();
   if (!userId) return [];
-  if (cuentasStore.transactionFormBankAccountsUserId?.trim() === userId) {
-    return cuentasStore.transactionFormBankAccounts;
+  const storeUserId = cuentasStore.transactionFormBankAccountsUserId?.trim() ?? "";
+  const loadedForUser = storeUserId === userId;
+  if (cuentasStore.transactionFormBankAccountsLoading && !loadedForUser) {
+    return [];
   }
-  return [];
+  if (loadedForUser) {
+    return bankAccountsBelongingToClient(
+      userId,
+      cuentasStore.transactionFormBankAccounts,
+    );
+  }
+  if (cuentasStore.transactionFormBankAccountsLoading) return [];
+  return bankAccountsBelongingToClient(userId, cuentasStore.bankAccounts);
 }
 
 function isBankAccountSelectable(
@@ -628,11 +783,8 @@ function isBankAccountSelectable(
   const account = findBankAccountById(accountId);
   if (!account) return false;
   if (flow === "origin" && !bankAccountMatchesSide(account, flow)) return false;
-  if (flow === "destination" && userId) {
-    const fromClientList = bankAccountsForSelectedClient().some(
-      (a) => String(a.id).trim() === accountId,
-    );
-    if (!fromClientList) return false;
+  if (flow === "destination" && userId && !bankAccountBelongsToClient(account, userId)) {
+    return false;
   }
   return bankAccountMatchesCurrency(account, expectedCurrency);
 }
@@ -665,8 +817,15 @@ const destinationAccountOptions = computed(() => {
 
 const showDestinationAccountsEmptyHint = computed(() => {
   if (!form.user_id?.trim()) return false;
+  if (cuentasStore.transactionFormBankAccountsLoading) return false;
   return destinationAccountOptions.value.length === 0;
 });
+
+const destinationAccountsLoading = computed(
+  () =>
+    Boolean(form.user_id?.trim()) &&
+    cuentasStore.transactionFormBankAccountsLoading,
+);
 
 function bankCatalogOptionLabel(b: BankOption): string {
   const parts: string[] = [];
@@ -713,9 +872,9 @@ function onBancoCrudSaved(payload?: {
   void cuentasStore.loadBanks(true);
 }
 
-/** Bancos del catálogo filtrados por la moneda de destino de la cotización. */
+/** Bancos del catálogo (razón social) filtrados por la moneda de envío de la cotización. */
 const destinationBankFilterOptions = computed(() => {
-  const currency = selectedAccountCurrencies.value.destination;
+  const currency = selectedAccountCurrencies.value.origin;
   const opts = cuentasStore.banks
     .filter((b) => {
       const bankCurrency = normalizeCurrencyCode(b.currency);
@@ -733,6 +892,19 @@ const destinationBankFilterOptions = computed(() => {
       value: b.id,
       label: bankCatalogOptionLabel(b),
     }));
+  const selectedId = destinationBankFilterId.value?.trim();
+  if (
+    selectedId &&
+    !opts.some((o) => String(o.value) === selectedId)
+  ) {
+    const bank = cuentasStore.banks.find((b) => String(b.id).trim() === selectedId);
+    if (bank) {
+      const bankCurrency = normalizeCurrencyCode(bank.currency);
+      if (!currency || !bankCurrency || bankCurrency === currency) {
+        opts.push({ value: bank.id, label: bankCatalogOptionLabel(bank) });
+      }
+    }
+  }
   return [{ value: "", label: "Todos" }, ...opts];
 });
 
@@ -907,11 +1079,13 @@ const commissionOptions = computed(() => {
   }));
 });
 
-/** Cuenta destino elegida pero sin metadatos resueltos en catálogo local (aviso ámbar). */
+/** Razón social o cuenta destino sin banco resoluble en catálogo local (aviso ámbar). */
 const showDestinationBankCatalogWarning = computed(
   () =>
-    Boolean(form.bank_account_destination_id?.trim()) &&
-    bankMetaFromDestinationAccount(form.bank_account_destination_id) === null,
+    Boolean(
+      destinationBankFilterId.value?.trim() ||
+        form.bank_account_destination_id?.trim(),
+    ) && resolveTransactionBankMeta() === null,
 );
 
 const statusFormOptions = TRANSACTION_STATUSES.map((s) => ({
@@ -1040,6 +1214,7 @@ function resetForm() {
   form.checked_image = null;
   editingId.value = null;
   editSourceTransaction.value = null;
+  confirmedNegativeSpecialDiscountSignature.value = null;
   destinationBankFilterId.value = "";
   void cuentasStore.loadBankAccountsForTransactionUser(undefined);
   calculatorStore.resetCalculatorMode();
@@ -1285,10 +1460,7 @@ async function hydrateEditForm(row: Transaction) {
     form.checked_image = null;
     editSourceTransaction.value = row;
     {
-      const destinationId = form.bank_account_destination_id?.trim();
-      const acc = destinationId ? findBankAccountById(destinationId) : undefined;
-      destinationBankFilterId.value =
-        acc?.bank_id?.trim() ?? row.bank_id?.trim() ?? "";
+      destinationBankFilterId.value = row.bank_id?.trim() ?? "";
     }
     await nextTick();
   } finally {
@@ -1361,12 +1533,10 @@ async function submitForm() {
       "Indica el número de operación antes de guardar.";
     return;
   }
-  const bankMeta = bankMetaFromDestinationAccount(
-    form.bank_account_destination_id,
-  );
+  const bankMeta = resolveTransactionBankMeta();
   if (!bankMeta) {
     transactionsStore.error =
-      "No se pudo resolver el banco de la cuenta destino (falta `bank_id` o la cuenta no está cargada). Recarga o elige otra cuenta destino.";
+      "Indica cuenta destino con banco válido en el catálogo (y razón social si aplica).";
     return;
   }
   try {
@@ -2212,6 +2382,20 @@ watch(
   },
 );
 
+watch(
+  () => selectedAccountCurrencies.value.origin,
+  (currency) => {
+    if (isHydratingTransactionForm.value) return;
+    const selectedId = destinationBankFilterId.value?.trim();
+    if (!selectedId || !currency) return;
+    const bank = cuentasStore.banks.find((b) => String(b.id).trim() === selectedId);
+    const bankCurrency = normalizeCurrencyCode(bank?.currency);
+    if (bankCurrency && bankCurrency !== currency) {
+      destinationBankFilterId.value = "";
+    }
+  },
+);
+
 watch(showBancoCrudModal, (open) => {
   if (!open) bancoCrudOpenForCreate.value = false;
 });
@@ -2480,7 +2664,7 @@ onMounted(() => {
         </span>
       </div>
 
-      <table class="w-full min-w-[1080px] text-left text-sm">
+      <table class="w-full min-w-[1180px] text-left text-sm">
         <thead>
           <tr class="bg-[#dbeafe]">
             <th class="w-10 px-2 py-3" title="Verificada">
@@ -2524,6 +2708,11 @@ onMounted(() => {
             <th
               class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark"
             >
+              Tipo cambio
+            </th>
+            <th
+              class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark"
+            >
               Estado
             </th>
             <th
@@ -2554,7 +2743,7 @@ onMounted(() => {
             class="border-t border-[#e5e7eb]"
           >
             <td
-              colspan="13"
+              colspan="14"
               class="rounded-xl border border-[#dbe7fb] bg-[#fbfdff] px-6 py-12 text-center text-[#666]"
             >
               No hay transacciones. Importa un archivo Excel o crea una nueva.
@@ -2627,6 +2816,12 @@ onMounted(() => {
                   getTransactionCurrencies(t).destination,
                 )
               }}
+            </td>
+            <td
+              class="max-w-[140px] truncate whitespace-nowrap px-4 py-3 tabular-nums text-[#374151]"
+              :title="getTransactionExchangeTitle(t)"
+            >
+              {{ getTransactionExchangeLabel(t) }}
             </td>
             <td class="px-4 py-3">
               <span
@@ -3662,6 +3857,13 @@ onMounted(() => {
                               <label class="block text-sm font-medium text-[#374151]"
                                 >Razón social</label
                               >
+                              <p class="text-xs text-[#6b7280]">
+                                Nombre en tabla (moneda de envío
+                                <template v-if="selectedAccountCurrencies.origin">
+                                  {{ selectedAccountCurrencies.origin }}
+                                </template>
+                                ). El banco enviado al API es el de la cuenta destino.
+                              </p>
                               <div class="flex gap-2">
                                 <AppDropdown
                                   v-model="destinationBankFilterId"
@@ -3739,6 +3941,12 @@ onMounted(() => {
                                   </svg>
                                 </button>
                               </div>
+                              <p
+                                v-if="destinationAccountsLoading"
+                                class="text-xs text-[#6b7280]"
+                              >
+                                Cargando cuentas del cliente…
+                              </p>
                             </div>
                             <div
                               v-if="showDestinationBankCatalogWarning"
@@ -4197,6 +4405,13 @@ onMounted(() => {
                     <label class="block text-sm font-medium text-[#374151]"
                       >Razón social</label
                     >
+                    <p class="text-xs text-[#6b7280]">
+                      Nombre en tabla (moneda de envío
+                      <template v-if="selectedAccountCurrencies.origin">
+                        {{ selectedAccountCurrencies.origin }}
+                      </template>
+                      ). El banco enviado al API es el de la cuenta destino.
+                    </p>
                     <div class="flex gap-2">
                       <AppDropdown
                         v-model="destinationBankFilterId"
@@ -4274,6 +4489,12 @@ onMounted(() => {
                         </svg>
                       </button>
                     </div>
+                    <p
+                      v-if="destinationAccountsLoading"
+                      class="text-xs text-[#6b7280]"
+                    >
+                      Cargando cuentas del cliente…
+                    </p>
                   </div>
                   <div
                     v-if="showDestinationBankCatalogWarning"
@@ -4286,7 +4507,7 @@ onMounted(() => {
                     v-if="showDestinationAccountsEmptyHint"
                     class="sm:col-span-2 rounded-lg border border-amber-200 bg-amber-50/90 px-3 py-2 text-xs text-amber-950"
                   >
-                    No hay cuentas de este cliente para la moneda de destino
+                    No hay cuentas de este cliente para la moneda de recepción
                     <template v-if="selectedAccountCurrencies.destination">
                       ({{ selectedAccountCurrencies.destination }})
                     </template>
@@ -4368,6 +4589,7 @@ onMounted(() => {
                       min="0"
                       step="0.01"
                       class="form-input w-full rounded-lg border border-[#cfdbef] bg-white px-3 py-2.5 text-sm"
+                      @wheel="blockNumberInputWheel"
                     />
                   </div>
                   <div class="space-y-1.5">
@@ -4386,6 +4608,7 @@ onMounted(() => {
                       min="0"
                       step="0.01"
                       class="form-input w-full rounded-lg border border-[#cfdbef] bg-white px-3 py-2.5 text-sm"
+                      @wheel="blockNumberInputWheel"
                     />
                   </div>
                 </div>

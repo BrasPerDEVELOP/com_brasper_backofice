@@ -88,6 +88,7 @@
               class="min-w-0 flex-1 pl-2 text-black font-semibold focus:outline-none"
               placeholder="1000"
               @input="onAmountSendInput"
+              @wheel="blockNumberInputWheel"
             />
             <div class="relative w-[96px] shrink-0 sm:w-auto">
               <img
@@ -124,6 +125,7 @@
               class="min-w-0 flex-1 pl-2 text-black font-semibold focus:outline-none"
               placeholder="0.00"
               @input="onAmountReceiveInput"
+              @wheel="blockNumberInputWheel"
             />
             <div class="relative w-[96px] shrink-0 sm:w-auto">
               <img
@@ -285,6 +287,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import CalculatorWhatsappModal from './CalculatorWhatsappModal.vue'
+import { blockNumberInputWheel } from '@/interface/helpers/block_number_input_wheel'
 import { useCalculatorPage, type CalculatorPageVariant } from '../composables/use_calculator_page'
 
 const props = withDefaults(
