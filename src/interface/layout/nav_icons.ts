@@ -3,6 +3,10 @@ import { h, type FunctionalComponent } from 'vue'
 const pathAttrs = { strokeLinecap: 'round', strokeLinejoin: 'round', strokeWidth: 2 }
 
 export const navIcons: Record<string, FunctionalComponent> = {
+  trophy: () =>
+    h('svg', { class: 'h-5 w-5', fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
+      h('path', { ...pathAttrs, d: 'M8 21h8m-4-4v4M7 4h10v4a5 5 0 01-10 0V4zm0 2H4v1a4 4 0 004 4m9-5h3v1a4 4 0 01-4 4' })
+    ]),
   ledger: () =>
     h('svg', { class: 'h-5 w-5', fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
       h('path', {

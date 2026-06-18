@@ -2,6 +2,15 @@ import { USER_ROLES, type UserRole } from './user_roles'
 
 export const PERMISSION_MODULES = [
   {
+    key: 'world_cup',
+    label: 'Mundial 2026',
+    permissions: [
+      { key: 'world_cup.view', label: 'Ver' },
+      { key: 'world_cup.manage', label: 'Configurar' },
+      { key: 'world_cup.approve', label: 'Aprobar cupones' }
+    ]
+  },
+  {
     key: 'dashboard',
     label: 'Panel',
     permissions: [{ key: 'dashboard.view', label: 'Ver' }]
@@ -162,6 +171,9 @@ const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
     'coupons.update',
     'home_banner.view',
     'home_banner.update',
+    'world_cup.view',
+    'world_cup.manage',
+    'world_cup.approve',
     'blog.view',
     'blog.create',
     'blog.update',

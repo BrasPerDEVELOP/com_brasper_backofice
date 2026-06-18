@@ -46,6 +46,7 @@ const allNavItems = [
   { to: "/app/contabilidad", label: "Contabilidad", icon: "ledger", permission: "accounting.view" },
   { to: "/app/calculator", label: "Calculadora", icon: "calc", permission: "calculator.view" },
   { to: "/app/cupones", label: "Cupones", icon: "ticket", permission: "coupons.view" },
+  { to: "/app/mundial-2026", label: "Mundial 2026", icon: "trophy", permission: "world_cup.view" },
   { to: "/app/cuentas", label: "Cuentas", icon: "bank", permission: "bank_accounts.view" },
   { to: "/app/comisiones", label: "Comisiones", icon: "folder", permission: "commissions.view" },
   { to: "/app/tasas", label: "Tasas", icon: "exchange", permission: "rates.view" },
