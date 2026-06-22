@@ -19,6 +19,20 @@ import { useAuthStore } from '../controllers/use_auth_store_controller'
 
 const authStore = useAuthStore()
 
+function formatValidationError(data: unknown): string | null {
+  if (data == null || typeof data !== 'object') return null
+  const detail = (data as Record<string, unknown>).detail
+  if (typeof detail === 'string') return detail
+  if (!Array.isArray(detail)) return null
+
+  const messages = detail.flatMap((item) => {
+    if (item == null || typeof item !== 'object') return []
+    const message = (item as Record<string, unknown>).msg
+    return typeof message === 'string' ? [message] : []
+  })
+  return messages.length > 0 ? messages.join('. ') : null
+}
+
 function formatLoadPermissionsError(e: unknown): string {
   const tail =
     'Se muestran permisos por defecto del front (no necesariamente los de la base de datos).'
@@ -116,7 +130,9 @@ async function saveSelectedRole() {
         ? 'No autorizado (401). Vuelve a iniciar sesión.'
         : e.response?.status === 403
           ? 'No tienes permiso para guardar (403).'
-          : (e.message || 'No se pudieron guardar los permisos')
+          : e.response?.status === 422
+            ? (formatValidationError(e.response.data) ?? 'El servidor rechazó uno o más permisos.')
+            : (e.message || 'No se pudieron guardar los permisos')
       : e instanceof Error
         ? e.message
         : 'No se pudieron guardar los permisos'
