@@ -3,8 +3,6 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { HomeBannerApiAdapter } from '../../infrastructure/adapters'
 import { Domain } from '@/interface/infrastructure/services'
 import type { HomeBanner } from '../../domain/models'
-import type { BannerIndicator } from '../../domain/models/home_banner'
-import { Icon } from '@iconify/vue'
 
 type BannerLanguage = 'es' | 'pr' | 'en'
 
@@ -23,50 +21,6 @@ const successMessage = ref('')
 const currentBanner = ref<HomeBanner | null>(null)
 
 const enable = ref(true)
-const showImage = ref(true)
-const showIndicators = ref(true)
-const content = reactive({
-  es: { eyebrow: '', title: '', subtitle: '', image_alt: '' },
-  pr: { eyebrow: '', title: '', subtitle: '', image_alt: '' },
-  en: { eyebrow: '', title: '', subtitle: '', image_alt: '' }
-})
-const appearance = reactive({ type: 'gradient' as 'solid' | 'gradient', primary: '#2563eb', secondary: '#38bdf8', blur: true })
-const indicators = ref<BannerIndicator[]>([])
-const iconOptions = ['mdi:shield-check-outline', 'mdi:account-heart-outline', 'mdi:swap-horizontal-circle-outline', 'mdi:clock-fast', 'mdi:whatsapp']
-function addIndicator() {
-  if (indicators.value.length >= 3) return
-  indicators.value.push({ icon: iconOptions[indicators.value.length] ?? 'mdi:shield-check-outline', enabled: true, text: { es: '', pr: '', en: '' } })
-}
-function removeIndicator(index: number) { indicators.value.splice(index, 1) }
-
-function copyContent() {
-  return {
-    es: { ...content.es },
-    pr: { ...content.pr },
-    en: { ...content.en }
-  }
-}
-
-function copyIndicators(source: BannerIndicator[] = indicators.value): BannerIndicator[] {
-  return source.map((indicator) => ({
-    ...indicator,
-    text: { ...indicator.text }
-  }))
-}
-
-function copyAppearance() {
-  return { ...appearance }
-}
-
-function restoreDefaults() {
-  Object.assign(content.es, { eyebrow: 'ENVÍA RÁPIDO DESDE WHATSAPP', title: 'Envía soles, dólares y reales a Brasil y Perú con el mejor tipo de cambio.', subtitle: 'Cotiza en segundos con total transparencia.', image_alt: 'Promoción Brasper' })
-  Object.assign(content.pr, { eyebrow: 'ENVIE RÁPIDO PELO WHATSAPP', title: 'Envie dinheiro com a melhor taxa de câmbio.', subtitle: 'Faça sua cotação em segundos com transparência.', image_alt: 'Promoção Brasper' })
-  Object.assign(content.en, { eyebrow: 'SEND FAST FROM WHATSAPP', title: 'Send money with a great exchange rate.', subtitle: 'Get a transparent quote in seconds.', image_alt: 'Brasper promotion' })
-  Object.assign(appearance, { type: 'gradient', primary: '#2563eb', secondary: '#38bdf8', blur: true })
-  indicators.value = []
-  showImage.value = true
-  showIndicators.value = true
-}
 const selectedFiles = reactive<Record<BannerLanguage, File | null>>({
   es: null,
   pr: null,
@@ -236,15 +190,6 @@ async function loadBanner() {
   try {
     currentBanner.value = await repo.getBanner()
     enable.value = currentBanner.value?.enable ?? true
-    if (currentBanner.value) {
-      Object.assign(content.es, currentBanner.value.content.es ?? {})
-      Object.assign(content.pr, currentBanner.value.content.pr ?? {})
-      Object.assign(content.en, currentBanner.value.content.en ?? {})
-      Object.assign(appearance, currentBanner.value.appearance)
-      indicators.value = copyIndicators(currentBanner.value.indicators)
-      showImage.value = currentBanner.value.show_image
-      showIndicators.value = currentBanner.value.show_indicators
-    }
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Error al cargar el banner'
     currentBanner.value = null
@@ -258,12 +203,7 @@ function createPayload() {
     enable: enable.value,
     banner_es: selectedFiles.es,
     banner_pr: selectedFiles.pr,
-    banner_en: selectedFiles.en,
-    content: copyContent(),
-    indicators: copyIndicators(),
-    appearance: copyAppearance(),
-    show_image: showImage.value,
-    show_indicators: showIndicators.value
+    banner_en: selectedFiles.en
   }
 }
 
@@ -278,12 +218,7 @@ async function submit() {
         enable: enable.value,
         banner_es: selectedFiles.es ?? (currentBanner.value.banner_es || undefined),
         banner_pr: selectedFiles.pr ?? (currentBanner.value.banner_pr || undefined),
-        banner_en: selectedFiles.en ?? (currentBanner.value.banner_en || undefined),
-        content: copyContent(),
-        indicators: copyIndicators(),
-        appearance: copyAppearance(),
-        show_image: showImage.value,
-        show_indicators: showIndicators.value
+        banner_en: selectedFiles.en ?? (currentBanner.value.banner_en || undefined)
       })
       successMessage.value = 'Banner actualizado correctamente.'
     } else {
@@ -327,15 +262,6 @@ onMounted(() => {
           cada idioma por separado y mantener las imagenes existentes si no subes un archivo nuevo.
         </p>
       </div>
-      <button
-        v-if="!loading"
-        type="submit"
-        form="home-banner-form"
-        class="inline-flex min-h-11 items-center justify-center rounded-xl bg-brasper-indigoStrong px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brasper-indigoDark disabled:cursor-not-allowed disabled:opacity-50"
-        :disabled="saving"
-      >
-        {{ submitLabel }}
-      </button>
     </div>
 
     <p
@@ -369,7 +295,6 @@ onMounted(() => {
     </div>
 
     <form
-      id="home-banner-form"
       v-else
       class="grid gap-6 xl:grid-cols-[minmax(0,1.8fr)_320px]"
       @submit.prevent="submit"
@@ -424,16 +349,6 @@ onMounted(() => {
               <p class="mt-1 text-sm text-[#4b5563]">Veras de inmediato la nueva imagen antes de guardarla.</p>
             </div>
           </div>
-        </div>
-
-        <div class="space-y-6 rounded-3xl border border-[#dbe7fb] bg-white p-5 shadow-sm md:p-6">
-          <div class="flex flex-wrap items-start justify-between gap-3"><div><p class="text-xs font-semibold uppercase tracking-[.18em] text-brasper-indigoStrong">Contenido y apariencia</p><h2 class="mt-1 text-lg font-semibold text-slate-900">Textos editables por idioma</h2></div><button type="button" class="min-h-11 rounded-xl border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50" @click="restoreDefaults">Restaurar valores iniciales</button></div>
-          <div class="grid gap-5 lg:grid-cols-3">
-            <fieldset v-for="locale in (['es','pr','en'] as const)" :key="locale" class="space-y-3 rounded-2xl border border-slate-200 p-4"><legend class="px-2 text-sm font-bold uppercase text-brasper-indigoStrong">{{ locale }}</legend><label class="block text-sm text-slate-700">Texto superior<input v-model="content[locale].eyebrow" class="banner-field" maxlength="100" /></label><label class="block text-sm text-slate-700">Título<textarea v-model="content[locale].title" class="banner-field min-h-24 py-2" maxlength="180" /></label><label class="block text-sm text-slate-700">Subtítulo<textarea v-model="content[locale].subtitle" class="banner-field min-h-20 py-2" maxlength="240" /></label><label class="block text-sm text-slate-700">Texto alternativo<input v-model="content[locale].image_alt" class="banner-field" maxlength="140" /></label></fieldset>
-          </div>
-          <div class="grid gap-4 md:grid-cols-2"><div class="rounded-2xl border border-slate-200 p-4"><h3 class="font-semibold text-slate-900">Fondo</h3><div class="mt-3 grid grid-cols-2 gap-3"><label class="text-sm text-slate-700">Tipo<select v-model="appearance.type" class="banner-field"><option value="gradient">Gradiente</option><option value="solid">Color sólido</option></select></label><label class="text-sm text-slate-700">Color principal<input v-model="appearance.primary" type="color" class="mt-1 h-11 w-full rounded-xl border border-slate-300 p-1" /></label><label v-if="appearance.type === 'gradient'" class="text-sm text-slate-700">Color secundario<input v-model="appearance.secondary" type="color" class="mt-1 h-11 w-full rounded-xl border border-slate-300 p-1" /></label><label class="flex min-h-11 items-center gap-2 text-sm font-medium text-slate-700"><input v-model="appearance.blur" type="checkbox" /> Difuminados</label></div></div><div class="rounded-2xl border border-slate-200 p-4"><h3 class="font-semibold text-slate-900">Elementos visibles</h3><label class="mt-3 flex min-h-11 items-center gap-3 text-sm"><input v-model="showImage" type="checkbox" /> Mostrar imagen promocional</label><label class="flex min-h-11 items-center gap-3 text-sm"><input v-model="showIndicators" type="checkbox" /> Mostrar indicadores</label></div></div>
-          <div><div class="flex items-center justify-between"><h3 class="font-semibold text-slate-900">Indicadores de confianza</h3><button type="button" class="min-h-11 rounded-xl border border-brasper-indigoStrong px-4 text-sm font-semibold text-brasper-indigoStrong disabled:opacity-50" :disabled="indicators.length >= 3" @click="addIndicator">Agregar indicador</button></div><div class="mt-3 space-y-3"><div v-for="(indicator, index) in indicators" :key="index" class="grid gap-3 rounded-2xl bg-slate-50 p-4 md:grid-cols-[220px_1fr_1fr_1fr_auto]"><label class="flex items-center gap-2"><Icon :icon="indicator.icon" width="28" height="28" class="shrink-0 text-brasper-indigoStrong" /><select v-model="indicator.icon" aria-label="Icono" class="banner-field !mt-0"><option v-for="icon in iconOptions" :key="icon" :value="icon">{{ icon.split(':')[1] }}</option></select></label><input v-model="indicator.text.es" aria-label="Texto español" class="banner-field" placeholder="Español" /><input v-model="indicator.text.pr" aria-label="Texto portugués" class="banner-field" placeholder="Português" /><input v-model="indicator.text.en" aria-label="Texto inglés" class="banner-field" placeholder="English" /><button type="button" class="min-h-11 rounded-xl px-3 text-sm font-semibold text-rose-700 hover:bg-rose-50" @click="removeIndicator(index)">Quitar</button></div></div></div>
-          <div class="overflow-hidden rounded-2xl p-6 text-white" :style="{ background: appearance.type === 'gradient' ? `linear-gradient(110deg, ${appearance.primary}, ${appearance.secondary})` : appearance.primary }"><p class="text-xs font-bold uppercase tracking-widest text-yellow-300">{{ content.es.eyebrow || 'Texto superior' }}</p><h3 class="mt-2 text-2xl font-bold">{{ content.es.title || 'Vista previa del título' }}</h3><p class="mt-2 text-sm text-white/85">{{ content.es.subtitle || 'Vista previa del subtítulo' }}</p><div v-if="showIndicators" class="mt-4 flex flex-wrap gap-2"><span v-for="item in indicators.filter((value) => value.enabled)" :key="item.icon" class="rounded-full bg-white/15 px-3 py-2 text-xs font-semibold">{{ item.text.es || item.icon }}</span></div></div>
         </div>
 
         <div class="grid gap-5 md:grid-cols-2 2xl:grid-cols-3">
@@ -588,8 +503,3 @@ onMounted(() => {
     </form>
   </div>
 </template>
-
-<style scoped>
-.banner-field { display:block; width:100%; min-height:2.75rem; margin-top:.25rem; border:1px solid #cbd5e1; border-radius:.75rem; background:#fff; padding:0 .75rem; color:#0f172a; font-size:.875rem; outline:none; transition:border-color .2s, box-shadow .2s; }
-.banner-field:focus { border-color:#3655a5; box-shadow:0 0 0 3px rgb(54 85 165 / 20%); }
-</style>

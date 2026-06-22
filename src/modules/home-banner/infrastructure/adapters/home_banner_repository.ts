@@ -1,22 +1,13 @@
 import type { HomeBanner } from '../../domain/models'
-import type { BannerAppearance, BannerIndicator, BannerLocaleContent } from '../../domain/models/home_banner'
 
-export interface HomeBannerConfigPayload {
-  content: Record<'es' | 'pr' | 'en', BannerLocaleContent>
-  indicators: BannerIndicator[]
-  appearance: BannerAppearance
-  show_image: boolean
-  show_indicators: boolean
-}
-
-export interface HomeBannerCreatePayload extends HomeBannerConfigPayload {
+export interface HomeBannerCreatePayload {
   enable: boolean
   banner_es?: File | null
   banner_pr?: File | null
   banner_en?: File | null
 }
 
-export interface HomeBannerUpdatePayload extends HomeBannerConfigPayload {
+export interface HomeBannerUpdatePayload {
   id: string
   enable: boolean
   banner_es?: File | string | null

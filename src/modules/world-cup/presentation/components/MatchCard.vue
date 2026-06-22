@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, watch } from 'vue'
+import { computed, reactive, shallowRef, watch } from 'vue'
 import { WORLD_CUP_EXCHANGE_RATE_OPTIONS, type MatchCouponSettings, type WorldCupCampaign, type WorldCupMatch } from '../../domain/models'
 
 type CampaignDefaults = Pick<WorldCupCampaign, 'default_discount_percentage' | 'default_max_uses' | 'exchange_rate_scope'>
@@ -10,6 +10,7 @@ const emit = defineEmits<{
   action: [id: string, action: 'approve' | 'cancel']
 }>()
 const settings = reactive<MatchCouponSettings>({ discount_percentage: 10, max_uses: 100, exchange_rate_scope: 'PEN_BRL' })
+const isEditingCoupon = shallowRef(false)
 const dateLabel = computed(() => new Intl.DateTimeFormat('es-PE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Lima' }).format(new Date(props.match.starts_at)))
 const badgeClass = computed(() => ({ LIVE: 'bg-emerald-100 text-emerald-800', FINISHED: 'bg-slate-200 text-slate-700', SCHEDULED: 'bg-blue-100 text-blue-800', POSTPONED: 'bg-amber-100 text-amber-800', CANCELLED: 'bg-rose-100 text-rose-800' }[props.match.status]))
 const STATUS_LABELS: Record<string, string> = { SCHEDULED: 'Programado', LIVE: 'En vivo', FINISHED: 'Finalizado', POSTPONED: 'Aplazado', CANCELLED: 'Cancelado' }
@@ -17,16 +18,30 @@ const COUPON_STATUS_LABELS: Record<string, string> = { DRAFT: 'Borrador', APPROV
 const statusLabel = computed(() => STATUS_LABELS[props.match.status] ?? props.match.status)
 const couponStatusLabel = computed(() => (props.match.coupon_status ? (COUPON_STATUS_LABELS[props.match.coupon_status] ?? props.match.coupon_status) : ''))
 const canConfigure = computed(() => !props.match.coupon_id || ['DRAFT', 'CANCELLED'].includes(props.match.coupon_status || ''))
-const canRemove = computed(() => props.match.selected && props.match.coupon_status !== 'ACTIVE')
+const canEditCoupon = computed(() => Boolean(props.match.coupon_id) && !['EXPIRED', 'CANCELLED'].includes(props.match.coupon_status || '') && props.match.status !== 'FINISHED')
+const canDeactivate = computed(() => Boolean(props.match.coupon_id) && !['EXPIRED', 'CANCELLED'].includes(props.match.coupon_status || ''))
+const showSettingsForm = computed(() => (canConfigure.value || isEditingCoupon.value) && props.match.status !== 'FINISHED')
 const exchangeRateLabel = computed(() => WORLD_CUP_EXCHANGE_RATE_OPTIONS.find((option) => option.value === props.match.coupon_exchange_rate_scope)?.label ?? 'Tipo de cambio no definido')
+
+function submitSettings(): void {
+  emit('select', props.match.id, true, { ...settings })
+  isEditingCoupon.value = false
+}
+
+function cancelEditing(): void {
+  isEditingCoupon.value = false
+}
 
 watch(
   () => [props.match, props.campaignDefaults] as const,
-  () => Object.assign(settings, {
-    discount_percentage: props.match.coupon_discount_percentage ?? props.campaignDefaults.default_discount_percentage,
-    max_uses: props.match.coupon_max_uses ?? props.campaignDefaults.default_max_uses,
-    exchange_rate_scope: props.match.coupon_exchange_rate_scope ?? props.campaignDefaults.exchange_rate_scope
-  }),
+  () => {
+    Object.assign(settings, {
+      discount_percentage: props.match.coupon_discount_percentage ?? props.campaignDefaults.default_discount_percentage,
+      max_uses: props.match.coupon_max_uses ?? props.campaignDefaults.default_max_uses,
+      exchange_rate_scope: props.match.coupon_exchange_rate_scope ?? props.campaignDefaults.exchange_rate_scope
+    })
+    isEditingCoupon.value = false
+  },
   { immediate: true }
 )
 </script>
@@ -40,18 +55,22 @@ watch(
       <p class="mt-2 font-semibold text-slate-700">{{ match.coupon_discount_percentage }}% de descuento · {{ match.coupon_max_uses }} usos máximos</p>
       <p class="mt-1 text-xs text-slate-600">Aplica a: {{ exchangeRateLabel }}</p>
     </div>
-    <form v-if="canConfigure && match.status !== 'FINISHED'" class="mb-4 rounded-xl border border-indigo-100 bg-indigo-50/60 p-3" @submit.prevent="emit('select', match.id, true, { ...settings })">
+    <form v-if="showSettingsForm" class="mb-4 rounded-xl border border-indigo-100 bg-indigo-50/60 p-3" @submit.prevent="submitSettings">
       <p class="mb-3 text-sm font-semibold text-slate-800">Cupón para {{ match.home_team }} vs {{ match.away_team }}</p>
       <div class="grid grid-cols-2 gap-2">
         <label class="text-xs font-medium text-slate-600">Descuento %<input v-model.number="settings.discount_percentage" class="coupon-field" type="number" min="0.01" max="100" step="0.01" required /></label>
         <label class="text-xs font-medium text-slate-600">Usos máximos<input v-model.number="settings.max_uses" class="coupon-field" type="number" min="1" required /></label>
         <label class="col-span-2 text-xs font-medium text-slate-600">Tipos de cambio afectados<select v-model="settings.exchange_rate_scope" class="coupon-field"><option v-for="option in WORLD_CUP_EXCHANGE_RATE_OPTIONS" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
       </div>
-      <button class="mt-3 min-h-11 w-full rounded-xl bg-brasper-indigoStrong px-4 text-sm font-semibold text-white disabled:opacity-50" :disabled="busy">{{ busy ? 'Guardando…' : match.selected ? `Guardar cupón de ${settings.discount_percentage}%` : `Crear cupón de ${settings.discount_percentage}%` }}</button>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <button class="min-h-11 flex-1 rounded-xl bg-brasper-indigoStrong px-4 text-sm font-semibold text-white disabled:opacity-50" :disabled="busy">{{ busy ? 'Guardando…' : match.selected ? `Guardar cupón de ${settings.discount_percentage}%` : `Crear cupón de ${settings.discount_percentage}%` }}</button>
+        <button v-if="isEditingCoupon" type="button" class="min-h-11 rounded-xl border border-slate-300 px-4 text-sm font-semibold text-slate-700 disabled:opacity-50" :disabled="busy" @click="cancelEditing">Cancelar</button>
+      </div>
     </form>
     <div class="flex flex-wrap gap-2">
       <button v-if="match.coupon_id && match.coupon_status === 'DRAFT'" class="min-h-11 rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white disabled:opacity-50" :disabled="busy" @click="emit('action', match.coupon_id, 'approve')">Aprobar</button>
-      <button v-if="canRemove" class="min-h-11 rounded-xl border border-rose-200 px-4 text-sm font-semibold text-rose-700 disabled:opacity-50" :disabled="busy" @click="emit('select', match.id, false)">{{ match.coupon_status === 'APPROVED_WAITING' ? 'Eliminar' : 'Rechazar' }}</button>
+      <button v-if="canEditCoupon && !isEditingCoupon" class="min-h-11 rounded-xl border border-brasper-indigoStrong/25 px-4 text-sm font-semibold text-brasper-indigoStrong disabled:opacity-50" :disabled="busy" @click="isEditingCoupon = true">Editar cupón</button>
+      <button v-if="canDeactivate && match.coupon_id" class="min-h-11 rounded-xl border border-rose-200 px-4 text-sm font-semibold text-rose-700 disabled:opacity-50" :disabled="busy" @click="emit('action', match.coupon_id, 'cancel')">Desactivar</button>
     </div>
   </article>
 </template>
