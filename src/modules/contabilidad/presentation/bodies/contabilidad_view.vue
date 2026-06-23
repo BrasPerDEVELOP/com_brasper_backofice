@@ -11,6 +11,8 @@ import {
   isTransactionChecked,
   normalizeTransactionStatus,
   resolveTransactionStatusForDisplay,
+  transactionMatchesSendDateRange,
+  formatTransactionCodeForDisplay,
 } from "@modules/transacciones/domain/models";
 import AppDropdown from "@/interface/components/AppDropdown.vue";
 import AppDateInput from "@/interface/components/AppDateInput.vue";
@@ -100,13 +102,7 @@ const apiFilterParams = computed((): GetTransactionsParams | undefined => {
   if (userFilter.value?.trim()) p.user_id = userFilter.value.trim();
   if (bankAccountFilter.value?.trim())
     p.bank_account_id = bankAccountFilter.value.trim();
-  if (createdAtFrom.value?.trim())
-    p.created_at_from = new Date(createdAtFrom.value).toISOString();
-  if (createdAtTo.value?.trim()) {
-    const d = new Date(createdAtTo.value);
-    d.setHours(23, 59, 59, 999);
-    p.created_at_to = d.toISOString();
-  }
+  /** Rango de fechas: solo en cliente por `send_date` (la API filtra `created_at`). */
   return Object.keys(p).length ? p : undefined;
 });
 
@@ -134,21 +130,14 @@ const searchedTransactions = computed(() => {
     );
   }
 
-  if (createdAtFrom.value?.trim()) {
-    const from = new Date(createdAtFrom.value).getTime();
-    list = list.filter((t) => {
-      const d = t.created_at ?? t.send_date ?? "";
-      return d ? new Date(d).getTime() >= from : false;
-    });
-  }
-  if (createdAtTo.value?.trim()) {
-    const to = new Date(createdAtTo.value);
-    to.setHours(23, 59, 59, 999);
-    const toMs = to.getTime();
-    list = list.filter((t) => {
-      const d = t.created_at ?? t.send_date ?? "";
-      return d ? new Date(d).getTime() <= toMs : false;
-    });
+  if (createdAtFrom.value?.trim() || createdAtTo.value?.trim()) {
+    list = list.filter((t) =>
+      transactionMatchesSendDateRange(
+        t,
+        createdAtFrom.value,
+        createdAtTo.value,
+      ),
+    );
   }
 
   const q = debouncedSearch.value.trim().toLowerCase();
@@ -168,9 +157,16 @@ const totalPages = computed(() =>
 );
 
 const paginatedTransactions = computed(() => {
-  const start = (currentPage.value - 1) * perPage.value;
+  const page = Math.min(currentPage.value, totalPages.value);
+  const start = (page - 1) * perPage.value;
   return searchedTransactions.value.slice(start, start + perPage.value);
 });
+
+function syncCurrentPageToTotal() {
+  if (currentPage.value > totalPages.value) {
+    currentPage.value = totalPages.value;
+  }
+}
 
 function formatValue(value: unknown): string {
   if (value == null) return "-";
@@ -199,22 +195,6 @@ function formatPen(value: number | null | undefined): string {
   })}`;
 }
 
-/** Fecha de emisión (d/M/yyyy). */
-function formatFechaEmision(value: string | undefined): string {
-  if (!value?.trim()) return "—";
-  try {
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return value;
-    return d.toLocaleDateString("es-PE", {
-      day: "numeric",
-      month: "numeric",
-      year: "numeric",
-    });
-  } catch {
-    return value;
-  }
-}
-
 function comisionFinalInterna(t: Transaction): number | undefined {
   const v =
     t.comision_final_interna ??
@@ -225,11 +205,13 @@ function comisionFinalInterna(t: Transaction): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
+const IMPUESTO_INTERNO_RATE = 0.18;
+
+/** 18% de la comisión final interna. */
 function impuestoFinalInterno(t: Transaction): number | undefined {
-  const v = t.impuesto_final_interno;
-  if (v == null) return undefined;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : undefined;
+  const c = comisionFinalInterna(t);
+  if (c == null) return undefined;
+  return Math.round(c * IMPUESTO_INTERNO_RATE * 100) / 100;
 }
 
 function ventaFinalMonto(t: Transaction): number | undefined {
@@ -248,26 +230,10 @@ function ventaFinalMonto(t: Transaction): number | undefined {
   return undefined;
 }
 
-function fechaEmisionTx(t: Transaction): string | undefined {
-  const raw = t.fecha_emision ?? t.send_date ?? t.created_at;
-  return raw?.trim() ? raw : undefined;
-}
-
-function observacionesTx(t: Transaction): string {
-  const o = t.observaciones;
-  if (typeof o === "string" && o.trim()) return o.trim();
-  const rec = t as Record<string, unknown>;
-  const alt = rec.notes ?? rec.note;
-  if (typeof alt === "string" && alt.trim()) return alt.trim();
-  return "";
-}
-
-function diasAtrasoTx(t: Transaction): string {
-  if (t.dias_atraso != null) {
-    const n = Number(t.dias_atraso);
-    if (Number.isFinite(n)) return String(Math.trunc(n));
-  }
-  return "—";
+/** Tabla: razón social de la empresa (`company_name` en API). */
+function transactionCompanyNameTable(t: Transaction): string {
+  const s = t.company_name != null ? String(t.company_name).trim() : "";
+  return s || "—";
 }
 
 function voucherMediaHref(path: unknown): string {
@@ -325,6 +291,58 @@ function getClientLabel(id: string | undefined): string {
   return u?.name ?? id;
 }
 
+function normalizeCurrencyCode(value: unknown): string {
+  if (value == null) return "";
+  return String(value).trim().toLowerCase();
+}
+
+function getBankAccountCurrencyById(id: string | undefined): string {
+  if (!id?.trim()) return "";
+  const acc = cuentasStore.bankAccounts.find((a) => a.id === id);
+  if (!acc) return "";
+  const bank = cuentasStore.banks.find((b) => b.id === acc.bank_id);
+  return normalizeCurrencyCode(bank?.currency);
+}
+
+function getTransactionCurrencies(t: Transaction) {
+  const rec = t as Record<string, unknown>;
+  return {
+    origin:
+      normalizeCurrencyCode(rec.origin_currency) ||
+      getBankAccountCurrencyById(t.bank_account_origin_id) ||
+      getBankAccountCurrencyById(t.bank_account_id),
+    destination:
+      normalizeCurrencyCode(rec.destination_currency) ||
+      getBankAccountCurrencyById(t.bank_account_destination_id),
+  };
+}
+
+function getTransactionExchangeRate(t: Transaction): number | null {
+  const rec = t as Record<string, unknown>;
+  const raw = t.tax_amount ?? rec.tipo_cambio ?? rec.rate;
+  if (raw == null || raw === "") return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+function getTransactionExchangeLabel(t: Transaction): string {
+  const rate = getTransactionExchangeRate(t);
+  if (rate == null) return "—";
+  return formatValue(rate);
+}
+
+function getTransactionExchangeTitle(t: Transaction): string {
+  const { origin, destination } = getTransactionCurrencies(t);
+  const from = origin || "—";
+  const to = destination || "—";
+  const rate = getTransactionExchangeRate(t);
+  if (rate != null && from !== "—" && to !== "—") {
+    return `1 ${from.toUpperCase()} = ${formatValue(rate)} ${to.toUpperCase()}`;
+  }
+  if (from !== "—" && to !== "—") return `${from.toUpperCase()} → ${to.toUpperCase()}`;
+  return "—";
+}
+
 async function toggleChecked(t: Transaction) {
   if (!t.id || updatingCheckedId.value) return;
   const newChecked = !isTransactionChecked(t);
@@ -347,17 +365,29 @@ function loadTransactions() {
   void transactionsStore.loadTransactions(apiFilterParams.value);
 }
 
-watch([searchQuery, perPage], () => {
+watch([perPage], () => {
   currentPage.value = 1;
 });
 
+watch(debouncedSearch, () => {
+  currentPage.value = 1;
+});
+
+watch(totalPages, () => {
+  syncCurrentPageToTotal();
+});
+
 watch(
-  [statusFilter, userFilter, bankAccountFilter, createdAtFrom, createdAtTo],
+  [statusFilter, userFilter, bankAccountFilter],
   () => {
     currentPage.value = 1;
     loadTransactions();
   },
 );
+
+watch([createdAtFrom, createdAtTo], () => {
+  currentPage.value = 1;
+});
 
 onMounted(() => {
   transactionsStore.error = null;
@@ -419,7 +449,7 @@ onMounted(() => {
           />
         </div>
         <div class="flex flex-col gap-0.5">
-          <label class="text-[11px] text-[#6b7280]">Desde</label>
+          <label class="text-[11px] text-[#6b7280]">Envío desde</label>
           <AppDateInput
             v-model="createdAtFrom"
             size="sm"
@@ -427,7 +457,7 @@ onMounted(() => {
           />
         </div>
         <div class="flex flex-col gap-0.5">
-          <label class="text-[11px] text-[#6b7280]">Hasta</label>
+          <label class="text-[11px] text-[#6b7280]">Envío hasta</label>
           <AppDateInput v-model="createdAtTo" size="sm" class="min-w-[150px]" />
         </div>
         <div class="flex flex-col gap-0.5">
@@ -498,7 +528,7 @@ onMounted(() => {
         </span>
       </div>
 
-      <table class="w-full min-w-[1500px] text-left text-sm">
+      <table class="w-full min-w-[1300px] text-left text-sm">
         <thead>
           <tr class="bg-[#dbeafe]">
             <th class="w-10 px-2 py-3" title="Verificada">
@@ -508,6 +538,11 @@ onMounted(() => {
               class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark"
             >
               Código
+            </th>
+            <th
+              class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark"
+            >
+              Fecha envío
             </th>
             <th
               class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark"
@@ -522,7 +557,12 @@ onMounted(() => {
             <th
               class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark"
             >
-              Cuenta de origen
+              Cuenta destino
+            </th>
+            <th
+              class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark"
+            >
+              Razón social
             </th>
             <th
               class="whitespace-nowrap px-4 py-3 text-center font-semibold text-brasper-indigoDark"
@@ -530,14 +570,14 @@ onMounted(() => {
               Monto de envío
             </th>
             <th
-              class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark"
-            >
-              Cuenta destino
-            </th>
-            <th
               class="whitespace-nowrap px-4 py-3 text-center font-semibold text-brasper-indigoDark"
             >
               Monto a recibir
+            </th>
+            <th
+              class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark"
+            >
+              Tipo cambio
             </th>
             <th
               class="whitespace-nowrap px-2 py-3 text-right text-[10px] font-bold uppercase leading-tight tracking-wide text-white bg-[#1e3a8a]"
@@ -555,29 +595,9 @@ onMounted(() => {
               Venta final
             </th>
             <th
-              class="whitespace-nowrap px-2 py-3 text-center text-[10px] font-bold uppercase leading-tight tracking-wide text-white bg-[#1e3a8a]"
-            >
-              Fecha de<br />emisión
-            </th>
-            <th
-              class="min-w-[120px] max-w-[200px] px-2 py-3 text-left text-[10px] font-bold uppercase leading-tight tracking-wide text-white bg-[#1e3a8a]"
-            >
-              Observaciones
-            </th>
-            <th
-              class="whitespace-nowrap px-2 py-3 text-center text-[10px] font-bold uppercase leading-tight tracking-wide text-white bg-[#1e3a8a]"
-            >
-              Días de<br />atraso
-            </th>
-            <th
               class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark"
             >
               Estado
-            </th>
-            <th
-              class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark"
-            >
-              Fecha envío
             </th>
             <th
               class="whitespace-nowrap px-2 py-3 text-center text-xs font-semibold leading-tight text-brasper-indigoDark"
@@ -595,14 +615,18 @@ onMounted(() => {
         </thead>
         <tbody>
           <tr
-            v-if="paginatedTransactions.length === 0"
+            v-if="searchedTransactions.length === 0"
             class="border-t border-[#e5e7eb]"
           >
             <td
-              colspan="18"
+              colspan="16"
               class="rounded-xl border border-[#dbe7fb] bg-[#fbfdff] px-6 py-12 text-center text-[#666]"
             >
-              No hay movimientos para mostrar.
+              {{
+                transactionsStore.transactions.length === 0
+                  ? "No hay movimientos para mostrar."
+                  : "No hay movimientos que coincidan con los filtros."
+              }}
             </td>
           </tr>
           <tr
@@ -642,7 +666,10 @@ onMounted(() => {
               </button>
             </td>
             <td class="px-4 py-3 font-medium text-[#374151]">
-              {{ t.code ?? "-" }}
+              {{ formatTransactionCodeForDisplay(t.code) }}
+            </td>
+            <td class="whitespace-nowrap px-4 py-3 text-[#374151]">
+              {{ formatDate(t.send_date) }}
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-[#374151]">
               {{ t.operation_number || "—" }}
@@ -652,21 +679,27 @@ onMounted(() => {
             </td>
             <td
               class="max-w-[180px] truncate px-4 py-3 text-[#374151]"
-              :title="getBankCurrencyTableLabel(t.bank_account_origin_id)"
-            >
-              {{ getBankCurrencyTableLabel(t.bank_account_origin_id) }}
-            </td>
-            <td class="whitespace-nowrap px-4 py-3 text-center tabular-nums text-[#374151]">
-              {{ formatValue(t.origin_amount) }}
-            </td>
-            <td
-              class="max-w-[180px] truncate px-4 py-3 text-[#374151]"
               :title="getBankCurrencyTableLabel(t.bank_account_destination_id)"
             >
               {{ getBankCurrencyTableLabel(t.bank_account_destination_id) }}
             </td>
+            <td
+              class="max-w-[180px] truncate px-4 py-3 text-[#374151]"
+              :title="transactionCompanyNameTable(t)"
+            >
+              {{ transactionCompanyNameTable(t) }}
+            </td>
+            <td class="whitespace-nowrap px-4 py-3 text-center tabular-nums text-[#374151]">
+              {{ formatValue(t.origin_amount) }}
+            </td>
             <td class="whitespace-nowrap px-4 py-3 text-center tabular-nums text-[#374151]">
               {{ formatValue(t.destination_amount) }}
+            </td>
+            <td
+              class="whitespace-nowrap px-4 py-3 tabular-nums text-[#374151]"
+              :title="getTransactionExchangeTitle(t)"
+            >
+              {{ getTransactionExchangeLabel(t) }}
             </td>
             <td
               class="whitespace-nowrap bg-slate-50/80 px-2 py-3 text-right tabular-nums text-[#111827]"
@@ -683,22 +716,6 @@ onMounted(() => {
             >
               {{ formatPen(ventaFinalMonto(t)) }}
             </td>
-            <td
-              class="whitespace-nowrap bg-slate-50/80 px-2 py-3 text-center text-sm text-[#374151]"
-            >
-              {{ formatFechaEmision(fechaEmisionTx(t)) }}
-            </td>
-            <td
-              class="max-w-[200px] truncate bg-slate-50/80 px-2 py-3 text-left text-xs text-[#374151]"
-              :title="observacionesTx(t) || undefined"
-            >
-              {{ observacionesTx(t) || "—" }}
-            </td>
-            <td
-              class="whitespace-nowrap bg-slate-50/80 px-2 py-3 text-center tabular-nums text-[#374151]"
-            >
-              {{ diasAtrasoTx(t) }}
-            </td>
             <td class="px-4 py-3">
               <span
                 class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium"
@@ -714,9 +731,6 @@ onMounted(() => {
                   )
                 }}
               </span>
-            </td>
-            <td class="px-4 py-3 text-[#374151]">
-              {{ formatDate(t.send_date) }}
             </td>
             <td class="px-2 py-2 align-middle text-center">
               <template v-if="voucherMediaHref(t.send_voucher)">
@@ -780,7 +794,7 @@ onMounted(() => {
     </div>
 
     <div
-      v-if="transactionsStore.transactions.length > 0"
+      v-if="searchedTransactions.length > 0"
       class="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-[#e5e7eb] pt-4"
     >
       <div class="flex items-center gap-4 text-sm text-[#6b7280]">

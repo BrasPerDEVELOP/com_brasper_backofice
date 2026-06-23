@@ -4,6 +4,7 @@ import {
   computed,
   onMounted,
   onBeforeUnmount,
+  onActivated,
   reactive,
   watch,
   nextTick,
@@ -22,13 +23,29 @@ import type { Transaction } from "../../domain/models";
 import type { GetTransactionsParams } from "../../infrastructure/adapters/transactions_repository";
 import { parseSimpleImportExcel } from "../../infrastructure/utils/excel_simple_import";
 import {
+  buildSpecialDiscountMetaFromSnapshot,
+  saveTransactionSpecialDiscountMeta,
+  enrichTransactionWithSpecialDiscountMeta,
+  getTransactionSpecialDiscountMeta,
+} from "../../infrastructure/utils/transaction_special_discount_meta";
+import {
   TRANSACTION_STATUSES,
   TRANSACTION_STATUS_LABELS,
   isTransactionChecked,
   normalizeTransactionStatus,
   resolveTransactionStatusForDisplay,
   roundMoneyAmount,
+  transactionMatchesSendDateRange,
+  normalizeCurrencyCode,
+  resolveTransactionCurrencyPair,
+  transactionMatchesCurrencyPair,
+  inferOriginCurrencyFromTransactionCode,
+  formatTransactionCodeForDisplay,
+  SPECIAL_CALCULATOR_DISCOUNT_CODE,
+  getTransactionSpecialDiscountInfo,
+  getTransactionSpecialDiscountForDisplay,
 } from "../../domain/models";
+import type { TransactionSpecialDiscountInfo } from "../../domain/models";
 import AppDropdown from "@/interface/components/AppDropdown.vue";
 import AppDateInput from "@/interface/components/AppDateInput.vue";
 import { blockNumberInputWheel } from "@/interface/helpers/block_number_input_wheel";
@@ -39,6 +56,8 @@ import type { BankOption } from "@modules/cuentas-bancarias/infrastructure/adapt
 import type { UserListItem } from "@modules/auth/infrastructure/adapters/users_management_api_adapter";
 import CalculatorConversionCard from "@modules/calculator/presentation/components/CalculatorConversionCard.vue";
 import TasasDemoCompact from "@modules/tasas/presentation/components/tasas_demo_compact.vue";
+import type { CurrencyCode } from "@modules/calculator/domain/models";
+import { CURRENCY_FLAG_SRC_BY_CODE } from "@modules/calculator/presentation/utils/calculator_format";
 import { Domain } from "@/interface/infrastructure/services";
 import { useTransactionPreviewController } from "../controllers/use_transaction_preview_controller";
 import { fetchUsers } from "@modules/auth/infrastructure/adapters/users_management_api_adapter";
@@ -88,6 +107,8 @@ const menuPosition = reactive({ top: 0, left: 0 });
 const statusFilter = ref<string>("todos");
 const userFilter = ref<string>("");
 const bankAccountFilter = ref<string>("");
+/** Par origen-destino (p. ej. `brl-pen`); vacío = todas las monedas. */
+const currencyPairFilter = ref<string>("");
 const createdAtFrom = ref<string>("");
 const createdAtTo = ref<string>("");
 /** Razón social Brasper (catálogo): filtrada por moneda de envío; independiente de cuenta destino del cliente. */
@@ -129,6 +150,25 @@ const userFilterOptions = computed(() => [
     label: u.name,
   })),
 ]);
+
+const currencyPairFilterOptions = computed(() => {
+  const pairs = new Map<string, string>();
+  for (const t of transactionsStore.transactions) {
+    const { origin, destination } = resolveTransactionCurrencyPair(
+      t,
+      currencyResolutionLookups.value,
+    );
+    if (!origin || !destination) continue;
+    const key = `${origin.toLowerCase()}-${destination.toLowerCase()}`;
+    pairs.set(key, `${origin}-${destination}`);
+  }
+  return [
+    { value: ALL_VALUE, label: "Todas" },
+    ...Array.from(pairs.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([value, label]) => ({ value, label })),
+  ];
+});
 
 const bankAccountFilterOptions = computed(() => [
   { value: ALL_VALUE, label: "Todas" },
@@ -237,6 +277,22 @@ const CREATE_FLOW_STEPS = [
 const createStepIndex = ref(0);
 const confirmedNegativeSpecialDiscountSignature = ref<string | null>(null);
 
+type CreateQuoteSnapshot = {
+  calculationMode: "normal" | "special";
+  origin_amount: number;
+  destination_amount: number;
+  resultado_comision: number | null;
+  total_a_enviar: number | null;
+  tax_amount: number | null;
+  tax_rate_id: string;
+  commission_id: string;
+  specialDiscountAmount?: number;
+  specialDiscountPercentage?: number;
+  specialBaseReceive?: number;
+};
+
+const createQuoteSnapshot = ref<CreateQuoteSnapshot | null>(null);
+
 const isLastCreateStep = computed(
   () => createStepIndex.value === CREATE_FLOW_STEPS.length - 1,
 );
@@ -317,6 +373,7 @@ function goCreateNext() {
     form.destination_amount = roundMoneyAmount(
       Number(form.destination_amount) || 0,
     );
+    createQuoteSnapshot.value = buildCreateQuoteSnapshot();
     createStepIndex.value = 1;
     return;
   }
@@ -499,10 +556,6 @@ function resolveTransactionBankMeta(): {
   return razonSocial;
 }
 
-function normalizeCurrencyCode(value: unknown): string {
-  return value == null ? "" : String(value).trim().toUpperCase();
-}
-
 function getBankAccountCurrency(a: BankAccount): string {
   const bank = cuentasStore.banks.find((b) => b.id === a.bank_id);
   return normalizeCurrencyCode(bank?.currency);
@@ -537,17 +590,51 @@ const transactionBankModalCountry = computed((): "pe" | "br" => {
   return to === "brl" ? "br" : "pe";
 });
 
+const currencyResolutionLookups = computed(() => ({
+  taxRateById: (id: string) =>
+    tasasStore.taxRates.find((item) => item.id === id),
+  commissionById: (id: string) =>
+    comisionesStore.commissions.find((item) => item.id === id),
+  bankAccountCurrencyById: (id: string) => getBankAccountCurrencyById(id),
+}));
+
 function getTransactionCurrencies(t: Transaction, fallbackToSelected = false) {
-  const rate = tasasStore.taxRates.find((item) => item.id === t.tax_rate_id);
+  const pair = resolveTransactionCurrencyPair(
+    t,
+    currencyResolutionLookups.value,
+  );
   return {
     origin:
-      normalizeCurrencyCode(rate?.coin_a ?? t.origin_currency) ||
-      getBankAccountCurrencyById(t.bank_account_origin_id) ||
+      pair.origin ||
       (fallbackToSelected ? selectedAccountCurrencies.value.origin : ""),
     destination:
-      normalizeCurrencyCode(rate?.coin_b ?? t.destination_currency) ||
-      getBankAccountCurrencyById(t.bank_account_destination_id) ||
+      pair.destination ||
       (fallbackToSelected ? selectedAccountCurrencies.value.destination : ""),
+  };
+}
+
+function asCurrencyCode(value: string): CurrencyCode | null {
+  const code = value.trim().toLowerCase();
+  if (code === "pen" || code === "usd" || code === "brl") return code;
+  return null;
+}
+
+function getTransactionOriginCurrency(t: Transaction): string {
+  return (
+    getTransactionCurrencies(t).origin ||
+    inferOriginCurrencyFromTransactionCode(t.code)
+  );
+}
+
+function getTransactionOriginFlag(
+  t: Transaction,
+): { src: string; label: string } | null {
+  const origin = getTransactionOriginCurrency(t);
+  const code = asCurrencyCode(origin);
+  if (!code) return null;
+  return {
+    src: CURRENCY_FLAG_SRC_BY_CODE[code],
+    label: origin ? `Envía ${origin}` : "Moneda de envío",
   };
 }
 
@@ -1111,14 +1198,7 @@ const apiFilterParams = computed((): GetTransactionsParams | undefined => {
   if (statusFilter.value && statusFilter.value !== "todos")
     p.status = statusFilter.value;
   if (userFilter.value?.trim()) p.user_id = userFilter.value.trim();
-  /** Filtro por cuenta: solo en cliente (API usa origen/destino por separado). */
-  if (createdAtFrom.value?.trim())
-    p.created_at_from = new Date(createdAtFrom.value).toISOString();
-  if (createdAtTo.value?.trim()) {
-    const d = new Date(createdAtTo.value);
-    d.setHours(23, 59, 59, 999);
-    p.created_at_to = d.toISOString();
-  }
+  /** Rango de fechas: solo en cliente por `send_date` (la API filtra `created_at`). */
   return Object.keys(p).length ? p : undefined;
 });
 
@@ -1149,22 +1229,24 @@ const searchedTransactions = computed(() => {
     );
   }
 
-  // Filtro por rango de fechas (created_at o send_date)
-  if (createdAtFrom.value?.trim()) {
-    const from = new Date(createdAtFrom.value).getTime();
-    list = list.filter((t) => {
-      const d = t.created_at ?? t.send_date ?? "";
-      return d ? new Date(d).getTime() >= from : false;
-    });
+  if (currencyPairFilter.value?.trim()) {
+    list = list.filter((t) =>
+      transactionMatchesCurrencyPair(
+        t,
+        currencyPairFilter.value,
+        currencyResolutionLookups.value,
+      ),
+    );
   }
-  if (createdAtTo.value?.trim()) {
-    const to = new Date(createdAtTo.value);
-    to.setHours(23, 59, 59, 999);
-    const toMs = to.getTime();
-    list = list.filter((t) => {
-      const d = t.created_at ?? t.send_date ?? "";
-      return d ? new Date(d).getTime() <= toMs : false;
-    });
+
+  if (createdAtFrom.value?.trim() || createdAtTo.value?.trim()) {
+    list = list.filter((t) =>
+      transactionMatchesSendDateRange(
+        t,
+        createdAtFrom.value,
+        createdAtTo.value,
+      ),
+    );
   }
 
   // Búsqueda por código
@@ -1186,9 +1268,16 @@ const totalPages = computed(() =>
 );
 
 const paginatedTransactions = computed(() => {
-  const start = (currentPage.value - 1) * perPage.value;
+  const page = Math.min(currentPage.value, totalPages.value);
+  const start = (page - 1) * perPage.value;
   return searchedTransactions.value.slice(start, start + perPage.value);
 });
+
+function syncCurrentPageToTotal() {
+  if (currentPage.value > totalPages.value) {
+    currentPage.value = totalPages.value;
+  }
+}
 
 function resetForm() {
   form.bank_account_origin_id = "";
@@ -1215,6 +1304,7 @@ function resetForm() {
   editingId.value = null;
   editSourceTransaction.value = null;
   confirmedNegativeSpecialDiscountSignature.value = null;
+  createQuoteSnapshot.value = null;
   destinationBankFilterId.value = "";
   void cuentasStore.loadBankAccountsForTransactionUser(undefined);
   calculatorStore.resetCalculatorMode();
@@ -1327,6 +1417,85 @@ function hasSpecialCalculatorValuesToPreserve(): boolean {
 function syncFromCalculatorIfSafe() {
   if (hasSpecialCalculatorValuesToPreserve()) return;
   syncFromCalculator();
+}
+
+function buildCreateQuoteSnapshot(): CreateQuoteSnapshot | null {
+  const res = calculatorStore.result;
+  if (!res) return null;
+  const isSpecial =
+    calculatorStore.calculationMode === "special" ||
+    res.calculationMode === "special" ||
+    res.specialDiscountAmount > 0.005;
+  return {
+    calculationMode: isSpecial ? "special" : "normal",
+    origin_amount: roundMoneyAmount(
+      isSpecial ? res.amountSend : form.origin_amount,
+    ),
+    destination_amount: roundMoneyAmount(
+      isSpecial ? res.amountReceive : form.destination_amount,
+    ),
+    resultado_comision: roundMoneyAmount(
+      isSpecial
+        ? res.finalCommission
+        : (form.resultado_comision ?? res.commission),
+    ),
+    total_a_enviar: roundMoneyAmount(
+      isSpecial ? res.totalToSend : (form.total_a_enviar ?? res.totalToSend),
+    ),
+    tax_amount: res.rate,
+    tax_rate_id: form.tax_rate_id,
+    commission_id: form.commission_id,
+    ...(isSpecial
+      ? {
+          specialDiscountAmount: roundMoneyAmount(res.specialDiscountAmount),
+          specialDiscountPercentage: res.specialDiscountPercentage,
+          specialBaseReceive: roundMoneyAmount(res.specialBaseReceive),
+        }
+      : {}),
+  };
+}
+
+function applyCreateQuoteSnapshot(snapshot: CreateQuoteSnapshot) {
+  form.origin_amount = snapshot.origin_amount;
+  form.destination_amount = snapshot.destination_amount;
+  form.resultado_comision = snapshot.resultado_comision;
+  form.total_a_enviar = snapshot.total_a_enviar;
+  form.tax_amount = snapshot.tax_amount;
+  form.tax_rate_id = snapshot.tax_rate_id;
+  form.commission_id = snapshot.commission_id;
+}
+
+function getSpecialDiscountCatalogLookup() {
+  return {
+    commissions: comisionesStore.commissions,
+    taxRates: tasasStore.taxRates,
+  };
+}
+
+function getTransactionSpecialDiscount(
+  t: Transaction,
+): TransactionSpecialDiscountInfo | null {
+  const meta = getTransactionSpecialDiscountMeta(t.id);
+  if (meta) {
+    return {
+      code: SPECIAL_CALCULATOR_DISCOUNT_CODE,
+      discountCommission: meta.discountCommission,
+      discountPercentage: meta.discountPercentage,
+      baseReceive: meta.baseReceive ?? meta.finalReceive,
+      finalReceive: meta.finalReceive,
+      improvementReceive: meta.improvementReceive,
+      baseCommission: roundMoneyAmount(
+        meta.discountCommission + Number(meta.finalCommission ?? 0),
+      ),
+      finalCommission: roundMoneyAmount(Number(meta.finalCommission ?? 0)),
+      totalToSend: meta.totalToSend,
+      persisted: true,
+    };
+  }
+  return getTransactionSpecialDiscountForDisplay(
+    t,
+    getSpecialDiscountCatalogLookup(),
+  );
 }
 
 function openCreateModal() {
@@ -1509,7 +1678,11 @@ async function openEditModal(t: Transaction) {
 }
 
 async function submitForm() {
-  syncFromCalculatorIfSafe();
+  if (!editingId.value && createQuoteSnapshot.value) {
+    applyCreateQuoteSnapshot(createQuoteSnapshot.value);
+  } else {
+    syncFromCalculatorIfSafe();
+  }
   syncStatusFromVoucherFiles();
   const calculatorError = getCalculatorBlockingError();
   if (calculatorError) {
@@ -1583,6 +1756,13 @@ async function submitForm() {
     const selectedCouponCode =
       selectedCouponPreview?.coupon.code ??
       (selectedCouponId ? editSourceTransaction.value?.coupon_discount_code : undefined);
+    const specialCreateSnapshot =
+      !editingId.value &&
+      createQuoteSnapshot.value &&
+      (createQuoteSnapshot.value.calculationMode === "special" ||
+        (createQuoteSnapshot.value.specialDiscountAmount ?? 0) > 0.005)
+        ? createQuoteSnapshot.value
+        : null;
     const commonAmounts = {
       ...(form.bank_account_origin_id?.trim()
         ? { bank_account_origin: form.bank_account_origin_id.trim() }
@@ -1594,47 +1774,71 @@ async function submitForm() {
         form.agent_id.trim() !== form.user_id?.trim()
           ? form.agent_id.trim()
           : undefined,
-      tax_rate_id: form.tax_rate_id,
-      commission_id: form.commission_id,
-      origin_amount: roundMoneyAmount(form.origin_amount),
-      destination_amount: roundMoneyAmount(form.destination_amount),
+      tax_rate_id: specialCreateSnapshot?.tax_rate_id ?? form.tax_rate_id,
+      commission_id: specialCreateSnapshot?.commission_id ?? form.commission_id,
+      origin_amount: roundMoneyAmount(
+        specialCreateSnapshot?.origin_amount ?? form.origin_amount,
+      ),
+      destination_amount: roundMoneyAmount(
+        specialCreateSnapshot?.destination_amount ?? form.destination_amount,
+      ),
       resultado_comision:
-        form.resultado_comision != null
-          ? roundMoneyAmount(form.resultado_comision)
+        (specialCreateSnapshot?.resultado_comision ?? form.resultado_comision) !=
+        null
+          ? roundMoneyAmount(
+              specialCreateSnapshot?.resultado_comision ??
+                form.resultado_comision!,
+            )
           : undefined,
       total_a_enviar:
-        form.total_a_enviar != null
-          ? roundMoneyAmount(form.total_a_enviar)
+        (specialCreateSnapshot?.total_a_enviar ?? form.total_a_enviar) != null
+          ? roundMoneyAmount(
+              specialCreateSnapshot?.total_a_enviar ?? form.total_a_enviar!,
+            )
           : undefined,
       tax_amount:
-        form.tax_amount != null && Number.isFinite(form.tax_amount)
-          ? Number(form.tax_amount)
+        (specialCreateSnapshot?.tax_amount ?? form.tax_amount) != null &&
+        Number.isFinite(specialCreateSnapshot?.tax_amount ?? form.tax_amount)
+          ? Number(specialCreateSnapshot?.tax_amount ?? form.tax_amount)
           : undefined,
       code,
       operation_number: operationNumber || undefined,
-      coupon_id: selectedCouponId,
-      coupon_discount_code: selectedCouponCode,
-      coupon_origin_amount:
-        selectedCouponPreview
+      coupon_id: specialCreateSnapshot ? undefined : selectedCouponId,
+      coupon_discount_code: specialCreateSnapshot
+        ? SPECIAL_CALCULATOR_DISCOUNT_CODE
+        : selectedCouponCode,
+      coupon_origin_amount: specialCreateSnapshot
+        ? specialCreateSnapshot.origin_amount
+        : selectedCouponPreview
           ? roundMoneyAmount(selectedCouponPreview.amountSend)
           : selectedCouponId
             ? editSourceTransaction.value?.coupon_origin_amount
             : undefined,
-      coupon_destination_amount:
-        selectedCouponPreview
+      coupon_destination_amount: specialCreateSnapshot
+        ? specialCreateSnapshot.destination_amount
+        : selectedCouponPreview
           ? roundMoneyAmount(selectedCouponPreview.amountReceive)
           : selectedCouponId
             ? editSourceTransaction.value?.coupon_destination_amount
             : undefined,
-      coupon_discount_percentage:
-        selectedCouponPreview?.coupon.discount_percentage ??
-        (selectedCouponId ? editSourceTransaction.value?.coupon_discount_percentage : undefined),
-      coupon_discount_commission:
-        selectedCouponPreview?.discountAmount ??
-        (selectedCouponId ? editSourceTransaction.value?.coupon_discount_commission : undefined),
-      coupon_discount_total_to_send:
-        selectedCouponPreview?.totalToSend ??
-        (selectedCouponId ? editSourceTransaction.value?.coupon_discount_total_to_send : undefined),
+      coupon_discount_percentage: specialCreateSnapshot
+        ? specialCreateSnapshot.specialDiscountPercentage
+        : selectedCouponPreview?.coupon.discount_percentage ??
+          (selectedCouponId
+            ? editSourceTransaction.value?.coupon_discount_percentage
+            : undefined),
+      coupon_discount_commission: specialCreateSnapshot
+        ? specialCreateSnapshot.specialDiscountAmount
+        : selectedCouponPreview?.discountAmount ??
+          (selectedCouponId
+            ? editSourceTransaction.value?.coupon_discount_commission
+            : undefined),
+      coupon_discount_total_to_send: specialCreateSnapshot
+        ? specialCreateSnapshot.total_a_enviar ?? undefined
+        : selectedCouponPreview?.totalToSend ??
+          (selectedCouponId
+            ? editSourceTransaction.value?.coupon_discount_total_to_send
+            : undefined),
       status: form.status,
       send_voucher: sendVoucher,
       payment_voucher: paymentVoucher,
@@ -1652,9 +1856,24 @@ async function submitForm() {
       });
     } else {
       /** POST: servidor fuerza `verification`, `checked: false` y `send_date` en el alta. */
-      await transactionsStore.createTransaction({
+      const created = await transactionsStore.createTransaction({
         ...commonAmounts,
       });
+      if (specialCreateSnapshot && created.id) {
+        const meta = buildSpecialDiscountMetaFromSnapshot(specialCreateSnapshot);
+        if (meta) {
+          saveTransactionSpecialDiscountMeta(created.id, meta);
+          const idx = transactionsStore.transactions.findIndex(
+            (row) => row.id === created.id,
+          );
+          if (idx >= 0) {
+            transactionsStore.transactions[idx] =
+              enrichTransactionWithSpecialDiscountMeta(
+                transactionsStore.transactions[idx],
+              );
+          }
+        }
+      }
     }
     showCreateModal.value = false;
     resetForm();
@@ -1671,6 +1890,7 @@ async function handleDelete(t: Transaction) {
   transactionsStore.error = null;
   try {
     await transactionsStore.deleteTransaction(t.id);
+    syncCurrentPageToTotal();
   } catch {
     // Error en store
   } finally {
@@ -1782,7 +2002,7 @@ const editModalSummary = computed(() => {
   const t = editPreviewTransaction.value;
   if (!t) return null;
   return {
-    code: formatTransactionCodeShort(t.code),
+    code: formatTransactionCodeForDisplay(t.code),
     status: getStatusLabel(
       resolveTransactionStatusForDisplay(t) ?? t.status,
     ),
@@ -1857,7 +2077,16 @@ const editHeroConditions = computed(() => {
       value: getCommissionPreviewLabel(t.commission_id),
     },
   ];
-  if (t.coupon_discount_code || t.coupon_id) {
+  const specialDiscount = getTransactionSpecialDiscount(t);
+  if (specialDiscount) {
+    items.push({
+      label: "Calculadora especial",
+      value:
+        specialDiscount.discountPercentage != null
+          ? `${SPECIAL_CALCULATOR_DISCOUNT_CODE} (${formatValue(specialDiscount.discountPercentage)}%)`
+          : SPECIAL_CALCULATOR_DISCOUNT_CODE,
+    });
+  } else if (t.coupon_discount_code || t.coupon_id) {
     items.push({
       label: "Cupón aplicado",
       value: getCouponPreviewLabel(t),
@@ -1870,8 +2099,10 @@ const editHeroAmounts = computed(() => {
   const t = editPreviewTransaction.value;
   if (!t) return [];
   const currencies = getTransactionCurrencies(t, true);
+  const specialDiscount = getTransactionSpecialDiscount(t);
   const hasCoupon = Boolean(
-    t.coupon_id || (t.coupon_discount_code && t.coupon_discount_code.trim()),
+    !specialDiscount &&
+      (t.coupon_id || (t.coupon_discount_code && t.coupon_discount_code.trim())),
   );
   const items = [
     {
@@ -1879,14 +2110,22 @@ const editHeroAmounts = computed(() => {
       value: formatValueWithCurrency(t.origin_amount, currencies.origin),
     },
     {
-      label: hasCoupon ? "Monto destino (Base)" : "Monto destino",
+      label: specialDiscount
+        ? "Monto destino (Especial)"
+        : hasCoupon
+          ? "Monto destino (Base)"
+          : "Monto destino",
       value: formatValueWithCurrency(
         t.destination_amount,
         currencies.destination,
       ),
     },
     {
-      label: hasCoupon ? "Comisión (Base)" : "Resultado comisión",
+      label: specialDiscount
+        ? "Comisión (Especial)"
+        : hasCoupon
+          ? "Comisión (Base)"
+          : "Resultado comisión",
       value: formatValueWithCurrency(
         t.resultado_comision ?? t.commission_result,
         currencies.origin,
@@ -1894,7 +2133,49 @@ const editHeroAmounts = computed(() => {
     },
   ];
 
-  if (hasCoupon) {
+  if (specialDiscount) {
+    if (specialDiscount.improvementReceive > 0.005) {
+      items.push({
+        label: "Recibe base (catálogo)",
+        value: formatValueWithCurrency(
+          specialDiscount.baseReceive,
+          currencies.destination,
+        ),
+      });
+      items.push({
+        label: "Mejora especial",
+        value: `+${formatValueWithCurrency(
+          specialDiscount.improvementReceive,
+          currencies.destination,
+        )}`,
+      });
+    }
+    if (specialDiscount.discountCommission > 0.005) {
+      items.push({
+        label: "Descuento comisión",
+        value: `-${formatValueWithCurrency(
+          specialDiscount.discountCommission,
+          currencies.origin,
+        )}`,
+      });
+      items.push({
+        label: "Comisión base (catálogo)",
+        value: formatValueWithCurrency(
+          specialDiscount.baseCommission,
+          currencies.origin,
+        ),
+      });
+    }
+    if (specialDiscount.totalToSend != null) {
+      items.push({
+        label: "Total a enviar",
+        value: formatValueWithCurrency(
+          specialDiscount.totalToSend,
+          currencies.origin,
+        ),
+      });
+    }
+  } else if (hasCoupon) {
     if (t.coupon_discount_commission != null) {
       items.push({
         label: "Descuento cupón",
@@ -2021,13 +2302,6 @@ function formatValueWithCurrency(value: unknown, currency: string): string {
   const amount = formatValue(value);
   const code = currency.trim().toUpperCase();
   return code && amount !== "-" ? `${amount} ${code}` : amount;
-}
-
-function formatTransactionCodeShort(code: string | undefined): string {
-  if (!code?.trim()) return "—";
-  const digits = code.replace(/\D/g, "");
-  if (digits.length > 0) return digits.slice(-4).padStart(4, "0");
-  return code.trim().slice(-4);
 }
 
 /** Fecha/hora para tabla (ISO del API → hora local legible). */
@@ -2363,7 +2637,9 @@ async function submitImportSimple() {
 }
 
 function loadTransactions() {
-  void transactionsStore.loadTransactions(apiFilterParams.value);
+  void transactionsStore.loadTransactions(apiFilterParams.value, {
+    background: false,
+  });
 }
 
 watch(
@@ -2442,30 +2718,53 @@ watch(
   },
 );
 
-watch([searchQuery, perPage], () => {
+watch([perPage], () => {
   currentPage.value = 1;
 });
 
-watch(
-  [statusFilter, userFilter, bankAccountFilter, createdAtFrom, createdAtTo],
-  () => {
-    currentPage.value = 1;
-    loadTransactions();
-  },
-);
+watch(debouncedSearch, () => {
+  currentPage.value = 1;
+});
+
+watch(totalPages, () => {
+  syncCurrentPageToTotal();
+});
+
+watch([statusFilter, userFilter, bankAccountFilter], () => {
+  currentPage.value = 1;
+  loadTransactions();
+});
+
+watch([createdAtFrom, createdAtTo, currencyPairFilter], () => {
+  currentPage.value = 1;
+});
+
+watch(currencyPairFilterOptions, (options) => {
+  const current = currencyPairFilter.value;
+  if (!current) return;
+  if (!options.some((option) => option.value === current)) {
+    currencyPairFilter.value = "";
+  }
+});
 
 onMounted(() => {
-  /** Evita mostrar `error` de otra vista o de un intento anterior mientras llegan cuentas/API. */
-  transactionsStore.error = null;
   void calculatorStore.loadData({
     background: transactionCatalogReadyForCurrentMode(),
   });
-  void loadTransactions();
+  loadTransactions();
   void Promise.all([
     cuentasStore.loadBankAccounts(),
     cuentasStore.loadTransactionFormUsers(),
     cuentasStore.loadBanks(),
+    tasasStore.loadTaxRates(),
+    comisionesStore.loadCommissions(),
   ]);
+});
+
+onActivated(() => {
+  if (!transactionsStore.isLoading && !transactionsStore.isRefreshing) {
+    loadTransactions();
+  }
 });
 </script>
 
@@ -2582,7 +2881,18 @@ onMounted(() => {
           />
         </div>
         <div class="flex flex-col gap-0.5">
-          <label class="text-[11px] text-[#6b7280]">Desde</label>
+          <label class="text-[11px] text-[#6b7280]">Moneda</label>
+          <AppDropdown
+            v-model="currencyPairFilter"
+            :options="currencyPairFilterOptions"
+            placeholder="Todas"
+            :searchable="false"
+            size="sm"
+            min-width="130px"
+          />
+        </div>
+        <div class="flex flex-col gap-0.5">
+          <label class="text-[11px] text-[#6b7280]">Envío desde</label>
           <AppDateInput
             v-model="createdAtFrom"
             size="sm"
@@ -2590,7 +2900,7 @@ onMounted(() => {
           />
         </div>
         <div class="flex flex-col gap-0.5">
-          <label class="text-[11px] text-[#6b7280]">Hasta</label>
+          <label class="text-[11px] text-[#6b7280]">Envío hasta</label>
           <AppDateInput v-model="createdAtTo" size="sm" class="min-w-[150px]" />
         </div>
         <div class="flex flex-col gap-0.5">
@@ -2639,6 +2949,22 @@ onMounted(() => {
 
     <!-- Tabla -->
     <div
+      v-if="
+        transactionsStore.isLoading &&
+        !transactionsStore.hasLoadedOnce &&
+        transactionsStore.transactions.length === 0
+      "
+      class="flex min-h-[220px] flex-col items-center justify-center gap-3 rounded-xl border border-[#e5e7eb] bg-white p-10"
+    >
+      <span
+        class="inline-block h-8 w-8 animate-spin rounded-full border-2 border-brasper-indigoStrong border-t-transparent"
+        aria-hidden="true"
+      />
+      <p class="text-sm font-medium text-[#374151]">Cargando transacciones…</p>
+    </div>
+
+    <div
+      v-else
       class="relative overflow-x-auto rounded-xl border border-[#e5e7eb] bg-white"
     >
       <div
@@ -2647,7 +2973,7 @@ onMounted(() => {
         "
         class="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/80"
       >
-        <span class="text-sm text-[#6b7280]">Cargando...</span>
+        <span class="text-sm font-medium text-[#374151]">Cargando transacciones…</span>
       </div>
       <div
         v-else-if="transactionsStore.isRefreshing"
@@ -2739,14 +3065,37 @@ onMounted(() => {
         </thead>
         <tbody>
           <tr
-            v-if="paginatedTransactions.length === 0"
+            v-if="searchedTransactions.length === 0"
             class="border-t border-[#e5e7eb]"
           >
             <td
               colspan="14"
               class="rounded-xl border border-[#dbe7fb] bg-[#fbfdff] px-6 py-12 text-center text-[#666]"
             >
-              No hay transacciones. Importa un archivo Excel o crea una nueva.
+              <template
+                v-if="
+                  transactionsStore.hasLoadedOnce &&
+                  transactionsStore.transactions.length === 0 &&
+                  !transactionsStore.error
+                "
+              >
+                <p class="mb-3">
+                  No se recibieron transacciones del servidor.
+                </p>
+                <button
+                  type="button"
+                  class="inline-flex items-center rounded-lg border border-[#e5e7eb] bg-white px-4 py-2 text-sm font-medium text-brasper-indigoStrong transition hover:bg-[#f9fafb]"
+                  @click="loadTransactions"
+                >
+                  Reintentar carga
+                </button>
+              </template>
+              <template v-else-if="transactionsStore.transactions.length === 0">
+                No hay transacciones. Importa un archivo Excel o crea una nueva.
+              </template>
+              <template v-else>
+                No hay transacciones que coincidan con los filtros.
+              </template>
             </td>
           </tr>
           <tr
@@ -2786,7 +3135,21 @@ onMounted(() => {
               </button>
             </td>
             <td class="whitespace-nowrap px-4 py-3 font-medium text-[#374151]">
-              {{ t.code?.trim() || "—" }}
+              <span class="inline-flex items-center gap-2">
+                <template
+                  v-for="flag in [getTransactionOriginFlag(t)]"
+                  :key="flag?.src ?? 'none'"
+                >
+                  <img
+                    v-if="flag"
+                    :src="flag.src"
+                    :alt="flag.label"
+                    :title="flag.label"
+                    class="h-5 w-5 shrink-0 rounded-full object-cover ring-1 ring-[#e5e7eb]"
+                  />
+                </template>
+                <span>{{ formatTransactionCodeForDisplay(t.code) }}</span>
+              </span>
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-[#374151]">
               {{ t.operation_number || "—" }}
@@ -2801,7 +3164,12 @@ onMounted(() => {
               {{ transactionCompanyNameTable(t) }}
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-center tabular-nums text-[#374151]">
-              {{ formatValueWithCurrency(t.origin_amount, getTransactionCurrencies(t).origin) }}
+              {{
+                formatValueWithCurrency(
+                  t.origin_amount,
+                  getTransactionCurrencies(t).origin,
+                )
+              }}
             </td>
             <td
               class="max-w-[180px] truncate px-4 py-3 text-[#374151]"
@@ -3349,7 +3717,7 @@ onMounted(() => {
 
     <!-- Paginación -->
     <div
-      v-if="transactionsStore.transactions.length > 0"
+      v-if="searchedTransactions.length > 0"
       class="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-[#e5e7eb] pt-4"
     >
       <div class="flex items-center gap-4 text-sm text-[#6b7280]">

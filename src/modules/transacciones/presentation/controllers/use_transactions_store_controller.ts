@@ -16,6 +16,7 @@ import {
 } from '../../application/use_cases'
 import { TransactionsApiAdapter } from '../../infrastructure/adapters'
 import type { TransactionsRepository } from '../../infrastructure/adapters/transactions_repository'
+import { enrichTransactionsWithSpecialDiscountMeta } from '../../infrastructure/utils/transaction_special_discount_meta'
 
 let transactionsRepositorySingleton: TransactionsRepository | null = null
 
@@ -55,6 +56,7 @@ interface TransactionsState {
   isCreating: boolean
   isUpdating: boolean
   error: string | null
+  hasLoadedOnce: boolean
 }
 
 export const useTransactionsStore = defineStore('transactions', {
@@ -65,7 +67,8 @@ export const useTransactionsStore = defineStore('transactions', {
     isImporting: false,
     isCreating: false,
     isUpdating: false,
-    error: null
+    error: null,
+    hasLoadedOnce: false
   }),
 
   actions: {
@@ -88,10 +91,11 @@ export const useTransactionsStore = defineStore('transactions', {
           const repo = getTransactionsRepository()
           const useCase = new GetTransactionsUseCase(repo)
           const list = await useCase.execute(params)
-          this.transactions = list
+          this.transactions = enrichTransactionsWithSpecialDiscountMeta(list)
         } catch (e) {
           this.error = errorMessageFromCatch(e, 'Error al cargar transacciones')
         } finally {
+          this.hasLoadedOnce = true
           if (background) {
             this.isRefreshing = false
           } else {

@@ -13,6 +13,7 @@ import type {
   GetTransactionsParams
 } from './transactions_repository'
 import type { Transaction } from '../../domain/models'
+import { extractTransactionsListFromApiPayload } from '../utils/transactions_api_list'
 
 function parseOptionalAmount(v: unknown): number | undefined {
   if (v == null || v === '') return undefined
@@ -296,15 +297,7 @@ function parseTransaction(item: unknown): Transaction {
 }
 
 function parseTransactions(data: unknown): Transaction[] {
-  if (!Array.isArray(data)) {
-    if (data != null && typeof data === 'object' && Array.isArray((data as { data?: unknown }).data)) {
-      return ((data as { data: unknown[] }).data).map((row) =>
-        transactionFromApiRecord(row as Record<string, unknown>),
-      )
-    }
-    return []
-  }
-  return data.map((row) =>
+  return extractTransactionsListFromApiPayload(data).map((row) =>
     transactionFromApiRecord(row as Record<string, unknown>),
   )
 }
@@ -331,12 +324,12 @@ export class TransactionsApiAdapter implements TransactionsRepository {
     if (qs) url += (url.includes('?') ? '&' : '?') + qs
     const response = await apiClient.get<unknown>(url)
     const raw = response.data
-    const data = Array.isArray(raw)
-      ? raw
-      : (raw != null && typeof raw === 'object' && Array.isArray((raw as { data?: unknown }).data))
-        ? (raw as { data: unknown[] }).data
-        : []
-    return parseTransactions(data)
+    if (typeof raw === 'string' && raw.trim().startsWith('<')) {
+      throw new Error(
+        'El servidor devolvió HTML en lugar de JSON al listar transacciones.',
+      )
+    }
+    return parseTransactions(raw)
   }
 
   async getTransactionById(id: string): Promise<Transaction | null> {
