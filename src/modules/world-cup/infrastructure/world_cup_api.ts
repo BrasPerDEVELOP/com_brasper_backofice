@@ -56,12 +56,16 @@ export const worldCupApi = {
     })
   },
   selectMatch(id: string, selected: boolean, settings?: MatchCouponSettings) {
+    const exchangeRateScopes = selected && settings
+      ? normalizeWorldCupExchangeRateScopes(settings.exchange_rate_scopes)
+      : []
     return apiClient.post<WorldCupMatch>(`${BASE}/matches/${id}/selection`, {
       selected,
       ...(selected && settings
         ? {
             ...settings,
-            exchange_rate_scopes: normalizeWorldCupExchangeRateScopes(settings.exchange_rate_scopes)
+            exchange_rate_scope: exchangeRateScopes[0],
+            exchange_rate_scopes: exchangeRateScopes
           }
         : undefined)
     })
