@@ -590,6 +590,20 @@ function couponCurrencyMatches(value: string | null | undefined, expected: strin
   return !couponCurrency || !targetCurrency || couponCurrency === targetCurrency;
 }
 
+function couponExchangeRateScopesMatch(coupon: Coupon, origin: string, destination: string): boolean {
+  const scopes = Array.isArray(coupon.exchange_rate_scopes)
+    ? coupon.exchange_rate_scopes.map((scope) => String(scope).trim().toUpperCase()).filter(Boolean)
+    : [];
+  if (!scopes.length) {
+    return couponCurrencyMatches(coupon.origin_currency, origin) && couponCurrencyMatches(coupon.destination_currency, destination);
+  }
+  if (scopes.includes("ALL")) return true;
+  const originCurrency = normalizeCurrencyCode(origin);
+  const destinationCurrency = normalizeCurrencyCode(destination);
+  if (!originCurrency || !destinationCurrency) return false;
+  return scopes.includes(`${originCurrency}_${destinationCurrency}`);
+}
+
 function isCouponCurrentlyActive(coupon: Coupon): boolean {
   if (!coupon.is_active) return false;
   const now = Date.now();
@@ -605,8 +619,7 @@ const availableCoupons = computed(() => {
   const destination = selectedAccountCurrencies.value.destination || calculatorStore.currencyTo;
   return cuponesStore.coupons
     .filter(isCouponCurrentlyActive)
-    .filter((coupon) => couponCurrencyMatches(coupon.origin_currency, origin))
-    .filter((coupon) => couponCurrencyMatches(coupon.destination_currency, destination))
+    .filter((coupon) => couponExchangeRateScopesMatch(coupon, origin, destination))
     .sort((a, b) => b.discount_percentage - a.discount_percentage);
 });
 

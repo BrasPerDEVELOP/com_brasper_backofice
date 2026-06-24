@@ -8,6 +8,26 @@ export const WORLD_CUP_EXCHANGE_RATE_OPTIONS = [
 
 export type WorldCupExchangeRateScope = typeof WORLD_CUP_EXCHANGE_RATE_OPTIONS[number]['value']
 
+const DEFAULT_WORLD_CUP_EXCHANGE_RATE_SCOPE: WorldCupExchangeRateScope = 'PEN_BRL'
+
+export function normalizeWorldCupExchangeRateScopes(
+  value: WorldCupExchangeRateScope[] | WorldCupExchangeRateScope | null | undefined
+): WorldCupExchangeRateScope[] {
+  const list = Array.isArray(value) ? value : value ? [value] : []
+  const unique = WORLD_CUP_EXCHANGE_RATE_OPTIONS
+    .map((option) => option.value)
+    .filter((scope) => list.includes(scope))
+  if (unique.includes('ALL')) return ['ALL']
+  return unique.length ? unique : [DEFAULT_WORLD_CUP_EXCHANGE_RATE_SCOPE]
+}
+
+export function getWorldCupExchangeRateScopeLabels(scopes: WorldCupExchangeRateScope[]): string {
+  const normalized = normalizeWorldCupExchangeRateScopes(scopes)
+  return normalized
+    .map((scope) => WORLD_CUP_EXCHANGE_RATE_OPTIONS.find((option) => option.value === scope)?.label ?? scope)
+    .join(', ')
+}
+
 export interface WorldCupCampaign {
   id: string
   name: string
@@ -15,7 +35,8 @@ export interface WorldCupCampaign {
   mode: 'REVIEW' | 'AUTOMATIC'
   default_discount_percentage: number
   default_max_uses: number
-  exchange_rate_scope: WorldCupExchangeRateScope
+  exchange_rate_scope?: WorldCupExchangeRateScope
+  exchange_rate_scopes: WorldCupExchangeRateScope[]
   code_template: string
   notification_emails: string[]
   updated_at: string
@@ -41,12 +62,13 @@ export interface WorldCupMatch {
   coupon_discount_percentage: number | null
   coupon_max_uses: number | null
   coupon_exchange_rate_scope: WorldCupExchangeRateScope | null
+  coupon_exchange_rate_scopes: WorldCupExchangeRateScope[]
 }
 
 export interface MatchCouponSettings {
   discount_percentage: number
   max_uses: number
-  exchange_rate_scope: WorldCupExchangeRateScope
+  exchange_rate_scopes: WorldCupExchangeRateScope[]
 }
 
 export interface AdminNotification {

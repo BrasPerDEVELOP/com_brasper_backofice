@@ -21,6 +21,11 @@ function parseCoupon(item: unknown): Coupon {
   const o = item as Record<string, unknown>
   const discountPercentage = Number(o.discount_percentage ?? 0)
   const maxUses = Number(o.max_uses ?? 0)
+  const exchangeRateScopes = Array.isArray(o.exchange_rate_scopes)
+    ? o.exchange_rate_scopes
+        .filter((item): item is string => typeof item === 'string')
+        .map((item) => item.toUpperCase())
+    : null
 
   return {
     id: String(o.id ?? ''),
@@ -29,6 +34,7 @@ function parseCoupon(item: unknown): Coupon {
     max_uses: Number.isNaN(maxUses) ? 0 : maxUses,
     origin_currency: String(o.origin_currency ?? '').toUpperCase(),
     destination_currency: String(o.destination_currency ?? '').toUpperCase(),
+    exchange_rate_scopes: exchangeRateScopes,
     start_date: String(o.start_date ?? ''),
     end_date: String(o.end_date ?? ''),
     is_active: Boolean(o.is_active),

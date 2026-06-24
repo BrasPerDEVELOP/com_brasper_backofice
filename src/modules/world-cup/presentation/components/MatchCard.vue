@@ -1,15 +1,23 @@
 <script setup lang="ts">
 import { computed, reactive, shallowRef, watch } from 'vue'
-import { WORLD_CUP_EXCHANGE_RATE_OPTIONS, type MatchCouponSettings, type WorldCupCampaign, type WorldCupMatch } from '../../domain/models'
+import {
+  WORLD_CUP_EXCHANGE_RATE_OPTIONS,
+  getWorldCupExchangeRateScopeLabels,
+  normalizeWorldCupExchangeRateScopes,
+  type MatchCouponSettings,
+  type WorldCupCampaign,
+  type WorldCupExchangeRateScope,
+  type WorldCupMatch
+} from '../../domain/models'
 
-type CampaignDefaults = Pick<WorldCupCampaign, 'default_discount_percentage' | 'default_max_uses' | 'exchange_rate_scope'>
+type CampaignDefaults = Pick<WorldCupCampaign, 'default_discount_percentage' | 'default_max_uses' | 'exchange_rate_scopes' | 'exchange_rate_scope'>
 
 const props = defineProps<{ match: WorldCupMatch; campaignDefaults: CampaignDefaults; busy: boolean }>()
 const emit = defineEmits<{
   select: [id: string, selected: boolean, settings?: MatchCouponSettings]
   action: [id: string, action: 'approve' | 'cancel']
 }>()
-const settings = reactive<MatchCouponSettings>({ discount_percentage: 10, max_uses: 100, exchange_rate_scope: 'PEN_BRL' })
+const settings = reactive<MatchCouponSettings>({ discount_percentage: 10, max_uses: 100, exchange_rate_scopes: ['PEN_BRL'] })
 const isEditingCoupon = shallowRef(false)
 const dateLabel = computed(() => new Intl.DateTimeFormat('es-PE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Lima' }).format(new Date(props.match.starts_at)))
 const badgeClass = computed(() => ({ LIVE: 'bg-emerald-100 text-emerald-800', FINISHED: 'bg-slate-200 text-slate-700', SCHEDULED: 'bg-blue-100 text-blue-800', POSTPONED: 'bg-amber-100 text-amber-800', CANCELLED: 'bg-rose-100 text-rose-800' }[props.match.status]))
@@ -21,15 +29,34 @@ const canConfigure = computed(() => !props.match.coupon_id || ['DRAFT', 'CANCELL
 const canEditCoupon = computed(() => Boolean(props.match.coupon_id) && !['EXPIRED', 'CANCELLED'].includes(props.match.coupon_status || '') && props.match.status !== 'FINISHED')
 const canDeactivate = computed(() => Boolean(props.match.coupon_id) && !['EXPIRED', 'CANCELLED'].includes(props.match.coupon_status || ''))
 const showSettingsForm = computed(() => (canConfigure.value || isEditingCoupon.value) && props.match.status !== 'FINISHED')
-const exchangeRateLabel = computed(() => WORLD_CUP_EXCHANGE_RATE_OPTIONS.find((option) => option.value === props.match.coupon_exchange_rate_scope)?.label ?? 'Tipo de cambio no definido')
+const exchangeRateLabel = computed(() => getWorldCupExchangeRateScopeLabels(props.match.coupon_exchange_rate_scopes))
 
 function submitSettings(): void {
-  emit('select', props.match.id, true, { ...settings })
+  emit('select', props.match.id, true, {
+    ...settings,
+    exchange_rate_scopes: normalizeWorldCupExchangeRateScopes(settings.exchange_rate_scopes)
+  })
   isEditingCoupon.value = false
 }
 
 function cancelEditing(): void {
   isEditingCoupon.value = false
+}
+
+function toggleExchangeRateScope(scope: WorldCupExchangeRateScope, checked: boolean): void {
+  const current = normalizeWorldCupExchangeRateScopes(settings.exchange_rate_scopes)
+  if (scope === 'ALL') {
+    settings.exchange_rate_scopes = checked ? ['ALL'] : ['PEN_BRL']
+    return
+  }
+  const next = checked
+    ? [...current.filter((item) => item !== 'ALL'), scope]
+    : current.filter((item) => item !== scope && item !== 'ALL')
+  settings.exchange_rate_scopes = normalizeWorldCupExchangeRateScopes(next)
+}
+
+function handleExchangeRateScopeChange(scope: WorldCupExchangeRateScope, event: Event): void {
+  toggleExchangeRateScope(scope, event.target instanceof HTMLInputElement && event.target.checked)
 }
 
 watch(
@@ -38,7 +65,11 @@ watch(
     Object.assign(settings, {
       discount_percentage: props.match.coupon_discount_percentage ?? props.campaignDefaults.default_discount_percentage,
       max_uses: props.match.coupon_max_uses ?? props.campaignDefaults.default_max_uses,
-      exchange_rate_scope: props.match.coupon_exchange_rate_scope ?? props.campaignDefaults.exchange_rate_scope
+      exchange_rate_scopes: normalizeWorldCupExchangeRateScopes(
+        props.match.coupon_exchange_rate_scopes?.length
+          ? props.match.coupon_exchange_rate_scopes
+          : (props.match.coupon_exchange_rate_scope ?? props.campaignDefaults.exchange_rate_scopes ?? props.campaignDefaults.exchange_rate_scope)
+      )
     })
     isEditingCoupon.value = false
   },
@@ -60,7 +91,15 @@ watch(
       <div class="grid grid-cols-2 gap-2">
         <label class="text-xs font-medium text-slate-600">Descuento %<input v-model.number="settings.discount_percentage" class="coupon-field" type="number" min="0.01" max="100" step="0.01" required /></label>
         <label class="text-xs font-medium text-slate-600">Usos máximos<input v-model.number="settings.max_uses" class="coupon-field" type="number" min="1" required /></label>
-        <label class="col-span-2 text-xs font-medium text-slate-600">Tipos de cambio afectados<select v-model="settings.exchange_rate_scope" class="coupon-field"><option v-for="option in WORLD_CUP_EXCHANGE_RATE_OPTIONS" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
+        <fieldset class="col-span-2">
+          <legend class="text-xs font-medium text-slate-600">Tipos de cambio afectados</legend>
+          <div class="mt-2 grid gap-2 rounded-xl bg-white/70 p-2">
+            <label v-for="option in WORLD_CUP_EXCHANGE_RATE_OPTIONS" :key="option.value" class="flex items-center gap-2 text-xs font-medium text-slate-700">
+              <input type="checkbox" class="h-4 w-4 rounded border-slate-300 text-brasper-indigoStrong" :checked="settings.exchange_rate_scopes.includes(option.value)" @change="handleExchangeRateScopeChange(option.value, $event)" />
+              {{ option.label }}
+            </label>
+          </div>
+        </fieldset>
       </div>
       <div class="mt-3 flex flex-wrap gap-2">
         <button class="min-h-11 flex-1 rounded-xl bg-brasper-indigoStrong px-4 text-sm font-semibold text-white disabled:opacity-50" :disabled="busy">{{ busy ? 'Guardando…' : match.selected ? `Guardar cupón de ${settings.discount_percentage}%` : `Crear cupón de ${settings.discount_percentage}%` }}</button>

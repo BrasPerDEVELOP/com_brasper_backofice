@@ -5,6 +5,7 @@ export interface Coupon {
   max_uses: number
   origin_currency: string
   destination_currency: string
+  exchange_rate_scopes?: string[] | null
   start_date: string
   end_date: string
   is_active: boolean

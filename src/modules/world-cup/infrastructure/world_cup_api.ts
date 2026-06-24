@@ -6,9 +6,30 @@ import type {
   WorldCupMatch,
   WorldCupSyncResult
 } from '../domain/models'
+import { normalizeWorldCupExchangeRateScopes } from '../domain/models'
 
 const BASE = 'world-cup'
 const SYNC_TIMEOUT_MS = 120_000
+
+function normalizeCampaign(campaign: WorldCupCampaign): WorldCupCampaign {
+  return {
+    ...campaign,
+    exchange_rate_scopes: normalizeWorldCupExchangeRateScopes(
+      campaign.exchange_rate_scopes ?? campaign.exchange_rate_scope
+    )
+  }
+}
+
+function normalizeMatch(match: WorldCupMatch): WorldCupMatch {
+  return {
+    ...match,
+    coupon_exchange_rate_scopes: normalizeWorldCupExchangeRateScopes(
+      match.coupon_exchange_rate_scopes?.length
+        ? match.coupon_exchange_rate_scopes
+        : match.coupon_exchange_rate_scope
+    )
+  }
+}
 
 export const worldCupApi = {
   async load() {
@@ -17,10 +38,17 @@ export const worldCupApi = {
       apiClient.get<WorldCupMatch[]>(`${BASE}/matches`),
       apiClient.get<AdminNotification[]>(`${BASE}/notifications`)
     ])
-    return { campaign: campaign.data, matches: matches.data, notifications: notifications.data }
+    return {
+      campaign: normalizeCampaign(campaign.data),
+      matches: matches.data.map(normalizeMatch),
+      notifications: notifications.data
+    }
   },
   saveCampaign(payload: Omit<WorldCupCampaign, 'id' | 'name' | 'updated_at'>) {
-    return apiClient.put<WorldCupCampaign>(`${BASE}/campaign`, payload)
+    return apiClient.put<WorldCupCampaign>(`${BASE}/campaign`, {
+      ...payload,
+      exchange_rate_scopes: normalizeWorldCupExchangeRateScopes(payload.exchange_rate_scopes)
+    })
   },
   sync() {
     return apiClient.post<WorldCupSyncResult>(`${BASE}/sync`, undefined, {
@@ -30,7 +58,12 @@ export const worldCupApi = {
   selectMatch(id: string, selected: boolean, settings?: MatchCouponSettings) {
     return apiClient.post<WorldCupMatch>(`${BASE}/matches/${id}/selection`, {
       selected,
-      ...(selected ? settings : undefined)
+      ...(selected && settings
+        ? {
+            ...settings,
+            exchange_rate_scopes: normalizeWorldCupExchangeRateScopes(settings.exchange_rate_scopes)
+          }
+        : undefined)
     })
   },
   couponAction(id: string, action: 'approve' | 'cancel') {

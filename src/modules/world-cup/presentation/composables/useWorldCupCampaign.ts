@@ -64,7 +64,7 @@ export function useWorldCupCampaign() {
 
   return {
     campaign,
-    matches: readonly(matches),
+    matches,
     notifications: readonly(notifications),
     loading: readonly(loading),
     busyId: readonly(busyId),
