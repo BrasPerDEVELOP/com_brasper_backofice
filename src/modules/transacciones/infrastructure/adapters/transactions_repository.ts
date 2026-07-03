@@ -52,10 +52,40 @@ export interface GetTransactionsParams {
   bank_account_destination_id?: string | null
   created_at_from?: string | null
   created_at_to?: string | null
+  /** Rango por `send_date` (fecha de envío), distinto de `created_at`. */
+  send_date_from?: string | null
+  send_date_to?: string | null
+  /** Búsqueda de texto libre (código, nº de operación o id). */
+  search?: string | null
+  /** Filtro por moneda (origen o destino de la tasa). */
+  currency?: string | null
+  /** Moneda origen de la tasa (coin_a). */
+  origin_currency?: string | null
+  /** Moneda destino de la tasa (coin_b). */
+  destination_currency?: string | null
+  /** Paginación de servidor. */
+  skip?: number | null
+  limit?: number | null
+}
+
+/** Página de transacciones devuelta por el API (paginación offset/limit). */
+export interface PagedTransactions {
+  items: Transaction[]
+  total: number
+}
+
+/** Métricas agregadas para el dashboard (sobre todas las transacciones). */
+export interface TransactionMetrics {
+  total: number
+  by_status: Record<string, number>
+  volume_origin: number
+  volume_destination: number
+  last_7_days: number
 }
 
 export interface TransactionsRepository {
-  getTransactions(params?: GetTransactionsParams): Promise<Transaction[]>
+  getTransactions(params?: GetTransactionsParams): Promise<PagedTransactions>
+  getTransactionMetrics(): Promise<TransactionMetrics>
   getTransactionById(id: string): Promise<Transaction | null>
   createTransaction(payload: CreateTransactionPayload): Promise<Transaction>
   updateTransaction(id: string, payload: UpdateTransactionPayload): Promise<Transaction>

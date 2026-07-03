@@ -1,0 +1,55 @@
+{
+  "title": "Contrato del endpoint de Métricas semanales",
+  "description": "Contrato entre el frontend (src/modules/metrics) y el backend FastAPI (com_brasper_api, app/modules/metrics). Implementado: GET /metrics/weekly.",
+  "endpoint": {
+    "method": "GET",
+    "url": "{{baseUrl}}/metrics/weekly",
+    "baseUrl_example": "http://127.0.0.1:8000",
+    "nota": "Backend FastAPI (sin barra final; redirect_slashes acepta también /metrics/weekly/). Requiere autenticación (header Authorization) y permiso 'metrics.view'. Ruta configurable en el frontend vía VITE_METRICS_WEEKLY_PATH."
+  },
+  "query_params": {
+    "origin_currency": { "tipo": "string (PEN|BRL|USD)", "obligatorio": true, "nota": "Moneda de origen del corredor." },
+    "destination_currency": { "tipo": "string (PEN|BRL|USD)", "obligatorio": true, "nota": "Moneda de destino del corredor." },
+    "date_from": { "tipo": "string (YYYY-MM-DD)", "obligatorio": false, "nota": "Si se omite: día→últimos 30 días, week→12 semanas, month→12 meses." },
+    "date_to": { "tipo": "string (YYYY-MM-DD)", "obligatorio": false },
+    "granularity": { "tipo": "string (day|week|month)", "obligatorio": false, "nota": "Agrupación temporal. Por defecto: week. Usa date_trunc de PostgreSQL." },
+    "status": { "tipo": "string", "obligatorio": false, "nota": "Clave de estado de transacción (mismas claves que TRANSACTION_STATUS_LABELS del frontend)." },
+    "agent_id": { "tipo": "string (UUID)", "obligatorio": false, "nota": "Filtra por asesor (id de usuario)." }
+  },
+  "response_200": {
+    "range": {
+      "date_from": "YYYY-MM-DD",
+      "date_to": "YYYY-MM-DD",
+      "origin_currency": "string | null",
+      "destination_currency": "string | null",
+      "corridor": "string (ej. 'PEN→BRL')",
+      "granularity": "string (day|week|month)"
+    },
+    "weeks": [
+      {
+        "period_start": "YYYY-MM-DD (inicio del bucket: día, lunes de semana, o día 1 del mes)",
+        "envios_count": "number (nº de envíos)",
+        "envios_volume_origin": "number (volumen en moneda origen)",
+        "clientes_nuevos": "number",
+        "caja_origin_in": "number (entradas en moneda origen)",
+        "caja_destination_out": "number (salidas en moneda destino)",
+        "caja_diferencia": "number (diferencia de cuadre)",
+        "facturado_destino": "number (facturado en moneda destino)"
+      }
+    ],
+    "totals": {
+      "envios_count": "number",
+      "envios_volume_origin": "number",
+      "clientes_nuevos": "number",
+      "caja_origin_in": "number",
+      "caja_destination_out": "number",
+      "caja_diferencia": "number",
+      "facturado_destino": "number"
+    }
+  },
+  "notas_frontend": [
+    "Todos los campos numéricos se normalizan con fallback a 0 si faltan o no son numéricos (ver metrics_api_adapter.ts).",
+    "weeks vacío o ausente => la vista muestra 'Sin datos para el rango seleccionado' por gráfico.",
+    "Un 404 se muestra como: 'El endpoint de métricas (metrics/weekly/) no está disponible en el backend (404).'"
+  ]
+}

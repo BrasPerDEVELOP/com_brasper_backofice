@@ -35,10 +35,10 @@ import {
   normalizeTransactionStatus,
   resolveTransactionStatusForDisplay,
   roundMoneyAmount,
-  transactionMatchesSendDateRange,
+  localDateInputStartMs,
+  localDateInputEndMs,
   normalizeCurrencyCode,
   resolveTransactionCurrencyPair,
-  transactionMatchesCurrencyPair,
   inferOriginCurrencyFromTransactionCode,
   formatTransactionCodeForDisplay,
   SPECIAL_CALCULATOR_DISCOUNT_CODE,
@@ -152,12 +152,12 @@ const userFilterOptions = computed(() => [
 ]);
 
 const currencyPairFilterOptions = computed(() => {
+  // Pares válidos desde el catálogo de tasas (fuente autoritativa),
+  // independiente de la página de transacciones cargada.
   const pairs = new Map<string, string>();
-  for (const t of transactionsStore.transactions) {
-    const { origin, destination } = resolveTransactionCurrencyPair(
-      t,
-      currencyResolutionLookups.value,
-    );
+  for (const rate of tasasStore.taxRates) {
+    const origin = (rate.coin_a ?? "").toUpperCase();
+    const destination = (rate.coin_b ?? "").toUpperCase();
     if (!origin || !destination) continue;
     const key = `${origin.toLowerCase()}-${destination.toLowerCase()}`;
     pairs.set(key, `${origin}-${destination}`);
@@ -1193,85 +1193,44 @@ watch(
   { immediate: true },
 );
 
-const apiFilterParams = computed((): GetTransactionsParams | undefined => {
-  const p: GetTransactionsParams = {};
+/**
+ * Parámetros enviados al API. El filtrado (estado efectivo, cuenta origen/destino,
+ * par de monedas, rango por `send_date`, búsqueda) y la paginación se resuelven
+ * en el servidor.
+ */
+const apiFilterParams = computed((): GetTransactionsParams => {
+  const p: GetTransactionsParams = {
+    skip: (currentPage.value - 1) * perPage.value,
+    limit: perPage.value,
+  };
   if (statusFilter.value && statusFilter.value !== "todos")
     p.status = statusFilter.value;
   if (userFilter.value?.trim()) p.user_id = userFilter.value.trim();
-  /** Rango de fechas: solo en cliente por `send_date` (la API filtra `created_at`). */
-  return Object.keys(p).length ? p : undefined;
+  if (bankAccountFilter.value?.trim())
+    p.bank_account_id = bankAccountFilter.value.trim();
+  const pair = currencyPairFilter.value?.trim();
+  if (pair) {
+    const [origin, destination] = pair.split("-");
+    if (origin) p.origin_currency = origin.toUpperCase();
+    if (destination) p.destination_currency = destination.toUpperCase();
+  }
+  const fromMs = localDateInputStartMs(createdAtFrom.value);
+  const toMs = localDateInputEndMs(createdAtTo.value);
+  if (fromMs != null) p.send_date_from = new Date(fromMs).toISOString();
+  if (toMs != null) p.send_date_to = new Date(toMs).toISOString();
+  const q = debouncedSearch.value.trim();
+  if (q) p.search = q;
+  return p;
 });
 
-const searchedTransactions = computed(() => {
-  let list = transactionsStore.transactions;
+/** Página actual (ya filtrada y paginada por el servidor). */
+const paginatedTransactions = computed(() => transactionsStore.transactions);
 
-  // Filtro por estado
-  if (statusFilter.value && statusFilter.value !== "todos") {
-    list = list.filter((t) => {
-      const eff =
-        resolveTransactionStatusForDisplay(t) ?? t.status ?? "";
-      return eff.toLowerCase() === statusFilter.value.toLowerCase();
-    });
-  }
-
-  // Filtro por cliente
-  if (userFilter.value?.trim()) {
-    list = list.filter((t) => (t.user_id ?? "") === userFilter.value.trim());
-  }
-
-  // Filtro por cuenta bancaria (origen o destino)
-  if (bankAccountFilter.value?.trim()) {
-    const accountId = bankAccountFilter.value.trim();
-    list = list.filter(
-      (t) =>
-        (t.bank_account_origin_id ?? t.bank_account_id ?? "") === accountId ||
-        (t.bank_account_destination_id ?? "") === accountId,
-    );
-  }
-
-  if (currencyPairFilter.value?.trim()) {
-    list = list.filter((t) =>
-      transactionMatchesCurrencyPair(
-        t,
-        currencyPairFilter.value,
-        currencyResolutionLookups.value,
-      ),
-    );
-  }
-
-  if (createdAtFrom.value?.trim() || createdAtTo.value?.trim()) {
-    list = list.filter((t) =>
-      transactionMatchesSendDateRange(
-        t,
-        createdAtFrom.value,
-        createdAtTo.value,
-      ),
-    );
-  }
-
-  // Búsqueda por código
-  const q = debouncedSearch.value.trim().toLowerCase();
-  if (q) {
-    list = list.filter((t) => {
-      const code = (t.code ?? "").toLowerCase();
-      const id = (t.id ?? "").toLowerCase();
-      const operationNumber = (t.operation_number ?? "").toLowerCase();
-      return code.includes(q) || id.includes(q) || operationNumber.includes(q);
-    });
-  }
-
-  return list;
-});
+const totalResults = computed(() => transactionsStore.total);
 
 const totalPages = computed(() =>
-  Math.max(1, Math.ceil(searchedTransactions.value.length / perPage.value)),
+  Math.max(1, Math.ceil(totalResults.value / perPage.value)),
 );
-
-const paginatedTransactions = computed(() => {
-  const page = Math.min(currentPage.value, totalPages.value);
-  const start = (page - 1) * perPage.value;
-  return searchedTransactions.value.slice(start, start + perPage.value);
-});
 
 function syncCurrentPageToTotal() {
   if (currentPage.value > totalPages.value) {
@@ -2718,25 +2677,28 @@ watch(
   },
 );
 
-watch([perPage], () => {
-  currentPage.value = 1;
-});
+// Al cambiar filtros/búsqueda/tamaño de página, vuelve a la primera página.
+watch(
+  [
+    statusFilter,
+    userFilter,
+    bankAccountFilter,
+    currencyPairFilter,
+    createdAtFrom,
+    createdAtTo,
+    debouncedSearch,
+    perPage,
+  ],
+  () => {
+    currentPage.value = 1;
+  },
+);
 
-watch(debouncedSearch, () => {
-  currentPage.value = 1;
-});
+// Cualquier cambio de filtros o de página recarga desde el servidor.
+watch(apiFilterParams, () => loadTransactions(), { deep: true });
 
 watch(totalPages, () => {
   syncCurrentPageToTotal();
-});
-
-watch([statusFilter, userFilter, bankAccountFilter], () => {
-  currentPage.value = 1;
-  loadTransactions();
-});
-
-watch([createdAtFrom, createdAtTo, currencyPairFilter], () => {
-  currentPage.value = 1;
 });
 
 watch(currencyPairFilterOptions, (options) => {
@@ -2908,7 +2870,7 @@ onActivated(() => {
           <div
             class="flex h-9 min-w-[3rem] items-center justify-center rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 text-sm font-medium text-[#374151]"
           >
-            {{ searchedTransactions.length }}
+            {{ totalResults }}
           </div>
         </div>
       </div>
@@ -3065,7 +3027,7 @@ onActivated(() => {
         </thead>
         <tbody>
           <tr
-            v-if="searchedTransactions.length === 0"
+            v-if="paginatedTransactions.length === 0"
             class="border-t border-[#e5e7eb]"
           >
             <td
@@ -3075,12 +3037,12 @@ onActivated(() => {
               <template
                 v-if="
                   transactionsStore.hasLoadedOnce &&
-                  transactionsStore.transactions.length === 0 &&
+                  totalResults === 0 &&
                   !transactionsStore.error
                 "
               >
                 <p class="mb-3">
-                  No se recibieron transacciones del servidor.
+                  No hay transacciones que coincidan con los filtros.
                 </p>
                 <button
                   type="button"
@@ -3090,11 +3052,8 @@ onActivated(() => {
                   Reintentar carga
                 </button>
               </template>
-              <template v-else-if="transactionsStore.transactions.length === 0">
-                No hay transacciones. Importa un archivo Excel o crea una nueva.
-              </template>
               <template v-else>
-                No hay transacciones que coincidan con los filtros.
+                No hay transacciones en esta página.
               </template>
             </td>
           </tr>
@@ -3717,7 +3676,7 @@ onActivated(() => {
 
     <!-- Paginación -->
     <div
-      v-if="searchedTransactions.length > 0"
+      v-if="totalResults > 0"
       class="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-[#e5e7eb] pt-4"
     >
       <div class="flex items-center gap-4 text-sm text-[#6b7280]">
@@ -3732,7 +3691,7 @@ onActivated(() => {
         />
       </div>
       <div class="flex items-center gap-2 text-sm text-[#6b7280]">
-        <span>{{ searchedTransactions.length }} resultados</span>
+        <span>{{ totalResults }} resultados</span>
         <div class="flex gap-1">
           <button
             type="button"

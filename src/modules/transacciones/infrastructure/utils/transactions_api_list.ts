@@ -22,3 +22,19 @@ export function extractTransactionsListFromApiPayload(raw: unknown): unknown[] {
 
   return []
 }
+
+/**
+ * Extrae el total de una respuesta paginada. Si el API no lo provee
+ * (respuesta como arreglo plano o sin `total`), retorna `fallback`
+ * (normalmente el número de ítems de la página).
+ */
+export function extractTotalFromApiPayload(raw: unknown, fallback = 0): number {
+  if (raw != null && typeof raw === 'object' && !Array.isArray(raw)) {
+    const obj = raw as Record<string, unknown>
+    const total = obj.total
+    if (typeof total === 'number' && Number.isFinite(total) && total >= 0) {
+      return total
+    }
+  }
+  return fallback
+}

@@ -50,6 +50,8 @@ export interface LoadTransactionsOptions {
 
 interface TransactionsState {
   transactions: Transaction[]
+  /** Total de registros que coinciden con el filtro (paginación de servidor). */
+  total: number
   isLoading: boolean
   isRefreshing: boolean
   isImporting: boolean
@@ -62,6 +64,7 @@ interface TransactionsState {
 export const useTransactionsStore = defineStore('transactions', {
   state: (): TransactionsState => ({
     transactions: [],
+    total: 0,
     isLoading: false,
     isRefreshing: false,
     isImporting: false,
@@ -90,8 +93,9 @@ export const useTransactionsStore = defineStore('transactions', {
         try {
           const repo = getTransactionsRepository()
           const useCase = new GetTransactionsUseCase(repo)
-          const list = await useCase.execute(params)
-          this.transactions = enrichTransactionsWithSpecialDiscountMeta(list)
+          const { items, total } = await useCase.execute(params)
+          this.transactions = enrichTransactionsWithSpecialDiscountMeta(items)
+          this.total = total
         } catch (e) {
           this.error = errorMessageFromCatch(e, 'Error al cargar transacciones')
         } finally {
@@ -139,6 +143,7 @@ export const useTransactionsStore = defineStore('transactions', {
         const useCase = new CreateTransactionUseCase(repo)
         const created = await useCase.execute(payload)
         this.transactions = [created, ...this.transactions]
+        this.total += 1
         return created
       } catch (e) {
         this.error = errorMessageFromCatch(e, 'Error al crear transacción')
@@ -173,6 +178,7 @@ export const useTransactionsStore = defineStore('transactions', {
         const useCase = new DeleteTransactionUseCase(repo)
         await useCase.execute(id)
         this.transactions = this.transactions.filter((t) => (t.id ?? '') !== id)
+        this.total = Math.max(0, this.total - 1)
       } catch (e) {
         this.error = e instanceof Error ? e.message : 'Error al eliminar transacción'
         throw e

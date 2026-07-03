@@ -114,5 +114,10 @@ export const env = {
   /** Ruta del endpoint de importación de transacciones. Si vacío, no hay import masivo. */
   get transactionsImportPath(): string {
     return getEnv('VITE_TRANSACTIONS_IMPORT_PATH', 'transactions/import/')
+  },
+
+  /** Ruta del endpoint de métricas semanales. Por defecto: metrics/weekly */
+  get metricsWeeklyPath(): string {
+    return getEnv('VITE_METRICS_WEEKLY_PATH', 'metrics/weekly')
   }
 }

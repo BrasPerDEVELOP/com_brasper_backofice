@@ -3,56 +3,172 @@
     class="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_15%_20%,_rgba(64,196,255,0.28),_transparent_35%),radial-gradient(circle_at_85%_10%,_rgba(63,81,181,0.2),_transparent_38%),linear-gradient(to_bottom,_#f9f9f9,_#f3f4f6)] px-4 py-8"
   >
     <div class="grid w-full max-w-5xl overflow-hidden rounded-3xl border border-[#d8e5fb] bg-white shadow-2xl lg:grid-cols-2">
-      <div class="hidden bg-gradient-to-br from-[#0F123E] via-[#232b4d] to-brasper-indigoStrong p-10 text-white lg:block">
-        <p class="text-xs font-semibold uppercase tracking-[0.3em] text-brasper-cyanLight">Brasper</p>
-        <h2 class="mt-3 text-3xl font-semibold leading-tight">
-          Backoffice
-          <span class="block text-brasper-indigo">Administración central</span>
-        </h2>
-        <p class="mt-5 max-w-xs text-sm text-[#d3dcfb]">
-          Controla tasas, comisiones y operaciones desde un panel seguro y moderno.
-        </p>
+      <!-- Panel izquierdo: branding -->
+      <div
+        class="relative hidden flex-col justify-between overflow-hidden bg-gradient-to-br from-brasper-darkDeep via-brasper-dark to-brasper-indigoStrong p-10 text-white lg:flex"
+      >
+        <!-- Formas decorativas -->
+        <div class="pointer-events-none absolute -bottom-24 -right-16 h-72 w-72 rotate-45 rounded-3xl bg-white/[0.04]"></div>
+        <div class="pointer-events-none absolute -bottom-10 right-10 h-56 w-56 rotate-45 rounded-3xl bg-brasper-indigo/20"></div>
+
+        <div class="relative z-10">
+          <div class="flex items-center gap-3">
+            <span class="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-brasper-cyanLight to-brasper-indigoStrong shadow-lg shadow-brasper-indigoStrong/40">
+              <svg class="h-5 w-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="11" width="18" height="11" rx="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+            </span>
+            <span class="text-sm font-semibold uppercase tracking-[0.3em] text-white/90">Brasper</span>
+          </div>
+
+          <h2 class="mt-16 text-4xl font-bold leading-tight">
+            Backoffice
+            <span class="mt-1 block text-[#8ea3ff]">Administración central</span>
+          </h2>
+          <p class="mt-5 max-w-xs text-sm leading-relaxed text-[#c9d3fb]">
+            Controla tasas, comisiones y operaciones desde un panel seguro y moderno.
+          </p>
+        </div>
+
+        <ul class="relative z-10 mt-16 space-y-3 text-sm text-[#c9d3fb]">
+          <li class="flex items-center gap-2.5">
+            <svg class="h-4 w-4 shrink-0 text-brasper-cyanLight" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              <path d="m9 12 2 2 4-4" />
+            </svg>
+            Conexión cifrada de extremo a extremo
+          </li>
+          <li class="flex items-center gap-2.5">
+            <svg class="h-4 w-4 shrink-0 text-brasper-cyanLight" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="7.5" cy="15.5" r="4.5" />
+              <path d="m10.7 12.3 8.6-8.6M17 5l2 2M15 7l2 2" />
+            </svg>
+            Acceso segmentado por roles
+          </li>
+        </ul>
       </div>
 
-      <div class="p-8 md:p-10">
+      <!-- Panel derecho: formulario -->
+      <div class="flex flex-col p-8 md:p-10">
+        <p class="mb-6 text-right text-sm text-brasper-textSoft">
+          ¿Problemas para entrar?
+          <a :href="supportMailto" class="font-medium text-brasper-indigoStrong hover:underline">Contacta a soporte</a>
+        </p>
+
         <div class="mb-8">
           <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brasper-indigoStrong">Acceso seguro</p>
-          <h1 class="mt-2 text-3xl font-semibold text-[#232b4d]">Iniciar sesión</h1>
-          <p class="mt-2 text-sm text-[#666]">Ingresa con tu cuenta del equipo Brasper (admin, asesores u otros roles con permiso).</p>
+          <h1 class="mt-2 text-3xl font-bold text-brasper-dark">Iniciar sesión</h1>
+          <p class="mt-2 text-sm text-brasper-textSoft">
+            Ingresa con tu cuenta del equipo Brasper (admin, asesores u otros roles con permiso).
+          </p>
         </div>
 
         <form class="flex flex-col gap-5" @submit.prevent="handleLogin">
           <div>
-            <label class="mb-1.5 block text-sm font-medium text-[#333]">Usuario</label>
-            <input
-              v-model="username"
-              type="text"
-              required
-              class="w-full rounded-xl border border-[#cfdbef] bg-white px-3 py-2.5 text-[#333] outline-none transition focus:border-brasper-indigoStrong focus:ring-4 focus:ring-brasper-indigoStrong/20"
-            />
+            <label for="login-username" class="mb-1.5 block text-sm font-medium text-brasper-text">Usuario</label>
+            <div class="relative">
+              <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-brasper-textSoft">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="2" y="4" width="20" height="16" rx="2" />
+                  <path d="m22 7-10 6L2 7" />
+                </svg>
+              </span>
+              <input
+                id="login-username"
+                v-model="username"
+                type="text"
+                required
+                autocomplete="username"
+                placeholder="tu@correo.com"
+                class="w-full rounded-xl border border-[#cfdbef] bg-white py-2.5 pl-10 pr-3 text-brasper-text outline-none transition placeholder:text-[#aab4c8] focus:border-brasper-indigoStrong focus:ring-4 focus:ring-brasper-indigoStrong/20"
+              />
+            </div>
           </div>
+
           <div>
-            <label class="mb-1.5 block text-sm font-medium text-[#333]">Contraseña</label>
-            <input
-              v-model="password"
-              type="password"
-              required
-              class="w-full rounded-xl border border-[#cfdbef] bg-white px-3 py-2.5 text-[#333] outline-none transition focus:border-brasper-indigoStrong focus:ring-4 focus:ring-brasper-indigoStrong/20"
-            />
+            <label for="login-password" class="mb-1.5 block text-sm font-medium text-brasper-text">Contraseña</label>
+            <div class="relative">
+              <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-brasper-textSoft">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="11" width="18" height="11" rx="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+              </span>
+              <input
+                id="login-password"
+                v-model="password"
+                :type="showPassword ? 'text' : 'password'"
+                required
+                autocomplete="current-password"
+                class="w-full rounded-xl border border-[#cfdbef] bg-white py-2.5 pl-10 pr-24 text-brasper-text outline-none transition focus:border-brasper-indigoStrong focus:ring-4 focus:ring-brasper-indigoStrong/20"
+              />
+              <button
+                type="button"
+                class="absolute inset-y-0 right-0 flex items-center gap-1.5 pr-3 text-sm text-brasper-textSoft transition hover:text-brasper-indigoStrong"
+                :aria-label="showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'"
+                @click="showPassword = !showPassword"
+              >
+                <svg v-if="!showPassword" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+                <svg v-else class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c6.5 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+                  <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3.5 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+                  <path d="m2 2 20 20M9.88 9.88a3 3 0 0 0 4.24 4.24" />
+                </svg>
+                {{ showPassword ? 'Ocultar' : 'Mostrar' }}
+              </button>
+            </div>
           </div>
+
+          <div class="flex items-center justify-between">
+            <label class="flex cursor-pointer select-none items-center gap-2 text-sm text-brasper-text">
+              <input
+                v-model="rememberSession"
+                type="checkbox"
+                class="h-4 w-4 rounded border-[#cfdbef] text-brasper-indigoStrong focus:ring-brasper-indigoStrong/30"
+              />
+              Recordar sesión
+            </label>
+            <button
+              type="button"
+              class="text-sm font-medium text-brasper-indigoStrong hover:underline"
+              @click="showForgotHint = true"
+            >
+              ¿Olvidaste tu contraseña?
+            </button>
+          </div>
+
+          <p v-if="showForgotHint" class="rounded-lg bg-brasper-indigoStrong/10 px-3 py-2 text-sm text-brasper-indigoStrong">
+            Contacta a un administrador para restablecer tu contraseña.
+          </p>
 
           <button
             type="submit"
             :disabled="authStore.isLoading || isSsoProcessing"
-            class="mt-2 w-full rounded-xl bg-gradient-to-r from-brasper-cyanLight to-brasper-indigoStrong px-4 py-2.5 font-semibold text-white shadow-lg shadow-brasper-indigoStrong/25 transition hover:opacity-95 disabled:opacity-50"
+            class="mt-1 w-full rounded-xl bg-gradient-to-r from-[#4361EE] via-brasper-indigoStrong to-[#4B2FC4] px-4 py-3 font-semibold text-white shadow-lg shadow-brasper-indigoStrong/30 transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {{ isSsoProcessing ? 'Validando SSO...' : authStore.isLoading ? 'Ingresando...' : 'Entrar al panel' }}
           </button>
 
-          <p v-if="authStore.error" class="rounded-lg bg-[#dc3545]/10 px-3 py-2 text-center text-sm text-[#dc3545]">
+          <p v-if="authStore.error" class="rounded-lg bg-brasper-danger/10 px-3 py-2 text-center text-sm text-brasper-danger">
             {{ authStore.error }}
           </p>
+
+          <p class="flex items-center justify-center gap-1.5 text-xs text-brasper-textSoft">
+            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="11" width="18" height="11" rx="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+            Conexión protegida · SSL 256-bit
+          </p>
         </form>
+
+        <footer class="mt-8 text-center text-xs text-brasper-textSoft">
+          © {{ currentYear }} Brasper &nbsp;•&nbsp; Términos &nbsp;•&nbsp; Privacidad
+        </footer>
       </div>
     </div>
   </div>
@@ -73,6 +189,12 @@ const { processFromQuery } = useAdminSso()
 const username = ref(env.username)
 const password = ref(env.password)
 const isSsoProcessing = ref(false)
+const showPassword = ref(false)
+const rememberSession = ref(true)
+const showForgotHint = ref(false)
+
+const currentYear = new Date().getFullYear()
+const supportMailto = 'mailto:soporte@brasper.com?subject=Ayuda%20para%20acceder%20al%20backoffice'
 
 async function tryAdminSsoLogin() {
   const query = new URLSearchParams(window.location.search)

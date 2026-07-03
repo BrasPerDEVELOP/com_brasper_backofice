@@ -10,10 +10,15 @@ import type {
   TransactionsRepository,
   CreateTransactionPayload,
   UpdateTransactionPayload,
-  GetTransactionsParams
+  GetTransactionsParams,
+  PagedTransactions,
+  TransactionMetrics
 } from './transactions_repository'
 import type { Transaction } from '../../domain/models'
-import { extractTransactionsListFromApiPayload } from '../utils/transactions_api_list'
+import {
+  extractTransactionsListFromApiPayload,
+  extractTotalFromApiPayload,
+} from '../utils/transactions_api_list'
 
 function parseOptionalAmount(v: unknown): number | undefined {
   if (v == null || v === '') return undefined
@@ -308,7 +313,7 @@ export class TransactionsApiAdapter implements TransactionsRepository {
     return p ? Domain.apiPath(`transactions/${p}`) : Domain.apiPath('transactions/')
   }
 
-  async getTransactions(params?: GetTransactionsParams): Promise<Transaction[]> {
+  async getTransactions(params?: GetTransactionsParams): Promise<PagedTransactions> {
     let url = this.endpoint('')
     const search = new URLSearchParams()
     if (params?.status?.trim()) search.set('status', params.status.trim())
@@ -320,6 +325,18 @@ export class TransactionsApiAdapter implements TransactionsRepository {
     if (params?.bank_account_id?.trim()) search.set('bank_account_id', params.bank_account_id.trim())
     if (params?.created_at_from?.trim()) search.set('created_at_from', params.created_at_from.trim())
     if (params?.created_at_to?.trim()) search.set('created_at_to', params.created_at_to.trim())
+    if (params?.send_date_from?.trim()) search.set('send_date_from', params.send_date_from.trim())
+    if (params?.send_date_to?.trim()) search.set('send_date_to', params.send_date_to.trim())
+    if (params?.search?.trim()) search.set('search', params.search.trim())
+    if (params?.currency?.trim()) search.set('currency', params.currency.trim())
+    if (params?.origin_currency?.trim())
+      search.set('origin_currency', params.origin_currency.trim())
+    if (params?.destination_currency?.trim())
+      search.set('destination_currency', params.destination_currency.trim())
+    if (typeof params?.skip === 'number' && params.skip >= 0)
+      search.set('skip', String(params.skip))
+    if (typeof params?.limit === 'number' && params.limit > 0)
+      search.set('limit', String(params.limit))
     const qs = search.toString()
     if (qs) url += (url.includes('?') ? '&' : '?') + qs
     const response = await apiClient.get<unknown>(url)
@@ -329,7 +346,29 @@ export class TransactionsApiAdapter implements TransactionsRepository {
         'El servidor devolvió HTML en lugar de JSON al listar transacciones.',
       )
     }
-    return parseTransactions(raw)
+    const items = parseTransactions(raw)
+    const total = extractTotalFromApiPayload(raw, items.length)
+    return { items, total }
+  }
+
+  async getTransactionMetrics(): Promise<TransactionMetrics> {
+    const url = this.endpoint('metrics')
+    const response = await apiClient.get<unknown>(url)
+    const raw =
+      response.data != null && typeof response.data === 'object'
+        ? (response.data as Record<string, unknown>)
+        : {}
+    const byStatus =
+      raw.by_status != null && typeof raw.by_status === 'object'
+        ? (raw.by_status as Record<string, number>)
+        : {}
+    return {
+      total: Number(raw.total) || 0,
+      by_status: byStatus,
+      volume_origin: Number(raw.volume_origin) || 0,
+      volume_destination: Number(raw.volume_destination) || 0,
+      last_7_days: Number(raw.last_7_days) || 0,
+    }
   }
 
   async getTransactionById(id: string): Promise<Transaction | null> {

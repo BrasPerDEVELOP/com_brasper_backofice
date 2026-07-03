@@ -11,8 +11,9 @@ import {
   isTransactionChecked,
   normalizeTransactionStatus,
   resolveTransactionStatusForDisplay,
-  transactionMatchesSendDateRange,
   formatTransactionCodeForDisplay,
+  localDateInputStartMs,
+  localDateInputEndMs,
 } from "@modules/transacciones/domain/models";
 import AppDropdown from "@/interface/components/AppDropdown.vue";
 import AppDateInput from "@/interface/components/AppDateInput.vue";
@@ -95,78 +96,37 @@ watch(
   { immediate: true },
 );
 
-const apiFilterParams = computed((): GetTransactionsParams | undefined => {
-  const p: GetTransactionsParams = {};
+/**
+ * Parámetros que se envían al API. El filtrado (estado efectivo, cuenta,
+ * rango por `send_date`, búsqueda) y la paginación se resuelven en el servidor.
+ */
+const apiFilterParams = computed((): GetTransactionsParams => {
+  const p: GetTransactionsParams = {
+    skip: (currentPage.value - 1) * perPage.value,
+    limit: perPage.value,
+  };
   if (statusFilter.value && statusFilter.value !== "todos")
     p.status = statusFilter.value;
   if (userFilter.value?.trim()) p.user_id = userFilter.value.trim();
   if (bankAccountFilter.value?.trim())
     p.bank_account_id = bankAccountFilter.value.trim();
-  /** Rango de fechas: solo en cliente por `send_date` (la API filtra `created_at`). */
-  return Object.keys(p).length ? p : undefined;
+  const fromMs = localDateInputStartMs(createdAtFrom.value);
+  const toMs = localDateInputEndMs(createdAtTo.value);
+  if (fromMs != null) p.send_date_from = new Date(fromMs).toISOString();
+  if (toMs != null) p.send_date_to = new Date(toMs).toISOString();
+  const q = debouncedSearch.value.trim();
+  if (q) p.search = q;
+  return p;
 });
 
-const searchedTransactions = computed(() => {
-  let list = transactionsStore.transactions;
+/** Página actual (ya filtrada y paginada por el servidor). */
+const paginatedTransactions = computed(() => transactionsStore.transactions);
 
-  if (statusFilter.value && statusFilter.value !== "todos") {
-    list = list.filter((t) => {
-      const eff =
-        resolveTransactionStatusForDisplay(t) ?? t.status ?? "";
-      return eff.toLowerCase() === statusFilter.value.toLowerCase();
-    });
-  }
-
-  if (userFilter.value?.trim()) {
-    list = list.filter((t) => (t.user_id ?? "") === userFilter.value.trim());
-  }
-
-  if (bankAccountFilter.value?.trim()) {
-    const accountId = bankAccountFilter.value.trim();
-    list = list.filter(
-      (t) =>
-        (t.bank_account_origin_id ?? t.bank_account_id ?? "") === accountId ||
-        (t.bank_account_destination_id ?? "") === accountId,
-    );
-  }
-
-  if (createdAtFrom.value?.trim() || createdAtTo.value?.trim()) {
-    list = list.filter((t) =>
-      transactionMatchesSendDateRange(
-        t,
-        createdAtFrom.value,
-        createdAtTo.value,
-      ),
-    );
-  }
-
-  const q = debouncedSearch.value.trim().toLowerCase();
-  if (q) {
-    list = list.filter((t) => {
-      const code = (t.code ?? "").toLowerCase();
-      const id = (t.id ?? "").toLowerCase();
-      return code.includes(q) || id.includes(q);
-    });
-  }
-
-  return list;
-});
+const totalResults = computed(() => transactionsStore.total);
 
 const totalPages = computed(() =>
-  Math.max(1, Math.ceil(searchedTransactions.value.length / perPage.value)),
+  Math.max(1, Math.ceil(totalResults.value / perPage.value)),
 );
-
-const paginatedTransactions = computed(() => {
-  const page = Math.min(currentPage.value, totalPages.value);
-  const start = (page - 1) * perPage.value;
-  return searchedTransactions.value.slice(start, start + perPage.value);
-});
-
-function syncCurrentPageToTotal() {
-  if (currentPage.value > totalPages.value) {
-    currentPage.value = totalPages.value;
-  }
-}
 
 function formatValue(value: unknown): string {
   if (value == null) return "-";
@@ -365,29 +325,24 @@ function loadTransactions() {
   void transactionsStore.loadTransactions(apiFilterParams.value);
 }
 
-watch([perPage], () => {
-  currentPage.value = 1;
-});
-
-watch(debouncedSearch, () => {
-  currentPage.value = 1;
-});
-
-watch(totalPages, () => {
-  syncCurrentPageToTotal();
-});
-
+// Al cambiar filtros/búsqueda/tamaño de página, vuelve a la primera página.
 watch(
-  [statusFilter, userFilter, bankAccountFilter],
+  [
+    statusFilter,
+    userFilter,
+    bankAccountFilter,
+    createdAtFrom,
+    createdAtTo,
+    debouncedSearch,
+    perPage,
+  ],
   () => {
     currentPage.value = 1;
-    loadTransactions();
   },
 );
 
-watch([createdAtFrom, createdAtTo], () => {
-  currentPage.value = 1;
-});
+// Cualquier cambio de filtros o de página recarga desde el servidor.
+watch(apiFilterParams, () => loadTransactions(), { deep: true });
 
 onMounted(() => {
   transactionsStore.error = null;
@@ -465,7 +420,7 @@ onMounted(() => {
           <div
             class="flex h-9 min-w-[3rem] items-center justify-center rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 text-sm font-medium text-[#374151]"
           >
-            {{ searchedTransactions.length }}
+            {{ totalResults }}
           </div>
         </div>
       </div>
@@ -615,7 +570,7 @@ onMounted(() => {
         </thead>
         <tbody>
           <tr
-            v-if="searchedTransactions.length === 0"
+            v-if="paginatedTransactions.length === 0"
             class="border-t border-[#e5e7eb]"
           >
             <td
@@ -623,9 +578,9 @@ onMounted(() => {
               class="rounded-xl border border-[#dbe7fb] bg-[#fbfdff] px-6 py-12 text-center text-[#666]"
             >
               {{
-                transactionsStore.transactions.length === 0
-                  ? "No hay movimientos para mostrar."
-                  : "No hay movimientos que coincidan con los filtros."
+                totalResults === 0
+                  ? "No hay movimientos que coincidan con los filtros."
+                  : "No hay movimientos en esta página."
               }}
             </td>
           </tr>
@@ -794,7 +749,7 @@ onMounted(() => {
     </div>
 
     <div
-      v-if="searchedTransactions.length > 0"
+      v-if="totalResults > 0"
       class="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-[#e5e7eb] pt-4"
     >
       <div class="flex items-center gap-4 text-sm text-[#6b7280]">
@@ -809,7 +764,7 @@ onMounted(() => {
         />
       </div>
       <div class="flex items-center gap-2 text-sm text-[#6b7280]">
-        <span>{{ searchedTransactions.length }} resultados</span>
+        <span>{{ totalResults }} resultados</span>
         <div class="flex gap-1">
           <button
             type="button"

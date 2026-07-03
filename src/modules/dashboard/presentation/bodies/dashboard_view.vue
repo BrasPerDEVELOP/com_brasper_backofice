@@ -12,8 +12,9 @@ import { BlogApiAdapter } from "@modules/blog/infrastructure/adapters/blog_api_a
 import type { Blog } from "@modules/blog/domain/models";
 import { HomeBannerApiAdapter } from "@modules/home-banner/infrastructure/adapters";
 import type { HomeBanner } from "@modules/home-banner/domain/models";
-import type { Transaction } from "@modules/transacciones/domain/models";
 import { TRANSACTION_STATUS_LABELS } from "@modules/transacciones/domain/models";
+import { TransactionsApiAdapter } from "@modules/transacciones/infrastructure/adapters";
+import type { TransactionMetrics } from "@modules/transacciones/infrastructure/adapters/transactions_repository";
 
 const transactionsStore = useTransactionsStore();
 const cuentasStore = useCuentasBancariasStore();
@@ -36,20 +37,14 @@ const isMarketingDashboard = computed(
   () => (authStore.user?.role ?? "").toLowerCase() === "marketing",
 );
 
-function statusOf(t: Transaction): string {
-  return (t.status ?? "").toLowerCase();
-}
+const transactionsRepo = new TransactionsApiAdapter();
+const metrics = ref<TransactionMetrics | null>(null);
 
-const transactions = computed(() => transactionsStore.transactions);
+/** Total de transacciones (agregado del servidor). */
+const transactionsTotal = computed(() => metrics.value?.total ?? 0);
 
-const txByStatus = computed(() => {
-  const map: Record<string, number> = {};
-  for (const t of transactions.value) {
-    const s = statusOf(t) || "sin_estado";
-    map[s] = (map[s] ?? 0) + 1;
-  }
-  return map;
-});
+/** Conteo por estado (agregado del servidor, sobre todas las transacciones). */
+const txByStatus = computed(() => metrics.value?.by_status ?? {});
 
 /** En verificación: estado nuevo + legado pendiente */
 const inVerificationCount = computed(
@@ -65,32 +60,15 @@ const verifiedIntermediateCount = computed(
 );
 const failedCount = computed(() => txByStatus.value.failed ?? 0);
 
-function isVolumeStatus(s: string): boolean {
-  return s === "completed" || s === "checked";
-}
-
-const volumeOriginCompleted = computed(() =>
-  transactions.value
-    .filter((t) => isVolumeStatus(statusOf(t)))
-    .reduce((acc, t) => acc + (Number(t.origin_amount) || 0), 0),
+const volumeOriginCompleted = computed(
+  () => metrics.value?.volume_origin ?? 0,
 );
 
-const volumeDestCompleted = computed(() =>
-  transactions.value
-    .filter((t) => isVolumeStatus(statusOf(t)))
-    .reduce((acc, t) => acc + (Number(t.destination_amount) || 0), 0),
+const volumeDestCompleted = computed(
+  () => metrics.value?.volume_destination ?? 0,
 );
 
-const ms7d = 7 * 24 * 60 * 60 * 1000;
-const transactionsLast7Days = computed(() => {
-  const cutoff = Date.now() - ms7d;
-  return transactions.value.filter((t) => {
-    const raw = t.created_at ?? t.send_date;
-    if (!raw) return false;
-    const ms = new Date(raw).getTime();
-    return Number.isFinite(ms) && ms >= cutoff;
-  }).length;
-});
+const transactionsLast7Days = computed(() => metrics.value?.last_7_days ?? 0);
 
 const couponsActive = computed(
   () => cuponesStore.coupons.filter((c) => c.is_active).length,
@@ -212,8 +190,8 @@ onMounted(async () => {
     return;
   }
 
-  await Promise.all([
-    transactionsStore.loadTransactions(),
+  const [metricsResult] = await Promise.allSettled([
+    transactionsRepo.getTransactionMetrics(),
     cuentasStore.loadBankAccounts(),
     cuentasStore.loadBanks(true),
     cuentasStore.loadClientUsers(true),
@@ -221,6 +199,9 @@ onMounted(async () => {
     comisionesStore.loadCommissions(),
     tasasStore.loadTaxRates(),
   ]);
+  if (metricsResult.status === "fulfilled") {
+    metrics.value = metricsResult.value;
+  }
   if (authStore.hasPermission("users.view")) {
     try {
       const users = await fetchUsers();
@@ -454,7 +435,7 @@ onMounted(async () => {
             Transacciones
           </p>
           <p class="relative mt-1 bg-gradient-to-br from-brasper-indigoDark to-brasper-indigoStrong bg-clip-text text-4xl font-bold tabular-nums text-transparent">
-            {{ formatInt(transactions.length) }}
+            {{ formatInt(transactionsTotal) }}
           </p>
         </RouterLink>
 
