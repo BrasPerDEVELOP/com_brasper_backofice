@@ -5,6 +5,7 @@ import { useAuthStore } from '@modules/auth/presentation/controllers/use_auth_st
 function firstPermittedAppPath(authStore: ReturnType<typeof useAuthStore>): string {
   const candidates = [
     { path: '/app/dashboard', permission: 'dashboard.view' },
+    { path: '/app/metricas', permission: 'metrics.view' },
     { path: '/app/usuarios', permission: 'users.view' },
     { path: '/app/transacciones', permission: 'transactions.view' },
     { path: '/app/contabilidad', permission: 'accounting.view' },
@@ -50,6 +51,12 @@ const routes: RouteRecordRaw[] = [
         name: 'dashboard',
         component: () => import('@modules/dashboard/presentation/bodies/dashboard_view.vue'),
         meta: { breadcrumb: 'Panel > Resumen', permission: 'dashboard.view' }
+      },
+      {
+        path: 'metricas',
+        name: 'metricas',
+        component: () => import('@modules/metrics/presentation/bodies/metrics_view.vue'),
+        meta: { breadcrumb: 'Panel > Métricas', permission: 'metrics.view' }
       },
       {
         path: 'transacciones',
@@ -139,6 +146,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/cupones', redirect: '/app/cupones' },
   { path: '/contabilidad', redirect: '/app/contabilidad' },
   { path: '/dashboard', redirect: '/app/dashboard' },
+  { path: '/metricas', redirect: '/app/metricas' },
   { path: '/calculator-demo', redirect: { path: '/app/calculator', hash: '#calculator-demo' } }
 ]
 

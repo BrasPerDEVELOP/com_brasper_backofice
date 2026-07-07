@@ -16,6 +16,11 @@ export const PERMISSION_MODULES = [
     permissions: [{ key: 'dashboard.view', label: 'Ver' }]
   },
   {
+    key: 'metrics',
+    label: 'Métricas',
+    permissions: [{ key: 'metrics.view', label: 'Ver' }]
+  },
+  {
     key: 'users',
     label: 'Usuarios',
     permissions: [
@@ -141,6 +146,7 @@ const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
   ],
   sales: [
     'dashboard.view',
+    'metrics.view',
     'users.view',
     'users.create',
     'users.update',
@@ -157,6 +163,7 @@ const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
   ],
   accounting: [
     'dashboard.view',
+    'metrics.view',
     'accounting.view',
     'transactions.view',
     'bank_accounts.view',

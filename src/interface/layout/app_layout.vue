@@ -41,6 +41,7 @@ const showSidebar = computed(() => route.path.startsWith("/app"));
 
 const allNavItems = [
   { to: "/app/dashboard", label: "Panel", icon: "chart", permission: "dashboard.view" },
+  { to: "/app/metricas", label: "Métricas", icon: "metrics", permission: "metrics.view" },
   { to: "/app/usuarios", label: "Usuarios", icon: "users", permission: "users.view" },
   { to: "/app/transacciones", label: "Transacciones", icon: "transactions", permission: "transactions.view" },
   { to: "/app/contabilidad", label: "Contabilidad", icon: "ledger", permission: "accounting.view" },

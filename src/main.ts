@@ -1,5 +1,6 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
+import VueApexCharts from 'vue3-apexcharts'
 import App from './App.vue'
 import { router } from '@/interface/router'
 import { setAuthCallbacks } from '@/interface/api/client'
@@ -10,6 +11,7 @@ const pinia = createPinia()
 const app = createApp(App)
 app.use(pinia)
 app.use(router)
+app.use(VueApexCharts)
 
 setAuthCallbacks(
   () => {

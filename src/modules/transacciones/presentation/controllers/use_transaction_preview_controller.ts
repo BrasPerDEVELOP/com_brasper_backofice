@@ -3,6 +3,10 @@ import {
   TRANSACTION_STATUS_LABELS,
   isTransactionChecked,
   resolveTransactionStatusForDisplay,
+  formatTransactionCodeForDisplay,
+  SPECIAL_CALCULATOR_DISCOUNT_CODE,
+  isSpecialCalculatorDiscountCode,
+  getTransactionSpecialDiscountInfo,
 } from "../../domain/models";
 import { useTasasStore } from "@modules/tasas/presentation/controllers/use_tasas_store_controller";
 import { useComisionesStore } from "@modules/comisiones/presentation/controllers/use_comisiones_store_controller";
@@ -41,13 +45,6 @@ function formatMoneyWithCurrency(value: unknown, currency: string): string {
   const amount = formatMoney(value);
   const code = currency.trim().toUpperCase();
   return code && amount !== "—" ? `${amount} ${code}` : amount;
-}
-
-function formatTransactionCodeShort(code: string | undefined): string {
-  if (!code?.trim()) return "—";
-  const digits = code.replace(/\D/g, "");
-  if (digits.length > 0) return digits.slice(-4).padStart(4, "0");
-  return code.trim().slice(-4);
 }
 
 function formatDate(value: string | undefined): string {
@@ -206,7 +203,7 @@ export function useTransactionPreviewController() {
       items: [
         {
           label: "Código",
-          value: formatTransactionCodeShort(code),
+          value: formatTransactionCodeForDisplay(code),
           variant: "mono",
         },
         {
@@ -259,10 +256,23 @@ export function useTransactionPreviewController() {
       ],
     });
 
-    const hasCoupon = Boolean(
-      rec.coupon_id ||
-        (rec.coupon_discount_code && String(rec.coupon_discount_code).trim()),
+    const hasSpecialDiscount = Boolean(
+      getTransactionSpecialDiscountInfo(rec as Transaction, {
+        commissions: comisionesStore.commissions,
+        taxRates: tasasStore.taxRates,
+      }),
     );
+    const hasCoupon = Boolean(
+      !hasSpecialDiscount &&
+        (rec.coupon_id ||
+          (rec.coupon_discount_code && String(rec.coupon_discount_code).trim())),
+    );
+    const specialDiscount = hasSpecialDiscount
+      ? getTransactionSpecialDiscountInfo(rec as Transaction, {
+          commissions: comisionesStore.commissions,
+          taxRates: tasasStore.taxRates,
+        })
+      : null;
     const currencies = getTransactionCurrencies(rec);
 
     // Montos finales: si hay cupón se usan los valores ajustados
@@ -296,6 +306,26 @@ export function useTransactionPreviewController() {
       value: formatMoneyWithCurrency(displayDestination, currencies.destination),
     });
 
+    if (
+      specialDiscount &&
+      specialDiscount.improvementReceive > 0.005
+    ) {
+      amountItems.push({
+        label: "Recibe base (catálogo)",
+        value: formatMoneyWithCurrency(
+          specialDiscount.baseReceive,
+          currencies.destination,
+        ),
+      });
+      amountItems.push({
+        label: "Mejora calculadora especial",
+        value: `+${formatMoneyWithCurrency(
+          specialDiscount.improvementReceive,
+          currencies.destination,
+        )}`,
+      });
+    }
+
     // Separador visual entre el bloque de conversión y el bloque de fees
     amountItems.push({ label: "", value: "", variant: "separator" });
 
@@ -303,9 +333,30 @@ export function useTransactionPreviewController() {
     const commissionRes = rec.resultado_comision ?? rec.commission_result ?? null;
     if (commissionRes != null && commissionRes !== "")
       amountItems.push({
-        label: hasCoupon ? "Comisión (base)" : "Comisión",
+        label:
+          hasCoupon || hasSpecialDiscount ? "Comisión (aplicada)" : "Comisión",
         value: formatMoneyWithCurrency(commissionRes, currencies.origin),
       });
+
+    if (
+      specialDiscount &&
+      specialDiscount.discountCommission > 0.005
+    ) {
+      amountItems.push({
+        label: "Comisión base (catálogo)",
+        value: formatMoneyWithCurrency(
+          specialDiscount.baseCommission,
+          currencies.origin,
+        ),
+      });
+      amountItems.push({
+        label: `Calculadora especial (${SPECIAL_CALCULATOR_DISCOUNT_CODE})`,
+        value: `-${formatMoneyWithCurrency(
+          specialDiscount.discountCommission,
+          currencies.origin,
+        )}`,
+      });
+    }
 
     // Descuento cupón
     if (hasCoupon && rec.coupon_discount_commission != null && rec.coupon_discount_commission !== "") {
@@ -347,11 +398,21 @@ export function useTransactionPreviewController() {
     });
 
     const registroItems: PreviewItem[] = [];
-    if (rec.coupon_discount_code != null && rec.coupon_discount_code !== "")
+    if (hasSpecialDiscount) {
+      registroItems.push({
+        label: "Calculadora especial",
+        value: SPECIAL_CALCULATOR_DISCOUNT_CODE,
+      });
+    } else if (
+      rec.coupon_discount_code != null &&
+      rec.coupon_discount_code !== "" &&
+      !isSpecialCalculatorDiscountCode(String(rec.coupon_discount_code))
+    ) {
       registroItems.push({
         label: "Cupón aplicado",
         value: String(rec.coupon_discount_code),
       });
+    }
 
     if (registroItems.length > 0) {
       sections.push({

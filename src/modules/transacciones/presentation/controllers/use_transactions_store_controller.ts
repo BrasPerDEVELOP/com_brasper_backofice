@@ -16,6 +16,7 @@ import {
 } from '../../application/use_cases'
 import { TransactionsApiAdapter } from '../../infrastructure/adapters'
 import type { TransactionsRepository } from '../../infrastructure/adapters/transactions_repository'
+import { enrichTransactionsWithSpecialDiscountMeta } from '../../infrastructure/utils/transaction_special_discount_meta'
 
 let transactionsRepositorySingleton: TransactionsRepository | null = null
 
@@ -49,23 +50,28 @@ export interface LoadTransactionsOptions {
 
 interface TransactionsState {
   transactions: Transaction[]
+  /** Total de registros que coinciden con el filtro (paginación de servidor). */
+  total: number
   isLoading: boolean
   isRefreshing: boolean
   isImporting: boolean
   isCreating: boolean
   isUpdating: boolean
   error: string | null
+  hasLoadedOnce: boolean
 }
 
 export const useTransactionsStore = defineStore('transactions', {
   state: (): TransactionsState => ({
     transactions: [],
+    total: 0,
     isLoading: false,
     isRefreshing: false,
     isImporting: false,
     isCreating: false,
     isUpdating: false,
-    error: null
+    error: null,
+    hasLoadedOnce: false
   }),
 
   actions: {
@@ -87,11 +93,13 @@ export const useTransactionsStore = defineStore('transactions', {
         try {
           const repo = getTransactionsRepository()
           const useCase = new GetTransactionsUseCase(repo)
-          const list = await useCase.execute(params)
-          this.transactions = list
+          const { items, total } = await useCase.execute(params)
+          this.transactions = enrichTransactionsWithSpecialDiscountMeta(items)
+          this.total = total
         } catch (e) {
           this.error = errorMessageFromCatch(e, 'Error al cargar transacciones')
         } finally {
+          this.hasLoadedOnce = true
           if (background) {
             this.isRefreshing = false
           } else {
@@ -135,6 +143,7 @@ export const useTransactionsStore = defineStore('transactions', {
         const useCase = new CreateTransactionUseCase(repo)
         const created = await useCase.execute(payload)
         this.transactions = [created, ...this.transactions]
+        this.total += 1
         return created
       } catch (e) {
         this.error = errorMessageFromCatch(e, 'Error al crear transacción')
@@ -169,6 +178,7 @@ export const useTransactionsStore = defineStore('transactions', {
         const useCase = new DeleteTransactionUseCase(repo)
         await useCase.execute(id)
         this.transactions = this.transactions.filter((t) => (t.id ?? '') !== id)
+        this.total = Math.max(0, this.total - 1)
       } catch (e) {
         this.error = e instanceof Error ? e.message : 'Error al eliminar transacción'
         throw e
