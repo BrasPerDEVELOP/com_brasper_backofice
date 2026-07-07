@@ -32,10 +32,10 @@ export interface Transaction {
   coupon_discount_total_to_send?: number | null
   send_date?: string
   payment_date?: string
-  send_voucher?: string
-  payment_voucher?: string
+  send_voucher?: string | string[]
+  payment_voucher?: string | string[]
   /** Imagen checklist (path/URL), nullable en API */
-  checked_image?: string | null
+  checked_image?: string | string[] | null
   checked?: boolean
   created_at?: string
   created_by?: string

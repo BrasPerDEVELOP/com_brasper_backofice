@@ -29,6 +29,11 @@ export function normalizeTransactionStatus(status: string | undefined): string {
   return STATUS_ES_TO_EN[folded] ?? folded;
 }
 
+function hasVoucher(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(hasVoucher);
+  return typeof value === "string" && value.trim() !== "";
+}
+
 /**
  * Los tres comprobantes (envío + pago + checklist); el formulario usa esto para
  * pasar a `verified` cuando los tres están presentes.
@@ -36,12 +41,9 @@ export function normalizeTransactionStatus(status: string | undefined): string {
 export function hasTransactionVerificationVouchersComplete(
   t: Pick<Transaction, "checked_image" | "send_voucher" | "payment_voucher">,
 ): boolean {
-  const send =
-    typeof t.send_voucher === "string" && t.send_voucher.trim() !== "";
-  const pay =
-    typeof t.payment_voucher === "string" && t.payment_voucher.trim() !== "";
-  const img =
-    typeof t.checked_image === "string" && t.checked_image.trim() !== "";
+  const send = hasVoucher(t.send_voucher);
+  const pay = hasVoucher(t.payment_voucher);
+  const img = hasVoucher(t.checked_image);
   return send && pay && img;
 }
 
@@ -49,7 +51,7 @@ export function hasTransactionVerificationVouchersComplete(
 export function hasStoredCheckedVerificationImage(
   t: Pick<Transaction, "checked_image">,
 ): boolean {
-  return typeof t.checked_image === "string" && t.checked_image.trim() !== "";
+  return hasVoucher(t.checked_image);
 }
 
 /**
@@ -304,7 +306,8 @@ export function inferOriginCurrencyFromTransactionCode(
   if (!trimmed) return "";
   const match = /^([BPU])x[BPU]/i.exec(trimmed);
   if (!match) return "";
-  return TRANSACTION_CODE_ORIGIN_CURRENCY[match[1].toUpperCase()] ?? "";
+  const originCode = match[1]?.toUpperCase();
+  return originCode ? (TRANSACTION_CODE_ORIGIN_CURRENCY[originCode] ?? "") : "";
 }
 
 /** Código legible en UI: conserva prefijo, quita ceros extra y deja dos ceros iniciales. */
@@ -321,7 +324,9 @@ export function formatTransactionCodeForDisplay(
   if (dash === -1) {
     const match = /^(.+?)(\d+)$/.exec(trimmed);
     if (!match) return trimmed;
-    return `${match[1]}${formatNumericSuffix(match[2])}`;
+    const prefix = match[1] ?? "";
+    const numericSuffix = match[2] ?? "";
+    return `${prefix}${formatNumericSuffix(numericSuffix)}`;
   }
   const prefix = trimmed.slice(0, dash + 1);
   const numPart = trimmed.slice(dash + 1).replace(/\D/g, "");

@@ -43,6 +43,31 @@ function parseBankAccounts(data: unknown): BankAccount[] {
     .map(parseBankAccount)
 }
 
+function extractBankAccountsArray(raw: unknown): unknown[] {
+  if (Array.isArray(raw)) return raw
+  if (raw == null || typeof raw !== 'object') return []
+
+  const obj = raw as Record<string, unknown>
+  const candidates = [
+    obj.data,
+    obj.results,
+    obj.items,
+    obj.bank_accounts,
+    obj.accounts,
+    obj.records
+  ]
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate
+    if (candidate != null && typeof candidate === 'object') {
+      const nested = extractBankAccountsArray(candidate)
+      if (nested.length) return nested
+    }
+  }
+
+  return []
+}
+
 export class CuentasBancariasApiAdapter implements CuentasBancariasRepository {
   private endpoint(path: string): string {
     const p = path.replace(/^\/+/, '')
@@ -60,12 +85,7 @@ export class CuentasBancariasApiAdapter implements CuentasBancariasRepository {
     const qs = search.toString()
     if (qs) url += (url.includes('?') ? '&' : '?') + qs
     const response = await apiClient.get<unknown>(url)
-    const raw = response.data
-    const data = Array.isArray(raw)
-      ? raw
-      : (raw != null && typeof raw === 'object' && Array.isArray((raw as { data?: unknown }).data))
-        ? (raw as { data: unknown[] }).data
-        : []
+    const data = extractBankAccountsArray(response.data)
     return parseBankAccounts(data)
   }
 

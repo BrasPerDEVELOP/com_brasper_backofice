@@ -1,5 +1,11 @@
 import type { Transaction } from '../../domain/models'
 
+export type TransactionAttachmentValue = string | File
+export type TransactionAttachmentPayload =
+  | TransactionAttachmentValue
+  | TransactionAttachmentValue[]
+  | null
+
 export interface CreateTransactionPayload {
   /** Opcional: el flujo permite crear sin cuenta de origen asignada. */
   bank_account_origin?: string
@@ -19,9 +25,9 @@ export interface CreateTransactionPayload {
   operation_number?: string | null
   send_date?: string
   payment_date?: string
-  send_voucher?: string | File | null
-  payment_voucher?: string | File | null
-  checked_image?: string | File | null
+  send_voucher?: TransactionAttachmentPayload
+  payment_voucher?: TransactionAttachmentPayload
+  checked_image?: TransactionAttachmentPayload
   /** UUID o null. No enviar "automatic" - el API espera UUID válido. */
   coupon_id?: string | null
   coupon_discount_code?: string | null

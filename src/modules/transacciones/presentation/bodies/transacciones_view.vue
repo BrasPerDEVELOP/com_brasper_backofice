@@ -15,10 +15,8 @@ import { useCuentasBancariasStore } from "@modules/cuentas-bancarias/presentatio
 import { useTasasStore } from "@modules/tasas/presentation/controllers/use_tasas_store_controller";
 import { useComisionesStore } from "@modules/comisiones/presentation/controllers/use_comisiones_store_controller";
 import { useCalculatorStore } from "@modules/calculator/presentation/controllers/use_calculator_store_controller";
-import { useCuponesStore } from "@modules/cupones/presentation/controllers/use_cupones_store_controller";
 import { useAuthStore } from "@modules/auth/presentation/controllers/use_auth_store_controller";
 import type { BankAccount } from "@modules/cuentas-bancarias/domain/models";
-import type { Coupon } from "@modules/cupones/domain/models";
 import type { Transaction } from "../../domain/models";
 import type { GetTransactionsParams } from "../../infrastructure/adapters/transactions_repository";
 import { parseSimpleImportExcel } from "../../infrastructure/utils/excel_simple_import";
@@ -42,7 +40,6 @@ import {
   inferOriginCurrencyFromTransactionCode,
   formatTransactionCodeForDisplay,
   SPECIAL_CALCULATOR_DISCOUNT_CODE,
-  getTransactionSpecialDiscountInfo,
   getTransactionSpecialDiscountForDisplay,
 } from "../../domain/models";
 import type { TransactionSpecialDiscountInfo } from "../../domain/models";
@@ -67,7 +64,6 @@ const cuentasStore = useCuentasBancariasStore();
 const tasasStore = useTasasStore();
 const comisionesStore = useComisionesStore();
 const calculatorStore = useCalculatorStore();
-const cuponesStore = useCuponesStore();
 const authStore = useAuthStore();
 
 /** Catálogo coin listo para el paso Cotización sin parpadeo de carga. */
@@ -205,6 +201,9 @@ const perPageStr = computed({
   },
 });
 
+type VoucherField = "send_voucher" | "payment_voucher" | "checked_image";
+type VoucherFormValue = string | File;
+
 const form = reactive<{
   bank_account_origin_id: string;
   bank_account_destination_id: string;
@@ -224,9 +223,9 @@ const form = reactive<{
   coupon_id: string;
   send_date: string;
   payment_date: string;
-  send_voucher: string | File | null;
-  payment_voucher: string | File | null;
-  checked_image: string | File | null;
+  send_voucher: VoucherFormValue[];
+  payment_voucher: VoucherFormValue[];
+  checked_image: VoucherFormValue[];
 }>({
   bank_account_origin_id: "",
   bank_account_destination_id: "",
@@ -246,9 +245,9 @@ const form = reactive<{
   coupon_id: "",
   send_date: "",
   payment_date: "",
-  send_voucher: null,
-  payment_voucher: null,
-  checked_image: null,
+  send_voucher: [],
+  payment_voucher: [],
+  checked_image: [],
 });
 
 const editingId = ref<string | null>(null);
@@ -276,6 +275,7 @@ const CREATE_FLOW_STEPS = [
 
 const createStepIndex = ref(0);
 const confirmedNegativeSpecialDiscountSignature = ref<string | null>(null);
+const editQuoteCorrectionMode = ref(false);
 
 type CreateQuoteSnapshot = {
   calculationMode: "normal" | "special";
@@ -393,6 +393,33 @@ function goCreatePrev() {
     createStepIndex.value--;
     if (transactionsStore.error) transactionsStore.error = null;
   }
+}
+
+function openEditQuoteCorrection() {
+  if (!isEditingMode.value) return;
+  transactionsStore.error = null;
+  syncCalculatorFromForm();
+  editQuoteCorrectionMode.value = true;
+}
+
+function cancelEditQuoteCorrection() {
+  editQuoteCorrectionMode.value = false;
+  if (transactionsStore.error) transactionsStore.error = null;
+}
+
+function applyEditQuoteCorrection() {
+  const calculatorError = getCalculatorBlockingError();
+  if (calculatorError) {
+    transactionsStore.error = calculatorError;
+    return;
+  }
+  syncFromCalculator();
+  form.origin_amount = roundMoneyAmount(Number(form.origin_amount) || 0);
+  form.destination_amount = roundMoneyAmount(
+    Number(form.destination_amount) || 0,
+  );
+  transactionsStore.error = null;
+  editQuoteCorrectionMode.value = false;
 }
 
 function openTransactionClientModal() {
@@ -671,110 +698,8 @@ function getTransactionExchangeTitle(t: Transaction): string {
   return `${conversion} · Catálogo ${rateCatalog}`;
 }
 
-function couponCurrencyMatches(value: string | null | undefined, expected: string): boolean {
-  const couponCurrency = normalizeCurrencyCode(value);
-  const targetCurrency = normalizeCurrencyCode(expected);
-  return !couponCurrency || !targetCurrency || couponCurrency === targetCurrency;
-}
-
-function couponExchangeRateScopesMatch(coupon: Coupon, origin: string, destination: string): boolean {
-  const scopes = Array.isArray(coupon.exchange_rate_scopes)
-    ? coupon.exchange_rate_scopes.map((scope) => String(scope).trim().toUpperCase()).filter(Boolean)
-    : [];
-  if (!scopes.length) {
-    return couponCurrencyMatches(coupon.origin_currency, origin) && couponCurrencyMatches(coupon.destination_currency, destination);
-  }
-  if (scopes.includes("ALL")) return true;
-  const originCurrency = normalizeCurrencyCode(origin);
-  const destinationCurrency = normalizeCurrencyCode(destination);
-  if (!originCurrency || !destinationCurrency) return false;
-  return scopes.includes(`${originCurrency}_${destinationCurrency}`);
-}
-
-function isCouponCurrentlyActive(coupon: Coupon): boolean {
-  if (!coupon.is_active) return false;
-  const now = Date.now();
-  const start = coupon.start_date ? new Date(coupon.start_date).getTime() : Number.NEGATIVE_INFINITY;
-  const end = coupon.end_date ? new Date(coupon.end_date).getTime() : Number.POSITIVE_INFINITY;
-  if (Number.isFinite(start) && now < start) return false;
-  if (Number.isFinite(end) && now > end) return false;
-  return true;
-}
-
-const availableCoupons = computed(() => {
-  const origin = selectedAccountCurrencies.value.origin || calculatorStore.currencyFrom;
-  const destination = selectedAccountCurrencies.value.destination || calculatorStore.currencyTo;
-  return cuponesStore.coupons
-    .filter(isCouponCurrentlyActive)
-    .filter((coupon) => couponExchangeRateScopesMatch(coupon, origin, destination))
-    .sort((a, b) => b.discount_percentage - a.discount_percentage);
-});
-
-const selectedCoupon = computed(() => {
-  const couponId = form.coupon_id.trim();
-  if (!couponId) return null;
-  return availableCoupons.value.find((coupon) => coupon.id === couponId) ?? null;
-});
-
-const couponOptions = computed(() => [
-  { value: "", label: "Sin cupón" },
-  ...availableCoupons.value.map((coupon) => ({
-    value: coupon.id,
-    label: `${coupon.code} - ${coupon.discount_percentage}%`,
-  })),
-]);
-
-const couponPreview = computed(() => {
-  const coupon = selectedCoupon.value;
-  const res = calculatorStore.result;
-  if (!coupon || !res) return null;
-  const baseCommission =
-    calculatorStore.calculationMode === "special"
-      ? res.finalCommission
-      : res.baseCommission;
-  const discountAmount = Math.min(
-    roundMoneyAmount(Math.max(0, baseCommission) * (Number(coupon.discount_percentage) / 100)),
-    roundMoneyAmount(Math.max(0, baseCommission)),
-  );
-  const finalCommission = roundMoneyAmount(Math.max(0, baseCommission - discountAmount));
-  const isReceiveMode =
-    calculatorStore.calculationMode === "normal" &&
-    calculatorStore.inputMode === "receive" &&
-    Number(calculatorStore.amountReceive) > 0;
-  const amountSend = isReceiveMode
-    ? roundMoneyAmount(Number(res.amountSend) - discountAmount)
-    : roundMoneyAmount(Number(res.amountSend));
-  const totalToSend = isReceiveMode
-    ? roundMoneyAmount(amountSend - finalCommission)
-    : roundMoneyAmount(amountSend - finalCommission);
-  const amountReceive = isReceiveMode
-    ? roundMoneyAmount(Number(res.amountReceive))
-    : roundMoneyAmount(totalToSend * Number(res.rate));
-  return {
-    coupon,
-    baseCommission: roundMoneyAmount(baseCommission),
-    discountAmount,
-    finalCommission,
-    amountSend,
-    amountReceive,
-    totalToSend,
-  };
-});
-
-watch(
-  availableCoupons,
-  (coupons) => {
-    if (!form.coupon_id) return;
-    if (!coupons.some((coupon) => coupon.id === form.coupon_id)) {
-      form.coupon_id = "";
-    }
-  },
-  { flush: "post" },
-);
-
 watch(
   () => [
-    form.coupon_id,
     calculatorStore.result?.amountSend,
     calculatorStore.result?.amountReceive,
     calculatorStore.result?.baseCommission,
@@ -1270,11 +1195,12 @@ function resetForm() {
   form.coupon_id = "";
   form.send_date = "";
   form.payment_date = "";
-  form.send_voucher = null;
-  form.payment_voucher = null;
-  form.checked_image = null;
+  form.send_voucher = [];
+  form.payment_voucher = [];
+  form.checked_image = [];
   editingId.value = null;
   editSourceTransaction.value = null;
+  editQuoteCorrectionMode.value = false;
   confirmedNegativeSpecialDiscountSignature.value = null;
   createQuoteSnapshot.value = null;
   destinationBankFilterId.value = "";
@@ -1330,21 +1256,15 @@ function syncCalculatorFromForm() {
 
 function syncFromCalculator() {
   const res = calculatorStore.result;
-  const couponAmounts = couponPreview.value;
   form.origin_amount = roundMoneyAmount(
-    couponAmounts?.amountSend ??
-      res?.amountSend ??
-      calculatorStore.amountSend ??
-      0,
+    res?.amountSend ?? calculatorStore.amountSend ?? 0,
   );
   form.destination_amount = roundMoneyAmount(
-    couponAmounts?.amountReceive ??
-      res?.amountReceive ??
-      calculatorStore.amountReceive ??
-      0,
+    res?.amountReceive ?? calculatorStore.amountReceive ?? 0,
   );
   form.tax_rate_id = calculatorStore.selectedTaxRateId ?? "";
   form.commission_id = calculatorStore.selectedCommissionId ?? "";
+  form.coupon_id = "";
   if (res) {
     const isSpecialCalculation =
       calculatorStore.calculationMode === "special" ||
@@ -1358,8 +1278,8 @@ function syncFromCalculator() {
         ? res.totalToSend
         : res.amountSend - commissionResult;
 
-    form.resultado_comision = couponAmounts?.finalCommission ?? commissionResult;
-    form.total_a_enviar = couponAmounts?.totalToSend ?? totalToSend;
+    form.resultado_comision = commissionResult;
+    form.total_a_enviar = totalToSend;
     form.tax_amount = res.rate;
   } else {
     form.resultado_comision = null;
@@ -1478,7 +1398,6 @@ function openCreateModal() {
   showCreateModal.value = true;
   loadFormOptions();
   void loadEditableUsers();
-  void cuponesStore.loadCoupons();
   calculatorStore.setCalculationMode("normal");
   void calculatorStore.loadData({
     background: transactionCatalogReadyForCurrentMode(),
@@ -1493,7 +1412,6 @@ async function loadFormOptions() {
     cuentasStore.loadBanks(),
     tasasStore.loadTaxRates(),
     comisionesStore.loadCommissions(),
-    cuponesStore.loadCoupons(),
   ]);
 }
 
@@ -1593,12 +1511,12 @@ async function hydrateEditForm(row: Transaction) {
     }
     form.code = row.code ?? "";
     form.operation_number = row.operation_number ?? "";
-    form.coupon_id = row.coupon_id ?? "";
+    form.coupon_id = "";
     form.send_date = apiDateTimeToFormValue(row.send_date);
     form.payment_date = apiDateTimeToFormValue(row.payment_date);
-    form.send_voucher = null;
-    form.payment_voucher = null;
-    form.checked_image = null;
+    form.send_voucher = [];
+    form.payment_voucher = [];
+    form.checked_image = [];
     editSourceTransaction.value = row;
     {
       destinationBankFilterId.value = row.bank_id?.trim() ?? "";
@@ -1616,6 +1534,7 @@ async function openEditModal(t: Transaction) {
   resetForm();
   editingId.value = transactionId;
   createStepIndex.value = 0;
+  editQuoteCorrectionMode.value = false;
   showCreateModal.value = true;
   editModalLoading.value = true;
   try {
@@ -1685,49 +1604,23 @@ async function submitForm() {
     return;
   }
   try {
-    const hasEditedFileUpload =
-      Boolean(editingId.value) &&
-      [form.send_voucher, form.payment_voucher, form.checked_image].some(
-        (value) => value instanceof File,
-      );
-    const persistedSendVoucher = editSourceTransaction.value?.send_voucher;
-    const persistedPaymentVoucher = editSourceTransaction.value?.payment_voucher;
-    const persistedCheckedImage = editSourceTransaction.value?.checked_image;
     const sendVoucher =
-      form.send_voucher instanceof File
-        ? form.send_voucher
-        : editingId.value
-          ? hasEditedFileUpload
-            ? persistedSendVoucher ?? undefined
-            : undefined
-          : form.send_voucher ?? undefined;
+      editingId.value && !hasNewVoucherFiles("send_voucher")
+        ? undefined
+        : formVoucherValues("send_voucher");
     const paymentVoucher =
-      form.payment_voucher instanceof File
-        ? form.payment_voucher
-        : editingId.value
-          ? hasEditedFileUpload
-            ? persistedPaymentVoucher ?? undefined
-            : undefined
-          : form.payment_voucher ?? undefined;
+      editingId.value && !hasNewVoucherFiles("payment_voucher")
+        ? undefined
+        : formVoucherValues("payment_voucher");
     const checkedImage =
-      form.checked_image instanceof File
-        ? form.checked_image
-        : editingId.value
-          ? hasEditedFileUpload
-            ? persistedCheckedImage ?? undefined
-            : undefined
-          : form.checked_image ?? undefined;
+      editingId.value && !hasNewVoucherFiles("checked_image")
+        ? undefined
+        : formVoucherValues("checked_image");
 
     const code =
       form.code?.trim() ||
       `TRX-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const operationNumber = form.operation_number.trim();
-    const selectedCouponPreview = couponPreview.value;
-    const selectedCouponId =
-      selectedCouponPreview?.coupon.id ?? (form.coupon_id.trim() || undefined);
-    const selectedCouponCode =
-      selectedCouponPreview?.coupon.code ??
-      (selectedCouponId ? editSourceTransaction.value?.coupon_discount_code : undefined);
     const specialCreateSnapshot =
       !editingId.value &&
       createQuoteSnapshot.value &&
@@ -1775,42 +1668,25 @@ async function submitForm() {
           : undefined,
       code,
       operation_number: operationNumber || undefined,
-      coupon_id: specialCreateSnapshot ? undefined : selectedCouponId,
+      coupon_id: undefined,
       coupon_discount_code: specialCreateSnapshot
         ? SPECIAL_CALCULATOR_DISCOUNT_CODE
-        : selectedCouponCode,
+        : undefined,
       coupon_origin_amount: specialCreateSnapshot
         ? specialCreateSnapshot.origin_amount
-        : selectedCouponPreview
-          ? roundMoneyAmount(selectedCouponPreview.amountSend)
-          : selectedCouponId
-            ? editSourceTransaction.value?.coupon_origin_amount
-            : undefined,
+        : undefined,
       coupon_destination_amount: specialCreateSnapshot
         ? specialCreateSnapshot.destination_amount
-        : selectedCouponPreview
-          ? roundMoneyAmount(selectedCouponPreview.amountReceive)
-          : selectedCouponId
-            ? editSourceTransaction.value?.coupon_destination_amount
-            : undefined,
+        : undefined,
       coupon_discount_percentage: specialCreateSnapshot
         ? specialCreateSnapshot.specialDiscountPercentage
-        : selectedCouponPreview?.coupon.discount_percentage ??
-          (selectedCouponId
-            ? editSourceTransaction.value?.coupon_discount_percentage
-            : undefined),
+        : undefined,
       coupon_discount_commission: specialCreateSnapshot
         ? specialCreateSnapshot.specialDiscountAmount
-        : selectedCouponPreview?.discountAmount ??
-          (selectedCouponId
-            ? editSourceTransaction.value?.coupon_discount_commission
-            : undefined),
+        : undefined,
       coupon_discount_total_to_send: specialCreateSnapshot
         ? specialCreateSnapshot.total_a_enviar ?? undefined
-        : selectedCouponPreview?.totalToSend ??
-          (selectedCouponId
-            ? editSourceTransaction.value?.coupon_discount_total_to_send
-            : undefined),
+        : undefined,
       status: form.status,
       send_voucher: sendVoucher,
       payment_voucher: paymentVoucher,
@@ -1839,10 +1715,11 @@ async function submitForm() {
             (row) => row.id === created.id,
           );
           if (idx >= 0) {
-            transactionsStore.transactions[idx] =
-              enrichTransactionWithSpecialDiscountMeta(
-                transactionsStore.transactions[idx],
-              );
+            const createdTransaction = transactionsStore.transactions[idx];
+            if (createdTransaction) {
+              transactionsStore.transactions[idx] =
+                enrichTransactionWithSpecialDiscountMeta(createdTransaction);
+            }
           }
         }
       }
@@ -1950,17 +1827,6 @@ const editPreviewTransaction = computed<Transaction | null>(() => {
     tax_amount: form.tax_amount ?? undefined,
     code: form.code || base.code,
     operation_number: form.operation_number || base.operation_number,
-    coupon_id: form.coupon_id || base.coupon_id,
-    coupon_discount_code: selectedCoupon.value?.code || base.coupon_discount_code,
-    coupon_discount_percentage:
-      selectedCoupon.value?.discount_percentage ?? base.coupon_discount_percentage,
-    coupon_discount_commission:
-      couponPreview.value?.discountAmount ?? base.coupon_discount_commission,
-    coupon_discount_total_to_send:
-      couponPreview.value?.totalToSend ?? base.coupon_discount_total_to_send,
-    coupon_origin_amount: couponPreview.value?.amountSend ?? base.coupon_origin_amount,
-    coupon_destination_amount:
-      couponPreview.value?.amountReceive ?? base.coupon_destination_amount,
     send_date: form.send_date
       ? (formDateTimeToApi(form.send_date) ?? form.send_date)
       : base.send_date,
@@ -1983,22 +1849,6 @@ const editModalSummary = computed(() => {
   };
 });
 
-const editModalCouponSummary = computed(() => {
-  const t = editPreviewTransaction.value;
-  if (!t) return null;
-  const code = t.coupon_discount_code ?? selectedCoupon.value?.code;
-  const percentage = t.coupon_discount_percentage ?? selectedCoupon.value?.discount_percentage;
-  const currencies = getTransactionCurrencies(t, true);
-  return {
-    hasCoupon: Boolean(code?.trim() || t.coupon_id),
-    code: code?.trim() || "Sin cupón aplicado",
-    percentage,
-    discount: t.coupon_discount_commission,
-    total: t.coupon_discount_total_to_send,
-    originCurrency: currencies.origin,
-  };
-});
-
 function getTaxRatePreviewLabel(id: string | undefined): string {
   if (!id?.trim()) return "—";
   const rate = tasasStore.taxRates.find((item) => item.id === id);
@@ -2014,8 +1864,8 @@ function getCommissionPreviewLabel(id: string | undefined): string {
 }
 
 function getCouponPreviewLabel(t: Transaction): string {
-  const code = t.coupon_discount_code ?? selectedCoupon.value?.code;
-  const percentage = t.coupon_discount_percentage ?? selectedCoupon.value?.discount_percentage;
+  const code = t.coupon_discount_code;
+  const percentage = t.coupon_discount_percentage;
   if (!code?.trim()) return "—";
   return percentage != null ? `${code} (${formatValue(percentage)}%)` : code;
 }
@@ -2319,6 +2169,10 @@ function formDateTimeToApi(local: string): string | undefined {
 
 /** URL absoluta para comprobantes en tabla (path API o URL completa). */
 function voucherMediaHref(path: unknown): string {
+  if (Array.isArray(path)) {
+    const first = voucherValues(path).find((value): value is string => typeof value === "string");
+    return first ? voucherMediaHref(first) : "";
+  }
   if (path == null || typeof path !== "string") return "";
   const s = path.trim();
   if (!s) return "";
@@ -2396,6 +2250,9 @@ function getSalesAdvisorLabel(id: string | undefined): string {
 }
 
 function getVoucherLabel(v: unknown): string {
+  const values = voucherValues(v);
+  if (values.length > 1) return `${values.length} archivos`;
+  if (values.length === 1 && values[0] !== v) return getVoucherLabel(values[0]);
   if (isFileValue(v)) {
     return v.name;
   }
@@ -2404,6 +2261,43 @@ function getVoucherLabel(v: unknown): string {
     return clean.split("/").filter(Boolean).pop() ?? "Imagen actual";
   }
   return "Archivo seleccionado";
+}
+
+function voucherValues(value: unknown): VoucherFormValue[] {
+  if (value == null || value === "") return [];
+  if (Array.isArray(value)) return value.flatMap((item) => voucherValues(item));
+  if (isFileValue(value)) return [value];
+  if (typeof value === "string" && value.trim()) return [value.trim()];
+  return [];
+}
+
+function transactionVoucherValues(
+  transaction: Transaction | null | undefined,
+  field: VoucherField,
+): VoucherFormValue[] {
+  if (!transaction) return [];
+  const rec = transaction as Record<string, unknown>;
+  return voucherValues([
+    rec[field],
+    rec[`${field}s`],
+    rec[`${field}_files`],
+  ]);
+}
+
+function formVoucherValues(field: VoucherField): VoucherFormValue[] {
+  return voucherValues(form[field]);
+}
+
+function persistedVoucherValues(field: VoucherField): VoucherFormValue[] {
+  return transactionVoucherValues(editSourceTransaction.value, field);
+}
+
+function displayedVoucherValues(field: VoucherField): VoucherFormValue[] {
+  return [...persistedVoucherValues(field), ...formVoucherValues(field)];
+}
+
+function hasNewVoucherFiles(field: VoucherField): boolean {
+  return formVoucherValues(field).some(isFileValue);
 }
 
 function isFileValue(v: unknown): v is File {
@@ -2425,29 +2319,34 @@ function isImagePath(path: string): boolean {
   );
 }
 
+function voucherOpenHref(value: unknown): string {
+  if (isFileValue(value)) return "";
+  return typeof value === "string" && value.trim() ? voucherMediaHref(value.trim()) : "";
+}
+
 const sendVoucherPreviewSrc = ref<string | null>(null);
 const paymentVoucherPreviewSrc = ref<string | null>(null);
 const checkedImagePreviewSrc = ref<string | null>(null);
+const sendVoucherPreviewSrcs = ref<string[]>([]);
+const paymentVoucherPreviewSrcs = ref<string[]>([]);
+const checkedImagePreviewSrcs = ref<string[]>([]);
 
 const persistedSendVoucherPreviewSrc = computed(() => {
-  const v = editSourceTransaction.value?.send_voucher;
-  return typeof v === "string" && v.trim() && isImagePath(v)
-    ? voucherMediaHref(v.trim())
-    : null;
+  return persistedVoucherValues("send_voucher")
+    .filter((value): value is string => typeof value === "string" && isImagePath(value))
+    .map((value) => voucherMediaHref(value))[0] ?? null;
 });
 
 const persistedPaymentVoucherPreviewSrc = computed(() => {
-  const v = editSourceTransaction.value?.payment_voucher;
-  return typeof v === "string" && v.trim() && isImagePath(v)
-    ? voucherMediaHref(v.trim())
-    : null;
+  return persistedVoucherValues("payment_voucher")
+    .filter((value): value is string => typeof value === "string" && isImagePath(value))
+    .map((value) => voucherMediaHref(value))[0] ?? null;
 });
 
 const persistedCheckedImagePreviewSrc = computed(() => {
-  const v = editSourceTransaction.value?.checked_image;
-  return typeof v === "string" && v.trim() && isImagePath(v)
-    ? voucherMediaHref(v.trim())
-    : null;
+  return persistedVoucherValues("checked_image")
+    .filter((value): value is string => typeof value === "string" && isImagePath(value))
+    .map((value) => voucherMediaHref(value))[0] ?? null;
 });
 
 const activeSendVoucherPreviewSrc = computed(
@@ -2474,13 +2373,17 @@ function nowLocalDateTimeValue(): string {
 }
 
 function onVoucherFileSelect(
-  field: "send_voucher" | "payment_voucher" | "checked_image",
+  field: VoucherField,
   event: Event,
 ) {
   const input = event.target as HTMLInputElement;
-  const file = input.files?.[0] ?? null;
-  form[field] = file;
-  if (field === "payment_voucher" && file) {
+  const files = Array.from(input.files ?? []);
+  if (!files.length) {
+    input.value = "";
+    return;
+  }
+  form[field] = [...formVoucherValues(field), ...files];
+  if (field === "payment_voucher") {
     if (!form.payment_date?.trim()) {
       form.payment_date = nowLocalDateTimeValue();
     }
@@ -2490,18 +2393,21 @@ function onVoucherFileSelect(
 }
 
 function hasVoucherValue(value: unknown): boolean {
-  return value instanceof File || (typeof value === "string" && value.trim() !== "");
+  return voucherValues(value).length > 0;
+}
+
+function removeVoucherAt(field: VoucherField, index: number) {
+  form[field] = formVoucherValues(field).filter((_, i) => i !== index);
+  syncStatusFromVoucherFiles();
 }
 
 function syncStatusFromVoucherFiles() {
   const currentStatus = (form.status ?? "").toLowerCase();
   if (["failed", "cancelled"].includes(currentStatus)) return;
 
-  const hasSendVoucher = hasVoucherValue(form.send_voucher ?? editSourceTransaction.value?.send_voucher);
-  const hasCheckedImage = hasVoucherValue(form.checked_image ?? editSourceTransaction.value?.checked_image);
-  const hasPaymentVoucher = hasVoucherValue(
-    form.payment_voucher ?? editSourceTransaction.value?.payment_voucher,
-  );
+  const hasSendVoucher = displayedVoucherValues("send_voucher").length > 0;
+  const hasCheckedImage = displayedVoucherValues("checked_image").length > 0;
+  const hasPaymentVoucher = displayedVoucherValues("payment_voucher").length > 0;
 
   form.checked = hasCheckedImage;
   if (hasSendVoucher && hasCheckedImage && hasPaymentVoucher) {
@@ -2518,31 +2424,44 @@ function revokeIfBlob(url: string | null) {
   if (url?.startsWith("blob:")) URL.revokeObjectURL(url);
 }
 
-function updateVoucherPreview(target: Ref<string | null>, v: unknown) {
+function revokeBlobList(urls: string[]) {
+  urls.forEach((url) => revokeIfBlob(url));
+}
+
+function updateVoucherPreview(target: Ref<string | null>, listTarget: Ref<string[]>, v: unknown) {
   revokeIfBlob(target.value);
-  target.value = null;
-  if (v instanceof File && isImageFile(v)) target.value = URL.createObjectURL(v);
-  else if (typeof v === "string" && v.trim() && isImagePath(v))
-    target.value = voucherMediaHref(v.trim());
+  revokeBlobList(listTarget.value);
+  const urls = voucherValues(v)
+    .map((value) => {
+      if (isFileValue(value) && isImageFile(value)) return URL.createObjectURL(value);
+      if (typeof value === "string" && isImagePath(value)) return voucherMediaHref(value);
+      return "";
+    })
+    .filter(Boolean);
+  listTarget.value = urls;
+  target.value = urls[0] ?? null;
 }
 
 watch(
   () => form.send_voucher,
-  (v) => updateVoucherPreview(sendVoucherPreviewSrc, v),
+  (v) => updateVoucherPreview(sendVoucherPreviewSrc, sendVoucherPreviewSrcs, v),
 );
 watch(
   () => form.payment_voucher,
-  (v) => updateVoucherPreview(paymentVoucherPreviewSrc, v),
+  (v) => updateVoucherPreview(paymentVoucherPreviewSrc, paymentVoucherPreviewSrcs, v),
 );
 watch(
   () => form.checked_image,
-  (v) => updateVoucherPreview(checkedImagePreviewSrc, v),
+  (v) => updateVoucherPreview(checkedImagePreviewSrc, checkedImagePreviewSrcs, v),
 );
 
 onBeforeUnmount(() => {
   revokeIfBlob(sendVoucherPreviewSrc.value);
   revokeIfBlob(paymentVoucherPreviewSrc.value);
   revokeIfBlob(checkedImagePreviewSrc.value);
+  revokeBlobList(sendVoucherPreviewSrcs.value);
+  revokeBlobList(paymentVoucherPreviewSrcs.value);
+  revokeBlobList(checkedImagePreviewSrcs.value);
 });
 
 async function submitImport() {
@@ -3954,6 +3873,57 @@ onActivated(() => {
 
               <template v-else>
                 <div
+                  v-if="editQuoteCorrectionMode"
+                  class="flex min-h-0 w-full flex-col bg-[#f6f8fc]"
+                >
+                  <div class="flex-1 overflow-y-auto p-5">
+                    <div class="mx-auto max-w-2xl space-y-5">
+                      <div class="rounded-2xl border border-[#d8e5fb] bg-white p-5 shadow-sm shadow-brasper-indigoStrong/5">
+                        <p class="text-[10px] font-semibold uppercase tracking-[0.22em] text-brasper-indigoStrong">
+                          Cotización
+                        </p>
+                        <h3 class="mt-2 text-lg font-semibold text-[#1f2937]">
+                          Corregir montos
+                        </h3>
+                        <p class="mt-1 text-sm leading-relaxed text-[#6b7280]">
+                          Ajusta el monto en la calculadora y aplica los cambios para volver a la edición.
+                        </p>
+                      </div>
+                      <CalculatorConversionCard
+                        variant="production"
+                        :show-send-cta="false"
+                        :show-calculation-mode-toggle="true"
+                        :show-coin-catalog-reload="true"
+                      />
+                      <TasasDemoCompact
+                        v-if="calculatorStore.calculationMode === 'special'"
+                        :use-main-calculator-store="true"
+                        :filter-rates-to-selected-pair="true"
+                      />
+                    </div>
+                  </div>
+                  <div class="border-t border-[#e5e7eb] bg-white px-4 py-4">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                      <button
+                        type="button"
+                        class="rounded-xl border border-[#e5e7eb] bg-white px-5 py-2.5 text-sm font-medium text-[#6b7280] transition hover:bg-[#f9fafb]"
+                        @click="cancelEditQuoteCorrection"
+                      >
+                        Volver sin aplicar
+                      </button>
+                      <button
+                        type="button"
+                        class="rounded-xl bg-brasper-indigoStrong px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brasper-indigoDark"
+                        @click="applyEditQuoteCorrection"
+                      >
+                        Aplicar montos
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  v-else
                   class="grid min-h-0 w-full gap-5 bg-[#f6f8fc] p-5 xl:grid-cols-[420px_minmax(0,1fr)]"
                 >
                   <div
@@ -3992,63 +3962,6 @@ onActivated(() => {
                         </span>
                         <span class="mt-2 block truncate text-sm font-semibold text-[#1f2937]">
                           {{ editModalSummary?.agent }}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div
-                      class="grid grid-cols-3 gap-3 rounded-2xl border border-[#e6ebf4] bg-white p-4"
-                      :class="editModalCouponSummary?.hasCoupon ? 'bg-emerald-50/60' : 'bg-white'"
-                    >
-                      <div class="min-w-0">
-                        <span class="block text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7b88a1]">
-                          Cupón aplicado
-                        </span>
-                        <span
-                          class="mt-2 block truncate text-[13px] font-semibold"
-                          :class="editModalCouponSummary?.hasCoupon ? 'text-emerald-950' : 'text-[#64748b]'"
-                        >
-                          {{ editModalCouponSummary?.code }}
-                        </span>
-                      </div>
-                      <div class="min-w-0">
-                        <span class="block text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7b88a1]">
-                          Descuento
-                        </span>
-                        <span
-                          class="mt-2 block truncate text-[13px] font-semibold"
-                          :class="editModalCouponSummary?.hasCoupon ? 'text-emerald-800' : 'text-[#64748b]'"
-                        >
-                          <template v-if="editModalCouponSummary?.hasCoupon">
-                            {{ editModalCouponSummary.percentage != null ? `${formatValue(editModalCouponSummary.percentage)}%` : "—" }}
-                            <template v-if="editModalCouponSummary.discount != null">
-                              · -{{ formatValueWithCurrency(
-                                editModalCouponSummary.discount,
-                                editModalCouponSummary.originCurrency,
-                              ) }}
-                            </template>
-                          </template>
-                          <template v-else>
-                            —
-                          </template>
-                        </span>
-                      </div>
-                      <div class="min-w-0">
-                        <span class="block text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7b88a1]">
-                          Total con cupón
-                        </span>
-                        <span
-                          class="mt-2 block truncate text-[13px] font-semibold"
-                          :class="editModalCouponSummary?.hasCoupon ? 'text-emerald-950' : 'text-[#64748b]'"
-                        >
-                          {{
-                            editModalCouponSummary?.total != null
-                              ? formatValueWithCurrency(
-                                  editModalCouponSummary.total,
-                                  editModalCouponSummary.originCurrency,
-                                )
-                              : "—"
-                          }}
                         </span>
                       </div>
                     </div>
@@ -4101,11 +4014,20 @@ onActivated(() => {
                       </section>
 
                       <section class="rounded-2xl border border-[#e6ebf4] bg-white p-4">
-                        <div class="flex items-center gap-2">
-                          <span class="h-2 w-2 rounded-full bg-emerald-300"></span>
-                          <h3 class="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#50607c]">
-                            Importes globales
-                          </h3>
+                        <div class="flex items-center justify-between gap-3">
+                          <div class="flex items-center gap-2">
+                            <span class="h-2 w-2 rounded-full bg-emerald-300"></span>
+                            <h3 class="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#50607c]">
+                              Importes globales
+                            </h3>
+                          </div>
+                          <button
+                            type="button"
+                            class="rounded-lg border border-[#c7d7f5] bg-[#f8faff] px-3 py-1.5 text-xs font-semibold text-brasper-indigoStrong transition hover:border-brasper-indigoStrong/40 hover:bg-white"
+                            @click="openEditQuoteCorrection"
+                          >
+                            Corregir montos
+                          </button>
                         </div>
                         <div class="mt-4 rounded-3xl border border-[#e8eef8] bg-[#fbfdff] p-4">
                           <dl class="space-y-3">
@@ -4409,10 +4331,12 @@ onActivated(() => {
                               >
                                 <input
                                   type="file"
+                                  multiple
+                                  accept="image/*,.pdf,application/pdf"
                                   class="sr-only"
                                   @change="onVoucherFileSelect('send_voucher', $event)"
                                 />
-                                Seleccionar archivo
+                                Agregar archivos
                               </label>
                               <img
                                 v-if="activeSendVoucherPreviewSrc"
@@ -4420,20 +4344,40 @@ onActivated(() => {
                                 alt="Vista previa comprobante de envío"
                                 class="mt-3 max-h-24 w-full rounded-lg border border-[#e5e7eb] object-contain"
                               />
-                              <p
-                                v-if="form.send_voucher || editSourceTransaction?.send_voucher"
-                                class="mt-3 truncate text-xs font-medium text-[#374151]"
-                                :title="
-                                  getVoucherLabel(form.send_voucher ?? editSourceTransaction?.send_voucher)
-                                "
+                              <div
+                                v-if="displayedVoucherValues('send_voucher').length"
+                                class="mt-3 space-y-2"
                               >
-                                {{
-                                  getVoucherLabel(
-                                    form.send_voucher ??
-                                      editSourceTransaction?.send_voucher,
-                                  )
-                                }}
-                              </p>
+                                <div
+                                  v-for="(voucher, idx) in displayedVoucherValues('send_voucher')"
+                                  :key="`edit-send-${idx}-${getVoucherLabel(voucher)}`"
+                                  class="flex items-center justify-between gap-2 rounded-lg border border-[#e8eef8] bg-[#fbfdff] px-3 py-2"
+                                >
+                                  <a
+                                    v-if="voucherOpenHref(voucher)"
+                                    :href="voucherOpenHref(voucher)"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    class="min-w-0 truncate text-xs font-medium text-brasper-indigoStrong hover:underline"
+                                  >
+                                    {{ getVoucherLabel(voucher) }}
+                                  </a>
+                                  <span
+                                    v-else
+                                    class="min-w-0 truncate text-xs font-medium text-[#374151]"
+                                  >
+                                    {{ getVoucherLabel(voucher) }}
+                                  </span>
+                                  <button
+                                    v-if="idx >= persistedVoucherValues('send_voucher').length"
+                                    type="button"
+                                    class="shrink-0 text-xs font-semibold text-[#dc3545] hover:underline"
+                                    @click="removeVoucherAt('send_voucher', idx - persistedVoucherValues('send_voucher').length)"
+                                  >
+                                    Quitar
+                                  </button>
+                                </div>
+                              </div>
                             </div>
 
                             <div class="order-3 rounded-2xl border border-[#e8eef8] bg-white p-4">
@@ -4450,10 +4394,12 @@ onActivated(() => {
                               >
                                 <input
                                   type="file"
+                                  multiple
+                                  accept="image/*,.pdf,application/pdf"
                                   class="sr-only"
                                   @change="onVoucherFileSelect('payment_voucher', $event)"
                                 />
-                                Seleccionar archivo
+                                Agregar archivos
                               </label>
                               <img
                                 v-if="activePaymentVoucherPreviewSrc"
@@ -4461,20 +4407,40 @@ onActivated(() => {
                                 alt="Vista previa comprobante de pago"
                                 class="mt-3 max-h-24 w-full rounded-lg border border-[#e5e7eb] object-contain"
                               />
-                              <p
-                                v-if="form.payment_voucher || editSourceTransaction?.payment_voucher"
-                                class="mt-3 truncate text-xs font-medium text-[#374151]"
-                                :title="
-                                  getVoucherLabel(form.payment_voucher ?? editSourceTransaction?.payment_voucher)
-                                "
+                              <div
+                                v-if="displayedVoucherValues('payment_voucher').length"
+                                class="mt-3 space-y-2"
                               >
-                                {{
-                                  getVoucherLabel(
-                                    form.payment_voucher ??
-                                      editSourceTransaction?.payment_voucher,
-                                  )
-                                }}
-                              </p>
+                                <div
+                                  v-for="(voucher, idx) in displayedVoucherValues('payment_voucher')"
+                                  :key="`edit-payment-${idx}-${getVoucherLabel(voucher)}`"
+                                  class="flex items-center justify-between gap-2 rounded-lg border border-[#e8eef8] bg-[#fbfdff] px-3 py-2"
+                                >
+                                  <a
+                                    v-if="voucherOpenHref(voucher)"
+                                    :href="voucherOpenHref(voucher)"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    class="min-w-0 truncate text-xs font-medium text-brasper-indigoStrong hover:underline"
+                                  >
+                                    {{ getVoucherLabel(voucher) }}
+                                  </a>
+                                  <span
+                                    v-else
+                                    class="min-w-0 truncate text-xs font-medium text-[#374151]"
+                                  >
+                                    {{ getVoucherLabel(voucher) }}
+                                  </span>
+                                  <button
+                                    v-if="idx >= persistedVoucherValues('payment_voucher').length"
+                                    type="button"
+                                    class="shrink-0 text-xs font-semibold text-[#dc3545] hover:underline"
+                                    @click="removeVoucherAt('payment_voucher', idx - persistedVoucherValues('payment_voucher').length)"
+                                  >
+                                    Quitar
+                                  </button>
+                                </div>
+                              </div>
                             </div>
 
                             <div class="order-2 rounded-2xl border border-[#e8eef8] bg-white p-4">
@@ -4493,10 +4459,12 @@ onActivated(() => {
                               >
                                 <input
                                   type="file"
+                                  multiple
+                                  accept="image/*,.pdf,application/pdf"
                                   class="sr-only"
                                   @change="onVoucherFileSelect('checked_image', $event)"
                                 />
-                                Seleccionar archivo
+                                Agregar archivos
                               </label>
                               <img
                                 v-if="activeCheckedImagePreviewSrc"
@@ -4504,20 +4472,40 @@ onActivated(() => {
                                 alt="Vista previa imagen de verificación"
                                 class="mt-3 max-h-24 w-full rounded-lg border border-[#e5e7eb] object-contain"
                               />
-                              <p
-                                v-if="form.checked_image || editSourceTransaction?.checked_image"
-                                class="mt-3 truncate text-xs font-medium text-[#374151]"
-                                :title="
-                                  getVoucherLabel(form.checked_image ?? editSourceTransaction?.checked_image)
-                                "
+                              <div
+                                v-if="displayedVoucherValues('checked_image').length"
+                                class="mt-3 space-y-2"
                               >
-                                {{
-                                  getVoucherLabel(
-                                    form.checked_image ??
-                                      editSourceTransaction?.checked_image,
-                                  )
-                                }}
-                              </p>
+                                <div
+                                  v-for="(voucher, idx) in displayedVoucherValues('checked_image')"
+                                  :key="`edit-checked-${idx}-${getVoucherLabel(voucher)}`"
+                                  class="flex items-center justify-between gap-2 rounded-lg border border-[#e8eef8] bg-[#fbfdff] px-3 py-2"
+                                >
+                                  <a
+                                    v-if="voucherOpenHref(voucher)"
+                                    :href="voucherOpenHref(voucher)"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    class="min-w-0 truncate text-xs font-medium text-brasper-indigoStrong hover:underline"
+                                  >
+                                    {{ getVoucherLabel(voucher) }}
+                                  </a>
+                                  <span
+                                    v-else
+                                    class="min-w-0 truncate text-xs font-medium text-[#374151]"
+                                  >
+                                    {{ getVoucherLabel(voucher) }}
+                                  </span>
+                                  <button
+                                    v-if="idx >= persistedVoucherValues('checked_image').length"
+                                    type="button"
+                                    class="shrink-0 text-xs font-semibold text-[#dc3545] hover:underline"
+                                    @click="removeVoucherAt('checked_image', idx - persistedVoucherValues('checked_image').length)"
+                                  >
+                                    Quitar
+                                  </button>
+                                </div>
+                              </div>
                             </div>
                           </div>
                         </section>
@@ -4528,6 +4516,13 @@ onActivated(() => {
                       class="border-t border-[#e5e7eb] bg-white px-4 py-4"
                     >
                       <div class="flex flex-wrap items-center justify-end gap-3">
+                        <button
+                          type="button"
+                          class="rounded-xl border border-[#c7d7f5] bg-[#f8faff] px-5 py-2.5 text-sm font-semibold text-brasper-indigoStrong transition hover:border-brasper-indigoStrong/40 hover:bg-white"
+                          @click="openEditQuoteCorrection"
+                        >
+                          Corregir montos
+                        </button>
                         <button
                           type="button"
                           class="rounded-xl border border-[#e5e7eb] bg-white px-5 py-2.5 text-sm font-medium text-[#6b7280] transition hover:bg-[#f9fafb]"
@@ -4570,78 +4565,12 @@ onActivated(() => {
                 :show-send-cta="false"
                 :show-calculation-mode-toggle="true"
                 :show-coin-catalog-reload="true"
-                :coupon-discount-percentage="selectedCoupon?.discount_percentage ?? null"
-                :coupon-code="selectedCoupon?.code ?? null"
-                :coupon-adjusted-amount-send="couponPreview?.amountSend ?? null"
-                :coupon-adjusted-amount-receive="couponPreview?.amountReceive ?? null"
               />
               <TasasDemoCompact
                 v-if="calculatorStore.calculationMode === 'special'"
                 :use-main-calculator-store="true"
                 :filter-rates-to-selected-pair="true"
               />
-              <section
-                class="rounded-2xl border border-[#d8e5fb] bg-white p-5 shadow-sm shadow-brasper-indigoStrong/5"
-              >
-                <div class="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <h3 class="text-sm font-semibold text-[#1f2937]">
-                      Cupón
-                    </h3>
-                    <p class="mt-1 text-xs text-[#6b7280]">
-                      Se muestran cupones activos para el par de monedas seleccionado.
-                    </p>
-                  </div>
-                  <span
-                    v-if="cuponesStore.isLoading"
-                    class="text-xs font-medium text-[#6b7280]"
-                  >
-                    Cargando cupones...
-                  </span>
-                </div>
-                <AppDropdown
-                  v-model="form.coupon_id"
-                  :options="couponOptions"
-                  placeholder="Sin cupón"
-                  :searchable="couponOptions.length > 6"
-                />
-                <div
-                  v-if="couponPreview"
-                  class="mt-4 grid gap-3 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 text-sm sm:grid-cols-3"
-                >
-                  <div>
-                    <span class="block text-xs font-semibold uppercase tracking-wide text-emerald-800">
-                      Código
-                    </span>
-                    <span class="mt-1 block font-semibold text-emerald-950">
-                      {{ couponPreview.coupon.code }}
-                    </span>
-                  </div>
-                  <div>
-                    <span class="block text-xs font-semibold uppercase tracking-wide text-emerald-800">
-                      Descuento
-                    </span>
-                    <span class="mt-1 block font-semibold text-emerald-950">
-                      {{ couponPreview.coupon.discount_percentage }}%
-                      ({{ formatValue(couponPreview.discountAmount) }})
-                    </span>
-                  </div>
-                  <div>
-                    <span class="block text-xs font-semibold uppercase tracking-wide text-emerald-800">
-                      Total con cupón
-                    </span>
-                    <span class="mt-1 block font-semibold text-emerald-950">
-                      {{ formatValue(couponPreview.totalToSend) }}
-                    </span>
-                  </div>
-                </div>
-                <p
-                  v-else-if="!cuponesStore.isLoading && availableCoupons.length === 0"
-                  class="mt-3 text-xs text-[#6b7280]"
-                >
-                  No hay cupones activos para esta combinación.
-                </p>
-              </section>
             </div>
 
             <form
@@ -5066,7 +4995,7 @@ onActivated(() => {
               </p>
 
               <div
-                v-if="form.send_voucher && form.payment_voucher"
+                v-if="formVoucherValues('send_voucher').length && formVoucherValues('payment_voucher').length"
                 class="flex items-start gap-3 rounded-xl border border-brasper-indigoStrong/25 bg-brasper-cyanLight/15 px-4 py-3 text-sm text-brasper-indigoDark"
               >
                 <svg
@@ -5126,11 +5055,12 @@ onActivated(() => {
                   >
                     <input
                       type="file"
+                      multiple
                       class="sr-only"
                       accept="image/*,.pdf,application/pdf"
                       @change="onVoucherFileSelect('send_voucher', $event)"
                     />
-                    Seleccionar archivo
+                    Agregar archivos
                   </label>
                   <img
                     v-if="sendVoucherPreviewSrc"
@@ -5139,12 +5069,33 @@ onActivated(() => {
                     class="mt-4 max-h-44 w-full rounded-lg border border-[#e5e7eb] object-contain"
                   />
                   <p
-                    v-if="form.send_voucher"
+                    v-if="formVoucherValues('send_voucher').length"
                     class="mt-3 truncate text-xs font-medium text-[#374151]"
                     :title="getVoucherLabel(form.send_voucher)"
                   >
                     {{ getVoucherLabel(form.send_voucher) }}
                   </p>
+                  <div
+                    v-if="formVoucherValues('send_voucher').length"
+                    class="mt-3 space-y-2"
+                  >
+                    <div
+                      v-for="(voucher, idx) in formVoucherValues('send_voucher')"
+                      :key="`create-send-${idx}-${getVoucherLabel(voucher)}`"
+                      class="flex items-center justify-between gap-2 rounded-lg border border-[#e8eef8] bg-[#fbfdff] px-3 py-2"
+                    >
+                      <span class="min-w-0 truncate text-xs font-medium text-[#374151]">
+                        {{ getVoucherLabel(voucher) }}
+                      </span>
+                      <button
+                        type="button"
+                        class="shrink-0 text-xs font-semibold text-[#dc3545] hover:underline"
+                        @click="removeVoucherAt('send_voucher', idx)"
+                      >
+                        Quitar
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 <div
@@ -5183,11 +5134,12 @@ onActivated(() => {
                   >
                     <input
                       type="file"
+                      multiple
                       class="sr-only"
                       accept="image/*,.pdf,application/pdf"
                       @change="onVoucherFileSelect('payment_voucher', $event)"
                     />
-                    Seleccionar archivo
+                    Agregar archivos
                   </label>
                   <img
                     v-if="paymentVoucherPreviewSrc"
@@ -5196,12 +5148,33 @@ onActivated(() => {
                     class="mt-4 max-h-44 w-full rounded-lg border border-[#e5e7eb] object-contain"
                   />
                   <p
-                    v-if="form.payment_voucher"
+                    v-if="formVoucherValues('payment_voucher').length"
                     class="mt-3 truncate text-xs font-medium text-[#374151]"
                     :title="getVoucherLabel(form.payment_voucher)"
                   >
                     {{ getVoucherLabel(form.payment_voucher) }}
                   </p>
+                  <div
+                    v-if="formVoucherValues('payment_voucher').length"
+                    class="mt-3 space-y-2"
+                  >
+                    <div
+                      v-for="(voucher, idx) in formVoucherValues('payment_voucher')"
+                      :key="`create-payment-${idx}-${getVoucherLabel(voucher)}`"
+                      class="flex items-center justify-between gap-2 rounded-lg border border-[#e8eef8] bg-[#fbfdff] px-3 py-2"
+                    >
+                      <span class="min-w-0 truncate text-xs font-medium text-[#374151]">
+                        {{ getVoucherLabel(voucher) }}
+                      </span>
+                      <button
+                        type="button"
+                        class="shrink-0 text-xs font-semibold text-[#dc3545] hover:underline"
+                        @click="removeVoucherAt('payment_voucher', idx)"
+                      >
+                        Quitar
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 <div
@@ -5262,11 +5235,12 @@ onActivated(() => {
                   >
                     <input
                       type="file"
+                      multiple
                       class="sr-only"
                       accept="image/*,.pdf,application/pdf"
                       @change="onVoucherFileSelect('checked_image', $event)"
                     />
-                    Seleccionar archivo
+                    Agregar archivos
                   </label>
                   <img
                     v-if="checkedImagePreviewSrc"
@@ -5275,12 +5249,33 @@ onActivated(() => {
                     class="mt-4 max-h-44 w-full rounded-lg border border-[#e5e7eb] object-contain"
                   />
                   <p
-                    v-if="form.checked_image"
+                    v-if="formVoucherValues('checked_image').length"
                     class="mt-3 truncate text-xs font-medium text-[#374151]"
                     :title="getVoucherLabel(form.checked_image)"
                   >
                     {{ getVoucherLabel(form.checked_image) }}
                   </p>
+                  <div
+                    v-if="formVoucherValues('checked_image').length"
+                    class="mt-3 space-y-2"
+                  >
+                    <div
+                      v-for="(voucher, idx) in formVoucherValues('checked_image')"
+                      :key="`create-checked-${idx}-${getVoucherLabel(voucher)}`"
+                      class="flex items-center justify-between gap-2 rounded-lg border border-[#e8eef8] bg-[#fbfdff] px-3 py-2"
+                    >
+                      <span class="min-w-0 truncate text-xs font-medium text-[#374151]">
+                        {{ getVoucherLabel(voucher) }}
+                      </span>
+                      <button
+                        type="button"
+                        class="shrink-0 text-xs font-semibold text-[#dc3545] hover:underline"
+                        @click="removeVoucherAt('checked_image', idx)"
+                      >
+                        Quitar
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 

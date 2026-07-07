@@ -31,23 +31,41 @@ function parseTruthyFlag(v: unknown): boolean {
   return false
 }
 
-/** Primer string no vacío entre candidatos (alias de API). */
-function firstNonEmptyString(...vals: unknown[]): string | undefined {
-  for (const v of vals) {
-    if (v == null || v === '') continue
-    const s = String(v).trim()
-    if (s) return s
-  }
-  return undefined
-}
-
 function appendFileToForm(form: FormData, key: string, file: File): void {
   const name = file.name?.trim() || 'upload'
   form.append(key, file, name)
 }
 
+function normalizeAttachmentValues(value: unknown): Array<string | File> {
+  if (value == null || value === '') return []
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => normalizeAttachmentValues(item))
+  }
+  if (value instanceof File) return [value]
+  if (typeof value === 'string') {
+    const s = value.trim()
+    return s ? [s] : []
+  }
+  return []
+}
+
+function appendAttachmentValues(form: FormData, key: string, value: unknown): void {
+  const values = normalizeAttachmentValues(value)
+  for (const item of values) {
+    if (item instanceof File) {
+      appendFileToForm(form, key, item)
+      continue
+    }
+    form.append(key, item)
+  }
+}
+
 function appendFormValue(form: FormData, key: string, value: unknown): void {
   if (value === undefined) return
+  if (['send_voucher', 'payment_voucher', 'checked_image'].includes(key)) {
+    appendAttachmentValues(form, key, value)
+    return
+  }
 
   if (value instanceof File) {
     appendFileToForm(form, key, value)
@@ -81,6 +99,19 @@ function coerceBankAccountId(value: unknown): string | undefined {
     if (id != null && id !== '') return String(id).trim() || undefined
   }
   return undefined
+}
+
+function attachmentStrings(...vals: unknown[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const item of normalizeAttachmentValues(vals)) {
+    if (typeof item !== 'string') continue
+    const s = item.trim()
+    if (!s || seen.has(s)) continue
+    seen.add(s)
+    out.push(s)
+  }
+  return out
 }
 
 function coerceUserId(value: unknown): string | undefined {
@@ -206,8 +237,10 @@ function parseTransaction(item: unknown): Transaction {
     couponDiscountCodeRaw == null || couponDiscountCodeRaw === ''
       ? undefined
       : String(couponDiscountCodeRaw).trim()
-  const checked_image = firstNonEmptyString(
+  const checkedImageValues = attachmentStrings(
     o.checked_image,
+    o.checked_images,
+    o.checked_image_files,
     o.checkedImage,
     o.checked_image_url,
     o.verification_image,
@@ -216,6 +249,7 @@ function parseTransaction(item: unknown): Transaction {
     o.imagen_checklist,
     o.verify_image
   )
+  const checked_image = checkedImageValues.length > 1 ? checkedImageValues : checkedImageValues[0]
   const operationNumberRaw = o.operation_number ?? o.numero_operacion
   const operation_number =
     operationNumberRaw == null || operationNumberRaw === ''
@@ -285,8 +319,14 @@ function parseTransaction(item: unknown): Transaction {
     })(),
     send_date: o.send_date != null ? String(o.send_date) : undefined,
     payment_date: o.payment_date != null ? String(o.payment_date) : undefined,
-    send_voucher: o.send_voucher != null ? String(o.send_voucher) : undefined,
-    payment_voucher: o.payment_voucher != null ? String(o.payment_voucher) : undefined,
+    send_voucher: (() => {
+      const values = attachmentStrings(o.send_voucher, o.send_vouchers, o.send_voucher_files)
+      return values.length > 1 ? values : values[0]
+    })(),
+    payment_voucher: (() => {
+      const values = attachmentStrings(o.payment_voucher, o.payment_vouchers, o.payment_voucher_files)
+      return values.length > 1 ? values : values[0]
+    })(),
     checked_image,
     created_at: o.created_at != null ? String(o.created_at) : undefined,
     created_by: o.created_by != null ? String(o.created_by) : undefined,
@@ -419,18 +459,9 @@ export class TransactionsApiAdapter implements TransactionsRepository {
     if (payload.tax_amount != null) {
       formData.append('tax_amount', String(payload.tax_amount))
     }
-    if (payload.send_voucher instanceof File)
-      appendFileToForm(formData, 'send_voucher', payload.send_voucher)
-    else if (typeof payload.send_voucher === 'string' && payload.send_voucher)
-      formData.append('send_voucher', payload.send_voucher)
-    if (payload.payment_voucher instanceof File)
-      appendFileToForm(formData, 'payment_voucher', payload.payment_voucher)
-    else if (typeof payload.payment_voucher === 'string' && payload.payment_voucher)
-      formData.append('payment_voucher', payload.payment_voucher)
-    if (payload.checked_image instanceof File)
-      appendFileToForm(formData, 'checked_image', payload.checked_image)
-    else if (typeof payload.checked_image === 'string' && payload.checked_image)
-      formData.append('checked_image', payload.checked_image)
+    appendAttachmentValues(formData, 'send_voucher', payload.send_voucher)
+    appendAttachmentValues(formData, 'payment_voucher', payload.payment_voucher)
+    appendAttachmentValues(formData, 'checked_image', payload.checked_image)
     if (payload.coupon_id != null && String(payload.coupon_id).trim())
       formData.append('coupon_id', String(payload.coupon_id).trim())
     if (payload.coupon_discount_code?.trim())
@@ -521,7 +552,9 @@ export class TransactionsApiAdapter implements TransactionsRepository {
     ) {
       delete body.status
     }
-    const hasFileUpload = Object.values(body).some((value) => value instanceof File)
+    const hasFileUpload = Object.values(body).some((value) =>
+      normalizeAttachmentValues(value).some((item) => item instanceof File)
+    )
     const requestPayload = hasFileUpload
       ? (() => {
           const form = new FormData()

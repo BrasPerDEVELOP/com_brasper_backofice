@@ -197,6 +197,10 @@ function transactionCompanyNameTable(t: Transaction): string {
 }
 
 function voucherMediaHref(path: unknown): string {
+  if (Array.isArray(path)) {
+    const first = path.find((item) => typeof item === "string" && item.trim());
+    return first ? voucherMediaHref(first) : "";
+  }
   if (path == null || typeof path !== "string") return "";
   const s = path.trim();
   if (!s) return "";

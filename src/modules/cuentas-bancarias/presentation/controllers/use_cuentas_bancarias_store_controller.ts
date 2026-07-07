@@ -48,6 +48,18 @@ function filterBankAccountsByUserId(accounts: BankAccount[], userId: string): Ba
   return accounts.filter((a) => String(a.user_id ?? '').trim() === uid)
 }
 
+function upsertBankAccount(list: BankAccount[], account: BankAccount): BankAccount[] {
+  const id = String(account.id ?? '').trim()
+  if (!id) return list
+  const next = list.filter((item) => String(item.id ?? '').trim() !== id)
+  next.unshift(account)
+  return next
+}
+
+function mergeBankAccounts(base: BankAccount[], extra: BankAccount[]): BankAccount[] {
+  return extra.reduce((list, account) => upsertBankAccount(list, account), base)
+}
+
 export const useCuentasBancariasStore = defineStore('cuentasBancarias', {
   state: (): CuentasBancariasState => ({
     bankAccounts: [],
@@ -98,7 +110,10 @@ export const useCuentasBancariasStore = defineStore('cuentasBancarias', {
         const useCase = new GetBankAccountsUseCase(repo)
         const raw = await useCase.execute({ userId: id })
         if (requestSeq !== this._transactionFormBankAccountsLoadSeq) return
-        this.transactionFormBankAccounts = filterBankAccountsByUserId(raw, id)
+        this.transactionFormBankAccounts = mergeBankAccounts(
+          filterBankAccountsByUserId(raw, id),
+          filterBankAccountsByUserId(this.bankAccounts, id)
+        )
         this.transactionFormBankAccountsUserId = id
       } catch (e) {
         if (requestSeq !== this._transactionFormBankAccountsLoadSeq) return
@@ -205,9 +220,19 @@ export const useCuentasBancariasStore = defineStore('cuentasBancarias', {
         }
         const repo = getRepository()
         const created = await repo.createBankAccount(fullPayload)
+        const createdForUser = {
+          ...created,
+          user_id: String(created.user_id || userId)
+        }
         await this.loadBankAccounts()
+        this.bankAccounts = upsertBankAccount(this.bankAccounts, createdForUser)
         await this.loadBankAccountsForTransactionUser(userId)
-        return created
+        this.transactionFormBankAccounts = upsertBankAccount(
+          this.transactionFormBankAccounts,
+          createdForUser
+        )
+        this.transactionFormBankAccountsUserId = userId
+        return createdForUser
       } catch (e) {
         this.error = e instanceof Error ? e.message : 'Error al crear cuenta bancaria'
         throw e
