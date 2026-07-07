@@ -1,4 +1,3 @@
-import { apiClient, getApiAuthHeaders } from '@/interface/api/client'
 import { formatApiErrorBody } from '@/interface/api/format_api_error'
 import { Domain } from '@/interface/infrastructure/services'
 import type {
@@ -50,30 +49,23 @@ async function parseJsonResponse(res: Response): Promise<unknown> {
 }
 
 /**
- * `fetch` + FormData evita que axios altere el multipart en PUT/POST
- * y permite manejar 401/403 sin cerrar la sesión global del backoffice.
+ * Los endpoints del banner son públicos (sin token). Se usa `fetch` sin cabecera
+ * `Authorization` a propósito: enviar un token haría que el backend intente
+ * validarlo y respondería "Not authenticated". Tampoco se toca la sesión global.
  */
-async function submitBannerForm(method: 'POST' | 'PUT', form: FormData): Promise<HomeBanner> {
+async function requestBanner(method: 'GET' | 'POST' | 'PUT', form?: FormData): Promise<unknown> {
   const res = await fetch(Domain.apiUrl(PATH), {
     method,
-    body: form,
-    headers: getApiAuthHeaders()
+    body: form
   })
   const raw = await parseJsonResponse(res)
-
-  if (res.status === 401 || res.status === 403) {
-    const msg =
-      formatApiErrorBody(raw) ??
-      (res.status === 401
-        ? 'No autorizado para guardar el banner. Si el endpoint aún no usa token, revisa permisos en el backend.'
-        : 'No tienes permiso para modificar el banner.')
-    throw new Error(msg)
-  }
-
   if (!res.ok) {
-    throw new Error(formatApiErrorBody(raw) ?? `Error al guardar el banner (${res.status})`)
+    throw new Error(formatApiErrorBody(raw) ?? `Error al procesar el banner (${res.status})`)
   }
+  return raw
+}
 
+function parseBannerResponse(raw: unknown): HomeBanner {
   const payload =
     raw != null && typeof raw === 'object'
       ? ((raw as Record<string, unknown>).data ?? raw)
@@ -85,9 +77,13 @@ async function submitBannerForm(method: 'POST' | 'PUT', form: FormData): Promise
 
 export class HomeBannerApiAdapter implements HomeBannerRepository {
   async getBanner(): Promise<HomeBanner | null> {
-    const response = await apiClient.get<unknown>(PATH, { skipAuthRedirect: true })
-    const data = response.data
+    const data = await requestBanner('GET')
     if (Array.isArray(data) && data.length > 0) return parseBanner(data[0])
+    if (data != null && typeof data === 'object') {
+      const wrapped = (data as Record<string, unknown>).data
+      if (Array.isArray(wrapped) && wrapped.length > 0) return parseBanner(wrapped[0])
+      if (wrapped != null && typeof wrapped === 'object') return parseBanner(wrapped)
+    }
     return parseBanner(data)
   }
 
@@ -97,7 +93,7 @@ export class HomeBannerApiAdapter implements HomeBannerRepository {
     appendBannerField(form, 'banner_es', payload.banner_es)
     appendBannerField(form, 'banner_pr', payload.banner_pr)
     appendBannerField(form, 'banner_en', payload.banner_en)
-    return submitBannerForm('POST', form)
+    return parseBannerResponse(await requestBanner('POST', form))
   }
 
   async updateBanner(payload: HomeBannerUpdatePayload): Promise<HomeBanner> {
@@ -107,6 +103,6 @@ export class HomeBannerApiAdapter implements HomeBannerRepository {
     appendBannerField(form, 'banner_es', payload.banner_es)
     appendBannerField(form, 'banner_pr', payload.banner_pr)
     appendBannerField(form, 'banner_en', payload.banner_en)
-    return submitBannerForm('PUT', form)
+    return parseBannerResponse(await requestBanner('PUT', form))
   }
 }

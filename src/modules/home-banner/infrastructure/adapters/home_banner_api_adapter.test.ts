@@ -1,17 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { apiClientGet, getApiAuthHeaders, triggerUnauthorized } = vi.hoisted(() => ({
-  apiClientGet: vi.fn(),
-  getApiAuthHeaders: vi.fn(() => ({ Authorization: 'Bearer test-token' })),
-  triggerUnauthorized: vi.fn()
-}))
-
-vi.mock('@/interface/api/client', () => ({
-  apiClient: { get: apiClientGet },
-  getApiAuthHeaders,
-  triggerUnauthorized
-}))
-
 vi.mock('@/interface/infrastructure/services', () => ({
   Domain: {
     apiUrl: (path: string) => `https://api.test/${path}`
@@ -56,9 +44,6 @@ describe('HomeBannerApiAdapter', () => {
     adapter = new HomeBannerApiAdapter()
     vi.stubGlobal('fetch', fetchMock)
     fetchMock.mockReset()
-    apiClientGet.mockReset()
-    getApiAuthHeaders.mockClear()
-    triggerUnauthorized.mockReset()
   })
 
   afterEach(() => {
@@ -66,7 +51,7 @@ describe('HomeBannerApiAdapter', () => {
   })
 
   describe('updateBanner', () => {
-    it('envía PUT multipart con id, enable y solo los campos presentes', async () => {
+    it('envía PUT multipart SIN cabecera Authorization', async () => {
       fetchMock.mockResolvedValue(jsonResponse(SERVER_BANNER))
       const file = new File(['x'], 'nuevo.webp', { type: 'image/webp' })
 
@@ -82,53 +67,32 @@ describe('HomeBannerApiAdapter', () => {
       const [url, init] = fetchMock.mock.calls[0]
       expect(url).toBe(ENDPOINT)
       expect(init.method).toBe('PUT')
-      expect(init.headers).toEqual({ Authorization: 'Bearer test-token' })
+      // No se manda token: las rutas del banner son públicas.
+      expect(init.headers).toBeUndefined()
 
-      const fields = formEntries(init)
-      expect(fields).toEqual({
+      expect(formEntries(init)).toEqual({
         id: '42',
         enable: 'true',
         banner_es: 'file:nuevo.webp',
         banner_pr: 'home_banner/pr.webp'
       })
-      expect(fields.banner_en).toBeUndefined()
       expect(result.id).toBe('42')
     })
 
-    it('no cierra sesión cuando el backend responde 401', async () => {
-      fetchMock.mockResolvedValue(jsonResponse({ detail: 'sin token' }, 401))
-
-      await expect(
-        adapter.updateBanner({ id: '42', enable: true })
-      ).rejects.toThrow('sin token')
-
-      expect(triggerUnauthorized).not.toHaveBeenCalled()
-    })
-
-    it('no cierra sesión cuando el backend responde 403', async () => {
-      fetchMock.mockResolvedValue(jsonResponse({ detail: 'prohibido' }, 403))
-
-      await expect(
-        adapter.updateBanner({ id: '42', enable: true })
-      ).rejects.toThrow('prohibido')
-
-      expect(triggerUnauthorized).not.toHaveBeenCalled()
-    })
-
-    it('propaga el mensaje de error en respuestas no exitosas', async () => {
+    it('propaga el mensaje de error del backend', async () => {
       fetchMock.mockResolvedValue(jsonResponse({ detail: 'archivo inválido' }, 400))
 
-      await expect(
-        adapter.updateBanner({ id: '42', enable: true })
-      ).rejects.toThrow('archivo inválido')
+      await expect(adapter.updateBanner({ id: '42', enable: true })).rejects.toThrow(
+        'archivo inválido'
+      )
     })
 
     it('lanza error cuando la respuesta no contiene un banner válido', async () => {
       fetchMock.mockResolvedValue(jsonResponse({ ok: true }))
 
-      await expect(
-        adapter.updateBanner({ id: '42', enable: true })
-      ).rejects.toThrow('Respuesta de guardado de banner inválida')
+      await expect(adapter.updateBanner({ id: '42', enable: true })).rejects.toThrow(
+        'Respuesta de guardado de banner inválida'
+      )
     })
 
     it('desempaqueta el banner cuando viene dentro de data', async () => {
@@ -141,7 +105,7 @@ describe('HomeBannerApiAdapter', () => {
   })
 
   describe('createBanner', () => {
-    it('envía POST multipart sin id y adjunta solo archivos', async () => {
+    it('envía POST multipart sin id y sin Authorization', async () => {
       fetchMock.mockResolvedValue(jsonResponse(SERVER_BANNER))
       const file = new File(['x'], 'es.webp', { type: 'image/webp' })
 
@@ -155,6 +119,7 @@ describe('HomeBannerApiAdapter', () => {
       const [url, init] = fetchMock.mock.calls[0]
       expect(url).toBe(ENDPOINT)
       expect(init.method).toBe('POST')
+      expect(init.headers).toBeUndefined()
       const fields = formEntries(init)
       expect(fields).toEqual({ enable: 'false', banner_es: 'file:es.webp' })
       expect(fields.id).toBeUndefined()
@@ -162,19 +127,20 @@ describe('HomeBannerApiAdapter', () => {
   })
 
   describe('getBanner', () => {
-    it('usa skipAuthRedirect y devuelve el primer elemento de un arreglo', async () => {
-      apiClientGet.mockResolvedValue({ data: [SERVER_BANNER] })
+    it('hace GET sin token y devuelve el primer elemento de un arreglo', async () => {
+      fetchMock.mockResolvedValue(jsonResponse([SERVER_BANNER]))
 
       const result = await adapter.getBanner()
 
-      expect(apiClientGet).toHaveBeenCalledWith('home-banner/home-image/', {
-        skipAuthRedirect: true
-      })
+      const [url, init] = fetchMock.mock.calls[0]
+      expect(url).toBe(ENDPOINT)
+      expect(init.method).toBe('GET')
+      expect(init.headers).toBeUndefined()
       expect(result?.id).toBe('42')
     })
 
     it('devuelve null cuando no hay banner', async () => {
-      apiClientGet.mockResolvedValue({ data: null })
+      fetchMock.mockResolvedValue(jsonResponse(null))
       expect(await adapter.getBanner()).toBeNull()
     })
   })
