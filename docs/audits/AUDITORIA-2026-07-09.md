@@ -172,8 +172,8 @@
 
 | Capa | Esperado | Estado hoy |
 |------|----------|------------|
-| 1 Local | typecheck + lint + vitest (pre-push) | Solo `npx vitest` manual; build hace `vue-tsc -b` |
-| 2 CI PR | npm ci + typecheck + lint + test + build | **Ausente** |
+| 1 Local | typecheck + lint + vitest (pre-push) | ✅ `npm run check` (Fase A). Falta hook pre-push (Fase D) |
+| 2 CI PR | npm ci + typecheck + lint + test + build | ✅ `.github/workflows/ci.yml` (Fase A) |
 | 3 Gate merge | tests adapters + permisos + E2E + no god files nuevos | **Ausente** (tests parciales) |
 | 4 Post-deploy | smoke API + login + permisos | **Ausente** (manual) |
 
@@ -181,16 +181,20 @@
 
 ## 6. Plan de mejoras en 4 fases
 
-### Fase A — Tooling + widgets base + CI (PR 1) ← siguiente si confirmas
+### Fase A — Tooling + widgets base + CI (PR 1) ✅ COMPLETADA (2026-07-09)
 
 Sin tocar diseño visual ni features de negocio.
 
-- [ ] Scripts npm: `typecheck`, `test`, `lint`, `check` (+ opcional `format`)
-- [ ] ESLint + Prettier básico Vue/TS
-- [ ] Un solo lockfile (eliminar duplicado)
-- [ ] `interface/widgets/`: `PageHeader`, `EmptyState`, `AppSpinner`, `ConfirmDialog` (mismas clases Tailwind/Brasper ya usadas en pantallas)
-- [ ] CI: `.gitea/workflows/ci.yml` o `.github/workflows/ci.yml` (typecheck + test + build; lint cuando exista)
-- [ ] `README.md` mínimo (setup, scripts, arquitectura, link CLAUDE/AGENTS)
+- [x] Scripts npm: `typecheck`, `test`, `test:watch`, `lint`, `lint:fix`, `format`, `format:check`, `check`
+- [x] ESLint + Prettier básico Vue/TS (`eslint.config.js` flat + `.prettierrc.json` / `.prettierignore`)
+- [x] Un solo lockfile (eliminado `pnpm-lock.yaml`; queda `package-lock.json` → npm)
+- [x] `interface/widgets/`: `PageHeader`, `EmptyState`, `AppSpinner`, `ConfirmDialog` (mismas clases Tailwind/Brasper ya usadas en pantallas)
+- [x] CI: `.github/workflows/ci.yml` (npm ci → typecheck → lint → test → build)
+- [x] `README.md` mínimo (setup, scripts, arquitectura, link CLAUDE/AGENTS)
+
+**Extras de higiene:** fix `vue/valid-v-for` en `cuentas_bancarias_view.vue:365` (key por índice, sin cambio de comportamiento); `*.tsbuildinfo` gitignored y destrackeado.
+
+**Estado del gate:** `npm run check` verde en local — typecheck OK · lint 0 errores / 11 avisos (deuda documentada) · 66 tests OK. `npm run build` y `npm ci` verdes.
 
 ### Fase B — Widgets adoption + modales + higiene auth UI (PR 2)
 
@@ -288,4 +292,4 @@ Sin tocar diseño visual ni features de negocio.
 
 ---
 
-*Fin Fase 1. Esperar confirmación del usuario para ejecutar Fase A.*
+*Fin Fase 1. **Fase A ejecutada el 2026-07-09** (tooling + widgets base + CI). Siguiente: Fase B (adopción de widgets, `hasPermission` en UI, guard `client` en router, eliminar stubs).*

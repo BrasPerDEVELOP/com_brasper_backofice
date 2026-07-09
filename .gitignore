@@ -3,6 +3,9 @@ node_modules
 dist
 dev-dist
 
+# Caché de compilación de TypeScript (regenerado por `vue-tsc -b`)
+*.tsbuildinfo
+
 .env
 
 com_brasper_backofice.code-workspace

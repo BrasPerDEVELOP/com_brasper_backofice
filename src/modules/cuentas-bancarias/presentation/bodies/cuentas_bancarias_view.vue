@@ -362,7 +362,7 @@ onMounted(() => {
             class="border-t border-[#e5e7eb] bg-white transition hover:bg-[#f9fafb]"
           >
               <td class="px-4 py-3 text-[#374151]">
-                <template v-for="cell in [getBankTableCell(account.bank_id)]" :key="account.id">
+                <template v-for="(cell, cellIdx) in [getBankTableCell(account.bank_id)]" :key="cellIdx">
                   <p class="font-medium">{{ cell.title }}</p>
                   <p
                     v-if="cell.razonSocial"
