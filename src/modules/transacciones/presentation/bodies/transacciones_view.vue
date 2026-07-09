@@ -109,6 +109,12 @@ const createdAtFrom = ref<string>("");
 const createdAtTo = ref<string>("");
 /** Razón social Brasper (catálogo): filtrada por moneda de envío; independiente de cuenta destino del cliente. */
 const destinationBankFilterId = ref("");
+/**
+ * Razón social (`company_name`) guardada en la transacción que se edita.
+ * Solo el `company_name` persiste (no el id de catálogo), así que lo conservamos para:
+ * 1) reconstruir la selección del dropdown, y 2) no perderlo al guardar si no está en catálogo.
+ */
+const editStoredCompanyName = ref("");
 const perPage = ref(10);
 const currentPage = ref(1);
 const fileInput = ref<HTMLInputElement | null>(null);
@@ -527,6 +533,26 @@ function bankMetaFromCatalogBankId(
   return { bank_id: trimmed, bank_name, company_name };
 }
 
+/**
+ * Id de catálogo (razón social) cuya empresa coincide con `company_name`.
+ * Solo `company_name` persiste en la transacción, así reconstruimos la selección del dropdown.
+ * Prefiere una coincidencia en la moneda de envío (el catálogo se filtra por esa moneda).
+ */
+function findCatalogBankIdByCompany(companyName: string): string {
+  const target = companyName?.trim().toLowerCase();
+  if (!target) return "";
+  const matches = cuentasStore.banks.filter(
+    (b) => (b.company ?? "").toString().trim().toLowerCase() === target,
+  );
+  if (matches.length === 0) return "";
+  const originCurrency = selectedAccountCurrencies.value.origin;
+  const byCurrency = matches.find((b) => {
+    const bankCurrency = normalizeCurrencyCode(b.currency);
+    return !originCurrency || !bankCurrency || bankCurrency === originCurrency;
+  });
+  return (byCurrency ?? matches[0])?.id ?? "";
+}
+
 /** Metadatos de banco para POST/PUT desde la cuenta destino del cliente. */
 function bankMetaFromDestinationAccount(
   accountId: string,
@@ -570,15 +596,16 @@ function resolveTransactionBankMeta(): {
     form.bank_account_destination_id,
   );
   const razonSocial = bankMetaFromCatalogBankId(destinationBankFilterId.value);
+  // Empresa a persistir: la elegida en el dropdown; o —en edición y sin selección
+  // nueva— la que ya traía la transacción, para no perderla si no está en catálogo.
+  const razonSocialCompany = (
+    razonSocial?.company_name ??
+    (editingId.value ? editStoredCompanyName.value : "")
+  ).trim();
   if (fromAccount) {
-    if (razonSocial) {
-      return {
-        bank_id: fromAccount.bank_id,
-        bank_name: fromAccount.bank_name,
-        company_name: razonSocial.company_name,
-      };
-    }
-    return fromAccount;
+    return razonSocialCompany
+      ? { ...fromAccount, company_name: razonSocialCompany }
+      : fromAccount;
   }
   return razonSocial;
 }
@@ -1204,9 +1231,11 @@ function resetForm() {
   confirmedNegativeSpecialDiscountSignature.value = null;
   createQuoteSnapshot.value = null;
   destinationBankFilterId.value = "";
+  editStoredCompanyName.value = "";
   void cuentasStore.loadBankAccountsForTransactionUser(undefined);
   calculatorStore.resetCalculatorMode();
   calculatorStore.resetAmounts();
+  calculatorStore.clearEditRateLock();
   calculatorStore.updateSelectedIds();
 }
 
@@ -1233,6 +1262,15 @@ function syncCalculatorFromForm() {
   if (rate) {
     calculatorStore.setCurrencyFrom(rate.from);
     calculatorStore.setCurrencyTo(rate.to);
+  }
+
+  // Al editar, la calculadora debe usar el tipo de cambio guardado en la transacción
+  // (no el catálogo vivo). Así los montos no cambian al corregir ni al guardar.
+  const storedRate = Number(form.tax_amount);
+  if (rate && editingId.value && Number.isFinite(storedRate) && storedRate > 0) {
+    calculatorStore.setEditRateLock(rate.from, rate.to, storedRate);
+  } else {
+    calculatorStore.clearEditRateLock();
   }
 
   const originAmount = Number(form.origin_amount) || 0;
@@ -1519,7 +1557,13 @@ async function hydrateEditForm(row: Transaction) {
     form.checked_image = [];
     editSourceTransaction.value = row;
     {
-      destinationBankFilterId.value = row.bank_id?.trim() ?? "";
+      // La razón social se persiste como `company_name` (no como id). `row.bank_id`
+      // es el banco de la cuenta destino, NO la razón social: usarlo la corrompía.
+      // Si el re-fetch en segundo plano no trae `company_name`, se conserva el ya cargado.
+      const storedCompany =
+        (row.company_name ?? "").toString().trim() || editStoredCompanyName.value;
+      editStoredCompanyName.value = storedCompany;
+      destinationBankFilterId.value = findCatalogBankIdByCompany(storedCompany);
     }
     await nextTick();
   } finally {
@@ -2566,6 +2610,29 @@ watch(
 watch(showBancoCrudModal, (open) => {
   if (!open) bancoCrudOpenForCreate.value = false;
 });
+
+// El usuario tomó control de la razón social: su elección (incluido "Todos") manda
+// sobre el `company_name` que traía la transacción, así ya no se aplica el respaldo.
+watch(
+  () => destinationBankFilterId.value,
+  () => {
+    if (isHydratingTransactionForm.value) return;
+    editStoredCompanyName.value = "";
+  },
+);
+
+// Reconstruye la razón social guardada en el dropdown cuando el catálogo de bancos
+// llega después de hidratar el formulario de edición.
+watch(
+  () => [cuentasStore.banks.length, selectedAccountCurrencies.value.origin],
+  () => {
+    if (!editingId.value || isHydratingTransactionForm.value) return;
+    const company = editStoredCompanyName.value.trim();
+    if (!company || destinationBankFilterId.value.trim()) return;
+    const id = findCatalogBankIdByCompany(company);
+    if (id) destinationBankFilterId.value = id;
+  },
+);
 
 watch(
   [

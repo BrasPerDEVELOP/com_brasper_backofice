@@ -260,3 +260,91 @@ describe('aislamiento entre useCalculatorStore y useCalculatorDemoStore', () => 
     expect(store.effectiveTaxRates.find(r => r.id === 'tr-2')?.rate).toBe(0.27)  // no afectado
   })
 })
+
+describe('editRateLock: tasa histórica de la transacción en edición', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('fuerza la tasa guardada en modo normal (no la del catálogo)', () => {
+    const store = useCalculatorStore()
+    seed(store, { calculationMode: 'normal' })  // catálogo: 1.438
+
+    store.setEditRateLock('pen', 'brl', 1.497)
+    store.setAmountSend(1000)
+
+    expect(store.result?.rate).toBe(1.497)
+    expect(store.currentRate).toBe(1.497)
+  })
+
+  it('NO muta taxRates al aplicar el bloqueo', () => {
+    const store = useCalculatorStore()
+    seed(store, { calculationMode: 'normal' })
+
+    store.setEditRateLock('pen', 'brl', 1.497)
+
+    expect(store.taxRates[0]?.rate).toBe(1.438)        // catálogo intacto
+    expect(store.effectiveTaxRates[0]?.rate).toBe(1.497)  // bloqueo aplicado
+  })
+
+  it('reproduce el monto destino guardado en vez de recalcular con el catálogo vivo', () => {
+    const store = useCalculatorStore()
+    seed(store, { calculationMode: 'normal' })  // catálogo 1.438 daría un destino distinto
+
+    store.setEditRateLock('pen', 'brl', 1.497)
+    store.setAmountSend(291)
+
+    // 291 - 2% = 285.18 neto → 285.18 * 1.497 ≈ 426.9 (con la tasa histórica, no la del catálogo)
+    const net = 291 - 291 * 0.02
+    expect(store.result?.amountReceive).toBeCloseTo(net * 1.497, 4)
+  })
+
+  it('aplica la inversa cuando el catálogo solo tiene el sentido contrario', () => {
+    const store = useCalculatorStore()
+    store.$patch({
+      taxRates: [{ id: 'tr-inv', pair: 'brl-pen', rate: 0.66, from: 'brl', to: 'pen' }],
+      commissions: [COMMISSION_PEN_BRL],
+      calculationMode: 'normal',
+      currencyFrom: 'pen',
+      currencyTo: 'brl',
+      lastCoinCatalogWasTrial: false
+    })
+
+    store.setEditRateLock('pen', 'brl', 1.497)
+    store.setAmountSend(1000)
+
+    expect(store.result?.rate).toBeCloseTo(1.497, 6)  // pen→brl derivado de la inversa bloqueada
+  })
+
+  it('también manda en modo especial', () => {
+    const store = useCalculatorStore()
+    seed(store, { calculationMode: 'special' })
+
+    store.setEditRateLock('pen', 'brl', 1.497)
+    store.setAmountSend(1000)
+
+    expect(store.result?.rate).toBe(1.497)
+  })
+
+  it('clearEditRateLock vuelve a la tasa del catálogo', () => {
+    const store = useCalculatorStore()
+    seed(store, { calculationMode: 'normal' })
+
+    store.setEditRateLock('pen', 'brl', 1.497)
+    store.setAmountSend(1000)
+    expect(store.result?.rate).toBe(1.497)
+
+    store.clearEditRateLock()
+    store.setAmountSend(1000)
+    expect(store.result?.rate).toBe(1.438)
+  })
+
+  it('ignora un bloqueo inválido (tasa <= 0)', () => {
+    const store = useCalculatorStore()
+    seed(store, { calculationMode: 'normal' })
+
+    store.setEditRateLock('pen', 'brl', 0)
+
+    expect(store.editRateLock).toBeNull()
+    store.setAmountSend(1000)
+    expect(store.result?.rate).toBe(1.438)
+  })
+})

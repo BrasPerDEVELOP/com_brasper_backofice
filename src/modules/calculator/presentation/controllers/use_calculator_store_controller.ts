@@ -235,6 +235,12 @@ interface CalculatorState {
   catalogCache: Record<CalculatorCatalogMode, CalculatorCatalogCache | null>
   /** Sobreescrituras locales de tasa (id → valor). Solo activas en modo especial; la calculadora normal nunca las lee. */
   localTaxRateOverrides: Record<string, number>
+  /**
+   * Bloqueo de tipo de cambio en edición: fuerza la tasa histórica guardada en la
+   * transacción para el par indicado (en modo normal y especial), en vez del catálogo vivo.
+   * Evita que los montos "se muevan" al re-editar una transacción cuya tasa ya cambió en catálogo.
+   */
+  editRateLock: { from: CurrencyCode; to: CurrencyCode; rate: number } | null
   /** IDs para POST /transactions/ (tasa y comisión usadas en la calculadora). */
   selectedTaxRateId: string | null
   selectedCommissionId: string | null
@@ -324,6 +330,7 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
       trial: null
     },
     localTaxRateOverrides: readLocalTaxRateOverrides(lockTrial),
+    editRateLock: null,
     selectedTaxRateId: null,
     selectedCommissionId: null,
     isLoading: false,
@@ -351,16 +358,35 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
      * El modo normal conserva el mapa, pero nunca lo lee.
      */
     effectiveTaxRates(state): ExchangeRate[] {
-      if (!lockTrial && state.calculationMode !== 'special') {
-        return state.taxRates
+      let rates = state.taxRates
+
+      // Sobrescrituras locales de tasa: solo en modo especial (o store demo/trial).
+      const applyLocalOverrides =
+        (lockTrial || state.calculationMode === 'special') &&
+        Object.keys(state.localTaxRateOverrides).length > 0
+      if (applyLocalOverrides) {
+        rates = rates.map((r) => {
+          const override = state.localTaxRateOverrides[r.id]
+          return override !== undefined ? { ...r, rate: override } : r
+        })
       }
-      if (Object.keys(state.localTaxRateOverrides).length === 0) {
-        return state.taxRates
+
+      // Bloqueo de tasa en edición: el tipo de cambio histórico manda sobre el
+      // catálogo vivo para el par editado, tanto en normal como en especial.
+      const lock = state.editRateLock
+      if (lock && lock.rate > 0) {
+        rates = rates.map((r) => {
+          if (r.from === lock.from && r.to === lock.to) {
+            return { ...r, rate: lock.rate }
+          }
+          if (r.from === lock.to && r.to === lock.from) {
+            return { ...r, rate: 1 / lock.rate }
+          }
+          return r
+        })
       }
-      return state.taxRates.map((r) => {
-        const override = state.localTaxRateOverrides[r.id]
-        return override !== undefined ? { ...r, rate: override } : r
-      })
+
+      return rates
     },
 
     /** Tasa de cambio del par actual (directa o derivada del inverso en catálogo). */
@@ -733,6 +759,25 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
       this.localTaxRateOverrides = { ...this.localTaxRateOverrides, [id]: newRate }
       writeLocalTaxRateOverrides(lockTrial, this.localTaxRateOverrides)
       this.updateSelectedIds()
+    },
+
+    /**
+     * Fija la tasa histórica de una transacción en edición para el par dado.
+     * Mientras esté activa, `effectiveTaxRates` usa esta tasa (y su inversa) en vez del catálogo,
+     * de modo que recalcular los montos reproduce los valores guardados y no "se mueven" al guardar.
+     */
+    setEditRateLock(from: CurrencyCode, to: CurrencyCode, rate: number) {
+      this.editRateLock =
+        Number.isFinite(rate) && rate > 0 ? { from, to, rate } : null
+      this.updateSelectedIds()
+    },
+
+    /** Quita el bloqueo de tasa (al cerrar/reiniciar el formulario o iniciar un alta nueva). */
+    clearEditRateLock() {
+      if (this.editRateLock !== null) {
+        this.editRateLock = null
+        this.updateSelectedIds()
+      }
     }
   }
 }
