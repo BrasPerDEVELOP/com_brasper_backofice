@@ -778,6 +778,20 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
         this.editRateLock = null
         this.updateSelectedIds()
       }
+    },
+
+    /**
+     * Entra en modo ESPECIAL con montos ya conocidos (envío + recibe objetivo), sin recargar
+     * catálogo ni recalcular el destino. Se usa al "Corregir montos" de una transacción especial:
+     * abre directo en especial mostrando el monto guardado (p. ej. 1450), no la cotización normal.
+     */
+    setSpecialQuote(send: number, receive: number) {
+      this.calculationMode = 'special'
+      this.inputMode = 'send'
+      this.amountSendSpecial = Number(send) || 0
+      this.amountReceiveSpecial = Number(receive) || 0
+      this.specialReceiveManuallyEdited = true
+      this.updateSelectedIds()
     }
   }
 }

@@ -40,6 +40,7 @@ import {
   inferOriginCurrencyFromTransactionCode,
   formatTransactionCodeForDisplay,
   SPECIAL_CALCULATOR_DISCOUNT_CODE,
+  isSpecialCalculatorDiscountCode,
   getTransactionSpecialDiscountForDisplay,
 } from "../../domain/models";
 import type { TransactionSpecialDiscountInfo } from "../../domain/models";
@@ -951,10 +952,10 @@ const destinationBankFilterOptions = computed(() => {
   ) {
     const bank = cuentasStore.banks.find((b) => String(b.id).trim() === selectedId);
     if (bank) {
-      const bankCurrency = normalizeCurrencyCode(bank.currency);
-      if (!currency || !bankCurrency || bankCurrency === currency) {
-        opts.push({ value: bank.id, label: bankCatalogOptionLabel(bank) });
-      }
+      // Mostrar SIEMPRE la razón social seleccionada, aunque su moneda no sea la de
+      // envío (p. ej. transacciones antiguas cuyo company_name venía de la cuenta destino).
+      // Un filtro no debe ocultar el valor que ya está elegido.
+      opts.push({ value: bank.id, label: bankCatalogOptionLabel(bank) });
     }
   }
   return [{ value: "", label: "Todos" }, ...opts];
@@ -1254,6 +1255,14 @@ function getCalculatorBlockingError(): string | null {
   return null;
 }
 
+/** ¿La transacción en edición se creó con la calculadora especial? */
+function isEditingSpecialTransaction(): boolean {
+  if (!editingId.value) return false;
+  if (getTransactionSpecialDiscountMeta(editingId.value)) return true;
+  const src = editSourceTransaction.value;
+  return Boolean(src && isSpecialCalculatorDiscountCode(src.coupon_discount_code));
+}
+
 function syncCalculatorFromForm() {
   calculatorStore.resetCalculatorMode();
   const rate = calculatorStore.taxRates.find(
@@ -1275,6 +1284,18 @@ function syncCalculatorFromForm() {
 
   const originAmount = Number(form.origin_amount) || 0;
   const destinationAmount = Number(form.destination_amount) || 0;
+
+  // Si la transacción en edición es ESPECIAL, "Corregir montos" abre la calculadora
+  // directamente en modo especial con el monto destino guardado (p. ej. 1450), en vez de
+  // recalcular la cotización normal (que daría 1449.18) y confundir.
+  if (
+    isEditingSpecialTransaction() &&
+    originAmount > 0 &&
+    destinationAmount > 0
+  ) {
+    calculatorStore.setSpecialQuote(originAmount, destinationAmount);
+    return;
+  }
 
   if (originAmount > 0) {
     calculatorStore.setAmountSend(originAmount);
@@ -1582,7 +1603,7 @@ async function openEditModal(t: Transaction) {
   showCreateModal.value = true;
   editModalLoading.value = true;
   try {
-    await hydrateEditForm(t);
+    await hydrateEditForm(enrichTransactionWithSpecialDiscountMeta(t));
     editModalLoading.value = false;
     const catalogReady = transactionCatalogReadyForCurrentMode();
     await calculatorStore.loadData({ background: catalogReady });
@@ -1597,7 +1618,11 @@ async function openEditModal(t: Transaction) {
           null,
         );
         if (fresh) {
-          await hydrateEditForm({ ...t, ...fresh });
+          // El GET por id no viene enriquecido: sin esto, el monto especial (p. ej. 1450)
+          // se "degradaría" al valor del catálogo (1449.18) que guarda el backend.
+          await hydrateEditForm(
+            enrichTransactionWithSpecialDiscountMeta({ ...t, ...fresh }),
+          );
           syncCalculatorFromForm();
         }
       } catch {
@@ -1999,87 +2024,9 @@ const editHeroAmounts = computed(() => {
     },
   ];
 
-  if (specialDiscount) {
-    if (specialDiscount.improvementReceive > 0.005) {
-      items.push({
-        label: "Recibe base (catálogo)",
-        value: formatValueWithCurrency(
-          specialDiscount.baseReceive,
-          currencies.destination,
-        ),
-      });
-      items.push({
-        label: "Mejora especial",
-        value: `+${formatValueWithCurrency(
-          specialDiscount.improvementReceive,
-          currencies.destination,
-        )}`,
-      });
-    }
-    if (specialDiscount.discountCommission > 0.005) {
-      items.push({
-        label: "Descuento comisión",
-        value: `-${formatValueWithCurrency(
-          specialDiscount.discountCommission,
-          currencies.origin,
-        )}`,
-      });
-      items.push({
-        label: "Comisión base (catálogo)",
-        value: formatValueWithCurrency(
-          specialDiscount.baseCommission,
-          currencies.origin,
-        ),
-      });
-    }
-    if (specialDiscount.totalToSend != null) {
-      items.push({
-        label: "Total a enviar",
-        value: formatValueWithCurrency(
-          specialDiscount.totalToSend,
-          currencies.origin,
-        ),
-      });
-    }
-  } else if (hasCoupon) {
-    if (t.coupon_discount_commission != null) {
-      items.push({
-        label: "Descuento cupón",
-        value: `-${formatValueWithCurrency(
-          t.coupon_discount_commission,
-          currencies.origin,
-        )}`,
-      });
-    }
-
-    if (t.coupon_origin_amount != null) {
-      items.push({
-        label: "Monto origen (Final)",
-        value: formatValueWithCurrency(t.coupon_origin_amount, currencies.origin),
-      });
-    }
-
-    if (t.coupon_destination_amount != null) {
-      items.push({
-        label: "Monto destino (Final)",
-        value: formatValueWithCurrency(
-          t.coupon_destination_amount,
-          currencies.destination,
-        ),
-      });
-    }
-
-    if (t.coupon_discount_total_to_send != null) {
-      items.push({
-        label: "Total a enviar (Final)",
-        value: formatValueWithCurrency(
-          t.coupon_discount_total_to_send,
-          currencies.origin,
-        ),
-      });
-    }
-  }
-
+  // En edición mostramos SOLO los tres importes guardados (origen, destino, comisión).
+  // El desglose especial/cupón (recibe base, mejora, descuento, total) confundía porque
+  // parecía un recálculo en vivo al abrir el modal.
   return items;
 });
 

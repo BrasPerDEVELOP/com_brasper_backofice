@@ -348,3 +348,33 @@ describe('editRateLock: tasa histórica de la transacción en edición', () => {
     expect(store.result?.rate).toBe(1.438)
   })
 })
+
+describe('setSpecialQuote: abrir edición especial con el monto guardado', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('entra en especial con el destino objetivo, sin recalcular a la cotización normal', () => {
+    const store = useCalculatorStore()
+    seed(store, { calculationMode: 'normal' })
+
+    store.setSpecialQuote(1000, 1450)
+
+    expect(store.calculationMode).toBe('special')
+    expect(store.amountSend).toBe(1000)
+    expect(store.amountReceive).toBe(1450)
+    expect(store.result?.calculationMode).toBe('special')
+    // muestra el objetivo especial guardado (1450), no la base del catálogo
+    expect(store.result?.amountReceive).toBe(1450)
+    expect(store.result?.rate).toBe(1.438)
+  })
+
+  it('combina con el bloqueo de tasa: usa la tasa histórica en especial', () => {
+    const store = useCalculatorStore()
+    seed(store, { calculationMode: 'normal' })
+    store.setEditRateLock('pen', 'brl', 1.497)
+
+    store.setSpecialQuote(1000, 1450)
+
+    expect(store.result?.rate).toBe(1.497)
+    expect(store.result?.amountReceive).toBe(1450)
+  })
+})
