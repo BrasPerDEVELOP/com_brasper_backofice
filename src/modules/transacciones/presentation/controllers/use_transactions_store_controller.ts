@@ -16,7 +16,7 @@ import {
 } from '../../application/use_cases'
 import { TransactionsApiAdapter } from '../../infrastructure/adapters'
 import type { TransactionsRepository } from '../../infrastructure/adapters/transactions_repository'
-import { enrichTransactionsWithSpecialDiscountMeta } from '../../infrastructure/utils/transaction_special_discount_meta'
+import { enrichTransactionsWithSpecialDiscountMeta, enrichTransactionWithSpecialDiscountMeta, removeTransactionSpecialDiscountMeta } from '../../infrastructure/utils/transaction_special_discount_meta'
 
 let transactionsRepositorySingleton: TransactionsRepository | null = null
 
@@ -161,8 +161,9 @@ export const useTransactionsStore = defineStore('transactions', {
         const useCase = new UpdateTransactionUseCase(repo)
         const updated = await useCase.execute(id, payload)
         const idx = this.transactions.findIndex((t) => (t.id ?? '') === id)
-        if (idx >= 0) this.transactions[idx] = updated
-        return updated
+        const enriched = enrichTransactionWithSpecialDiscountMeta(updated)
+        if (idx >= 0) this.transactions[idx] = enriched
+        return enriched
       } catch (e) {
         this.error = errorMessageFromCatch(e, 'Error al actualizar transacción')
         throw e
@@ -177,6 +178,7 @@ export const useTransactionsStore = defineStore('transactions', {
         const repo = getTransactionsRepository()
         const useCase = new DeleteTransactionUseCase(repo)
         await useCase.execute(id)
+        removeTransactionSpecialDiscountMeta(id)
         this.transactions = this.transactions.filter((t) => (t.id ?? '') !== id)
         this.total = Math.max(0, this.total - 1)
       } catch (e) {
