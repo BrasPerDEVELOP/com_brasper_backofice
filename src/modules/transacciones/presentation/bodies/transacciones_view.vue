@@ -67,6 +67,11 @@ const comisionesStore = useComisionesStore();
 const calculatorStore = useCalculatorStore();
 const authStore = useAuthStore();
 
+// B4 (Fase B) — gates de permisos para acciones mutables (admin siempre pasa).
+const canCreateTransactions = computed(() => authStore.hasPermission("transactions.create"));
+const canUpdateTransactions = computed(() => authStore.hasPermission("transactions.update"));
+const canDeleteTransactions = computed(() => authStore.hasPermission("transactions.delete"));
+
 /** Catálogo coin listo para el paso Cotización sin parpadeo de carga. */
 function transactionCatalogReadyForCurrentMode(): boolean {
   return (
@@ -1450,6 +1455,7 @@ function getTransactionSpecialDiscount(
 }
 
 function openCreateModal() {
+  if (!canCreateTransactions.value) return;
   transactionsStore.error = null;
   resetForm();
   applyDefaultAgentForCurrentUser(true);
@@ -1593,6 +1599,7 @@ async function hydrateEditForm(row: Transaction) {
 }
 
 async function openEditModal(t: Transaction) {
+  if (!canUpdateTransactions.value) return;
   if (!t.id) return;
   const transactionId = t.id;
   transactionsStore.error = null;
@@ -1638,6 +1645,8 @@ async function openEditModal(t: Transaction) {
 }
 
 async function submitForm() {
+  // B4 — el submit sirve para crear y editar; exige el permiso según el modo.
+  if (editingId.value ? !canUpdateTransactions.value : !canCreateTransactions.value) return;
   if (!editingId.value && createQuoteSnapshot.value) {
     applyCreateQuoteSnapshot(createQuoteSnapshot.value);
   } else {
@@ -1801,6 +1810,7 @@ async function submitForm() {
 }
 
 async function handleDelete(t: Transaction) {
+  if (!canDeleteTransactions.value) return;
   if (!t.id) return;
   if (!confirm(`¿Eliminar transacción ${t.code ?? t.id}?`)) return;
   openMenuId.value = null;
@@ -2456,6 +2466,7 @@ onBeforeUnmount(() => {
 });
 
 async function submitImport() {
+  if (!canCreateTransactions.value) return;
   if (!importFile.value) return;
   try {
     await transactionsStore.importExcel(
@@ -2471,6 +2482,7 @@ async function submitImport() {
 }
 
 async function submitImportSimple() {
+  if (!canCreateTransactions.value) return;
   if (!importSimpleFile.value) return;
   importingSimple.value = true;
   importSimpleError.value = "";
@@ -2692,6 +2704,7 @@ onActivated(() => {
         <div class="flex items-center gap-2">
           <button
             type="button"
+            v-if="canCreateTransactions"
             class="inline-flex items-center gap-2 rounded-xl border border-brasper-cyan/40 bg-white px-4 py-2.5 text-sm font-medium text-brasper-indigoStrong transition hover:bg-brasper-cyanLight/10"
             @click="showImportModal = true"
           >
@@ -2712,6 +2725,7 @@ onActivated(() => {
           </button>
           <button
             type="button"
+            v-if="canCreateTransactions"
             class="inline-flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-white px-4 py-2.5 text-sm font-medium text-[#374151] transition hover:bg-[#f9fafb]"
             @click="showImportSimpleModal = true"
           >
@@ -2732,6 +2746,7 @@ onActivated(() => {
           </button>
           <button
             type="button"
+            v-if="canCreateTransactions"
             class="inline-flex items-center gap-2 rounded-lg bg-brasper-indigoStrong px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brasper-indigoDark"
             @click="openCreateModal"
           >
@@ -3227,6 +3242,7 @@ onActivated(() => {
           Previsualizar
         </button>
         <button
+          v-if="canUpdateTransactions"
           type="button"
           class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-[#374151] hover:bg-[#f9fafb]"
           @click="confirmEditFromMenu"
@@ -3247,6 +3263,7 @@ onActivated(() => {
           Editar
         </button>
         <button
+          v-if="canDeleteTransactions"
           type="button"
           class="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-[#dc3545] hover:bg-[#fef2f2]"
           :disabled="deletingId === selectedMenuTransaction.id"
@@ -3605,7 +3622,7 @@ onActivated(() => {
               Cerrar
             </button>
             <button
-              v-if="previewTransaction.id"
+              v-if="previewTransaction.id && canUpdateTransactions"
               type="button"
               class="inline-flex items-center gap-2 rounded-lg bg-brasper-indigoStrong px-4 py-2.5 text-sm font-semibold text-white hover:bg-brasper-indigoDark"
               @click="openEditFromPreview"

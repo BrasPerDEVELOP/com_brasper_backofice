@@ -84,14 +84,18 @@ export const env = {
     return getEnv('VITE_COUNTRY', 'US')
   },
 
-  /** Usuario para prellenar login (desarrollo) */
+  /**
+   * Usuario para prellenar login. Solo en desarrollo (`import.meta.env.DEV`);
+   * en builds de producción devuelve '' para no exponer credenciales.
+   * No definir `VITE_USERNAME`/`VITE_PASSWORD` en el `.env` de producción.
+   */
   get username(): string {
-    return getEnv('VITE_USERNAME', '')
+    return import.meta.env.DEV ? getEnv('VITE_USERNAME', '') : ''
   },
 
-  /** Contraseña para prellenar login (desarrollo) */
+  /** Contraseña para prellenar login. Solo en desarrollo (ver `username`). */
   get password(): string {
-    return getEnv('VITE_PASSWORD', '')
+    return import.meta.env.DEV ? getEnv('VITE_PASSWORD', '') : ''
   },
 
   /** Nivel de log: debug | info | warn | error (en prod por defecto: warn) */

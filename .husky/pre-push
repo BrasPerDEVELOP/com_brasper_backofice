@@ -1,0 +1,4 @@
+#!/bin/sh
+# Fase D — activar con: npm install -D husky && npx husky init
+# Capa 1 Stemis: bloquea push si check falla
+npm run check

@@ -292,4 +292,4 @@ Sin tocar diseño visual ni features de negocio.
 
 ---
 
-*Fin Fase 1. **Fase A ejecutada el 2026-07-09** (tooling + widgets base + CI). Siguiente: Fase B (adopción de widgets, `hasPermission` en UI, guard `client` en router, eliminar stubs).*
+*Fin Fase 1. **Fase A ejecutada el 2026-07-09**. Planes B/C/D y scaffolds en [`docs/plans/00-ROADMAP.md`](../plans/00-ROADMAP.md). **Siguiente: Fase B** — [`docs/plans/FASE-B.md`](../plans/FASE-B.md).*

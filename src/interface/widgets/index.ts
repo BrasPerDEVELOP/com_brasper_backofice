@@ -7,3 +7,5 @@ export { default as PageHeader } from './PageHeader.vue'
 export { default as EmptyState } from './EmptyState.vue'
 export { default as AppSpinner } from './AppSpinner.vue'
 export { default as ConfirmDialog } from './ConfirmDialog.vue'
+/** Fase C3 — scaffold; implementar antes de usar en producción */
+export { default as DataTable } from './DataTable.vue'

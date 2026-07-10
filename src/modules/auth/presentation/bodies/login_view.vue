@@ -229,7 +229,9 @@ const handleLogin = async () => {
   try {
     await authStore.login(username.value, password.value)
     if (!authStore.validateBackofficeAccess()) {
+      const reason = authStore.error
       await authStore.logout()
+      authStore.setError(reason)
       return
     }
     await router.push('/app/transacciones')

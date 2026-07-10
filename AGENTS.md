@@ -2,59 +2,67 @@
 
 Vue 3 + TypeScript + Pinia + Vite. Backoffice Brasper (API Django externa). Clean Architecture por módulos.
 
+## Roadmap de fases (empezar aquí)
+
+| Fase | Estado | Documento |
+|------|--------|-----------|
+| A — Tooling + CI + widgets base | ✅ | [docs/plans/FASE-A.md](docs/plans/FASE-A.md) |
+| B — Auth + permisos UI + widgets adoption | 🔲 **SIGUIENTE** | [docs/plans/FASE-B.md](docs/plans/FASE-B.md) |
+| C — Split transacciones | 🔲 | [docs/plans/FASE-C.md](docs/plans/FASE-C.md) |
+| D — E2E + pre-push + smoke | 🔲 | [docs/plans/FASE-D.md](docs/plans/FASE-D.md) |
+
+Índice: [docs/plans/00-ROADMAP.md](docs/plans/00-ROADMAP.md)  
+Mapa módulos: [FEATURE_MAP.md](FEATURE_MAP.md)  
+Prompts Cursor: [docs/PROMPT-FASES.md](docs/PROMPT-FASES.md)
+
+**Gate local:** `npm run check` antes de cada PR.
+
 ## Skills (`.agents/skills/` y `.cursor/skills/`)
 
-| Skill | Origen | Cuándo usar |
-|-------|--------|-------------|
-| **brasper-backoffice-audit** | Stemis (adaptada) | Auditoría completa, flujo 4 capas, pre-merge, "limpiar código" |
-| **brainstorming** | Stemis | Antes de features nuevas o refactors grandes |
-| **thermo-nuclear-code-quality-review** | Stemis | Review estricto de PR; god files; spaghetti |
-| **vue-best-practices** | Proyecto | Composition API, composables, performance Vue |
+| Skill | Cuándo usar |
+|-------|-------------|
+| **brasper-backoffice-audit** | Auditoría, flujo 4 capas, pre-merge |
+| **brainstorming** | Features nuevas (no en refactors de fases) |
+| **thermo-nuclear-code-quality-review** | God files, PR review estricto |
+| **vue-best-practices** | Patrones Vue 3 |
 
-### NO copiar de Stemis (otro stack o diseño)
+## Capas de validación (Stemis)
 
-- `shadcn-ui`, `next-best-practices` — React/Next.js
-- `nestjs-best-practices`, `prisma-expert` — backend NestJS (API Django está fuera)
-- `interface-design`, `ui-ux-pro-max` — **diseño visual** (no usar en auditoría de código)
-- `dokploy-deploy`, `notion-stemis` — específicos Stemis
+| Capa | Estado | Qué |
+|------|--------|-----|
+| 1 Local | A ✅ / D 🔲 husky | `npm run check` |
+| 2 CI PR | A ✅ | `.github` + `.gitea/workflows/ci.yml` |
+| 3 Gate merge | D 🔲 | Playwright + tests permisos |
+| 4 Deploy | D 🔲 | `scripts/smoke.sh` |
 
-## Flujo recomendado (estilo Stemis)
+Ver [docs/ops/DEPLOYMENT-FLOW.md](docs/ops/DEPLOYMENT-FLOW.md).
 
-```
-1. brasper-backoffice-audit  → reporte en docs/audits/
-2. brainstorming             → si hay features nuevas
-3. Implementar por fases     → tooling → widgets → split views → CI
-4. thermo-nuclear            → review final del PR
-```
+## Scaffolds listos para codear
 
-## Capas de validación
-
-| Capa | Dónde | Qué |
-|------|-------|-----|
-| 1 Local | pre-push | typecheck + lint + vitest |
-| 2 CI PR | Gitea/GitHub Actions | check + build |
-| 3 Gate | merge main | tests adapters + permisos + E2E mínimo |
-| 4 Deploy | post-release | smoke API + login |
+| Fase | Carpetas / archivos |
+|------|---------------------|
+| B | `src/modules/auth/infrastructure/parse_user.ts`, `use_permission_gate.ts` |
+| C | `src/modules/transacciones/presentation/components/*.vue`, `composables/*.ts`, `infrastructure/mappers/` |
+| D | `e2e/`, `playwright.config.ts`, `.husky/pre-push`, `scripts/smoke.sh` |
 
 ## Arquitectura UI (sin cambiar diseño)
 
 ```
-interface/components/  → primitivos (AppButton, AppModal, AppDateInput…)
-interface/widgets/     → patrones (PageHeader, DataTable, ConfirmDialog…)
+interface/components/  → primitivos
+interface/widgets/     → PageHeader, EmptyState, ConfirmDialog, AppSpinner, DataTable (C3)
 modules/*/presentation/components/  → UI del módulo
-modules/*/presentation/bodies/*_view.vue  → orquestador (<300 líneas ideal)
+modules/*/presentation/bodies/*_view.vue  → orquestador (<500 líneas objetivo)
 ```
 
 ## Convenciones
 
-- Leer `CLAUDE.md` antes de editar
+- Leer `CLAUDE.md` + `FEATURE_MAP.md` antes de editar
 - Español en UI; inglés en código
-- `snake_case` archivos; PascalCase componentes Vue
 - API solo vía `Domain.apiPath()` y `apiClient`
 - Permisos: `module.action` en `permissions.ts`
 
-## Invocación en Cursor
+## Invocación Cursor
 
-- *"Usa brasper-backoffice-audit y genera el reporte"*
-- *"Auditoría estilo Stemis sin tocar diseño"*
-- *"thermo-nuclear en transacciones_view.vue"*
+```
+Implementa Fase B según docs/plans/FASE-B.md. npm run check verde. Sin diseño visual.
+```

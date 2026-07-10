@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { onMounted, useTemplateRef } from 'vue'
+import { computed, onMounted, useTemplateRef } from 'vue'
 import CouponCreateForm from '../components/CouponCreateForm.vue'
 import CouponList from '../components/CouponList.vue'
 import { useCuponesStore } from '../controllers/use_cupones_store_controller'
+import { useAuthStore } from '@modules/auth/presentation/controllers/use_auth_store_controller'
 
 interface CouponFormModel {
   code: string
@@ -16,18 +17,26 @@ interface CouponFormModel {
 }
 
 const cuponesStore = useCuponesStore()
+const authStore = useAuthStore()
 const createFormRef = useTemplateRef<InstanceType<typeof CouponCreateForm>>('createFormRef')
 
+const canCreate = computed(() => authStore.hasPermission('coupons.create'))
+const canUpdate = computed(() => authStore.hasPermission('coupons.update'))
+const canDelete = computed(() => authStore.hasPermission('coupons.delete'))
+
 async function handleCreate(payload: CouponFormModel): Promise<void> {
+  if (!canCreate.value) return
   const ok = await cuponesStore.validateAndCreateCoupon(payload)
   if (ok) createFormRef.value?.resetForm()
 }
 
 async function handleUpdate(id: string, payload: CouponFormModel): Promise<void> {
+  if (!canUpdate.value) return
   await cuponesStore.validateAndUpdateCoupon(id, payload)
 }
 
 async function handleDelete(coupon: { id: string; code: string }): Promise<void> {
+  if (!canDelete.value) return
   if (!window.confirm(`¿Eliminar el cupón "${coupon.code}"? Esta acción no se puede deshacer.`)) return
   await cuponesStore.deleteCoupon(coupon.id)
 }
@@ -64,6 +73,7 @@ onMounted(() => {
 
     <template v-else>
       <CouponCreateForm
+        v-if="canCreate"
         ref="createFormRef"
         :currency-options="cuponesStore.currencyOptions"
         :is-saving="cuponesStore.savingId === 'new'"

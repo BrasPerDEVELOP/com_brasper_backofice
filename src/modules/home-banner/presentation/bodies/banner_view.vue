@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { HomeBannerApiAdapter } from '../../infrastructure/adapters'
 import { Domain } from '@/interface/infrastructure/services'
 import type { HomeBanner } from '../../domain/models'
+import { useAuthStore } from '@modules/auth/presentation/controllers/use_auth_store_controller'
 
 type BannerLanguage = 'es' | 'pr' | 'en'
 
@@ -14,6 +15,8 @@ interface BannerField {
 }
 
 const repo = new HomeBannerApiAdapter()
+const authStore = useAuthStore()
+const canUpdateBanner = computed(() => authStore.hasPermission('home_banner.update'))
 const loading = ref(true)
 const saving = ref(false)
 const error = ref('')
@@ -208,6 +211,7 @@ function createPayload() {
 }
 
 async function submit() {
+  if (!canUpdateBanner.value) return
   saving.value = true
   error.value = ''
   successMessage.value = ''
@@ -421,6 +425,7 @@ onMounted(() => {
 
               <div class="flex flex-wrap items-center gap-3">
                 <label
+                  v-if="canUpdateBanner"
                   class="inline-flex cursor-pointer items-center justify-center rounded-xl bg-brasper-indigoStrong px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brasper-indigoDark"
                 >
                   {{ field.hasNewSelection ? 'Cambiar imagen' : 'Seleccionar imagen' }}
@@ -433,7 +438,7 @@ onMounted(() => {
                 </label>
 
                 <button
-                  v-if="field.hasNewSelection"
+                  v-if="canUpdateBanner && field.hasNewSelection"
                   type="button"
                   class="rounded-xl border border-[#d1d5db] bg-white px-4 py-2.5 text-sm font-medium text-[#374151] transition hover:bg-[#f9fafb]"
                   @click="clearSelectedFile(field.key)"
@@ -451,6 +456,7 @@ onMounted(() => {
 
         <div class="flex flex-wrap gap-3">
           <button
+            v-if="canUpdateBanner"
             type="submit"
             class="rounded-xl bg-brasper-indigoStrong px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brasper-indigoDark disabled:cursor-not-allowed disabled:opacity-50"
             :disabled="saving"

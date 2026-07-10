@@ -7,7 +7,7 @@ import type {
   UpdateProfilePayload
 } from './auth_repository'
 import type { User } from '../../domain/models'
-import { normalizePermissions, normalizeStoredRole } from '../../domain/models'
+import { parseUser } from '../parse_user'
 
 const log = createLoggerWithContext('auth')
 
@@ -15,43 +15,6 @@ const log = createLoggerWithContext('auth')
 function authPath(subpath: string): string {
   const segment = subpath.replace(/^\/+/, '').replace(/\/+$/, '')
   return segment ? `auth/${segment}/` : 'auth/'
-}
-
-/**
- * Parsea el objeto user de la respuesta del backend.
- * GET /user/{id} devuelve: id, names, lastnames, email, profile_image,
- * document_number, document_type, is_agent, role, phone, code_phone.
- */
-function parseUser(data: unknown): User | null {
-  if (data === null || typeof data !== 'object') return null
-  const o = data as Record<string, unknown>
-  const id = o.id ?? o.user_id
-  if (id == null) return null
-  const names = o.names != null ? String(o.names) : null
-  const lastnames = o.lastnames != null ? String(o.lastnames) : null
-  const email = (o.email ?? o.username) != null ? String(o.email ?? o.username) : ''
-  const displayName = [names, lastnames].filter(Boolean).join(' ') || email
-  const phoneVal = o.phone ?? o.telefono
-  const phone = typeof phoneVal === 'number' ? phoneVal : (typeof phoneVal === 'string' && phoneVal ? Number(phoneVal) : null)
-  const documentType = o.document_type ?? o.documentType ?? o.tipo_documento
-  const codePhone = o.code_phone ?? o.codePhone ?? o.codigo_telefono
-  const roleNorm = normalizeStoredRole(o.role)
-  return {
-    id: String(id),
-    email,
-    names,
-    lastnames,
-    name: displayName,
-    document_number: o.document_number != null ? String(o.document_number) : null,
-    document_type: documentType != null ? String(documentType) : null,
-    profile_image: o.profile_image != null ? String(o.profile_image) : null,
-    is_agent: Boolean(o.is_agent),
-    role: roleNorm,
-    phone: Number.isFinite(phone) ? phone : null,
-    code_phone: codePhone != null ? String(codePhone) : null,
-    permissions: normalizePermissions(o.permissions, roleNorm),
-    must_change_password: Boolean(o.must_change_password)
-  }
 }
 
 export class AuthApiAdapter implements AuthRepository {

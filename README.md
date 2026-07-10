@@ -91,8 +91,25 @@ Vitest (`environment: node`). Ejecutar un archivo:
 npx vitest run src/modules/calculator/presentation/controllers/use_calculator_store_controller.test.ts
 ```
 
+## Plan de mejoras (estilo Stemis)
+
+| Fase | Estado | Doc |
+|------|--------|-----|
+| A — Tooling + CI | ✅ | [FASE-A](docs/plans/FASE-A.md) |
+| B — Auth + widgets | 🔲 **empezar aquí** | [FASE-B](docs/plans/FASE-B.md) |
+| C — Split transacciones | 🔲 | [FASE-C](docs/plans/FASE-C.md) |
+| D — E2E + smoke | 🔲 | [FASE-D](docs/plans/FASE-D.md) |
+
+Índice completo: [`docs/plans/00-ROADMAP.md`](docs/plans/00-ROADMAP.md)  
+Mapa módulos: [`FEATURE_MAP.md`](FEATURE_MAP.md)  
+Prompts para Cursor: [`docs/PROMPT-FASES.md`](docs/PROMPT-FASES.md)
+
+Antes de codear una fase: leer su doc y correr `npm run check`.
+
 ## Documentación relacionada
 
 - [`CLAUDE.md`](CLAUDE.md) — guía detallada de arquitectura, comandos y convenciones.
 - [`AGENTS.md`](AGENTS.md) — skills y flujo de trabajo para agentes de IA.
-- [`docs/audits/`](docs/audits/) — auditorías de código y plan de mejoras por fases.
+- [`docs/audits/`](docs/audits/) — auditorías de código.
+- [`docs/ops/DEPLOYMENT-FLOW.md`](docs/ops/DEPLOYMENT-FLOW.md) — 4 capas de validación.
+- [`docs/TESTING.md`](docs/TESTING.md) — Vitest + Playwright.

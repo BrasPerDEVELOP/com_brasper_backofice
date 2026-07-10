@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { computed, reactive, shallowRef } from 'vue'
 import type { Coupon } from '../../domain/models'
+import { useAuthStore } from '@modules/auth/presentation/controllers/use_auth_store_controller'
+
+const authStore = useAuthStore()
+// B4 (Fase B) — gates de permisos para editar/eliminar cupones (admin siempre pasa).
+const canUpdateCoupons = computed(() => authStore.hasPermission('coupons.update'))
+const canDeleteCoupons = computed(() => authStore.hasPermission('coupons.delete'))
 
 interface CouponFormModel {
   code: string
@@ -60,6 +66,7 @@ function formatDate(value: string): string {
 }
 
 function startEditing(coupon: Coupon): void {
+  if (!canUpdateCoupons.value) return
   editingId.value = coupon.id
   editingForm.code = coupon.code
   editingForm.discount_percentage = String(coupon.discount_percentage)
@@ -84,10 +91,12 @@ function cancelEditing(): void {
 }
 
 function submitEdit(id: string): void {
+  if (!canUpdateCoupons.value) return
   emit('save', id, { ...editingForm })
 }
 
 function emitDelete(coupon: Coupon): void {
+  if (!canDeleteCoupons.value) return
   emit('delete', coupon)
 }
 </script>
@@ -141,6 +150,7 @@ function emitDelete(coupon: Coupon): void {
 
           <div v-if="editingId !== coupon.id" class="flex items-center gap-2">
             <button
+              v-if="canUpdateCoupons"
               type="button"
               class="rounded-xl border border-brasper-indigoStrong/30 bg-brasper-indigoStrong/10 px-4 py-2 text-sm font-medium text-brasper-indigoDark hover:bg-brasper-indigoStrong/20"
               @click="startEditing(coupon)"
@@ -148,6 +158,7 @@ function emitDelete(coupon: Coupon): void {
               Editar
             </button>
             <button
+              v-if="canDeleteCoupons"
               type="button"
               class="rounded-xl border border-[#dc3545]/30 bg-[#dc3545]/10 px-4 py-2 text-sm font-medium text-[#dc3545] hover:bg-[#dc3545]/20 disabled:opacity-60"
               :disabled="props.deletingId === coupon.id"

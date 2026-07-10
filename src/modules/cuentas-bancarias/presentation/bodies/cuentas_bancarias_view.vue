@@ -4,6 +4,11 @@ import { useCuentasBancariasStore } from '../controllers/use_cuentas_bancarias_s
 import type { BankAccount } from '../../domain/models'
 import AppDropdown from '@/interface/components/AppDropdown.vue'
 import CuentaBancariaCreateFormModal from '@/interface/components/CuentaBancariaCreateFormModal.vue'
+import { useAuthStore } from '@modules/auth/presentation/controllers/use_auth_store_controller'
+
+const authStore = useAuthStore()
+const canCreateAccount = computed(() => authStore.hasPermission('bank_accounts.create'))
+const canUpdateAccount = computed(() => authStore.hasPermission('bank_accounts.update'))
 
 const cuentasStore = useCuentasBancariasStore()
 const showCreateModal = ref(false)
@@ -47,6 +52,7 @@ const perPageStr = computed({
   }
 })
 function openCreateModal() {
+  if (!canCreateAccount.value) return
   cuentasStore.error = null
   showCreateModal.value = true
 }
@@ -217,6 +223,7 @@ onMounted(() => {
             </svg>
           </button>
           <button
+            v-if="canCreateAccount"
             type="button"
             class="inline-flex items-center gap-2 rounded-lg bg-brasper-indigoStrong px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brasper-indigoDark disabled:opacity-50 disabled:cursor-not-allowed"
             @click.stop="openCreateModal"
@@ -393,6 +400,7 @@ onMounted(() => {
                   @click.stop
                 >
                   <button
+                    v-if="canUpdateAccount"
                     type="button"
                     class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-[#374151] hover:bg-[#f9fafb]"
                   >

@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useComisionesStore } from '../controllers/use_comisiones_store_controller'
+import { useAuthStore } from '@modules/auth/presentation/controllers/use_auth_store_controller'
 import type { Commission } from '../../domain/models'
 
 const comisionesStore = useComisionesStore()
+const authStore = useAuthStore()
+const canUpdateCommission = computed(() => authStore.hasPermission('commissions.update'))
+const canDeleteCommission = computed(() => authStore.hasPermission('commissions.delete'))
 const activePair = ref<'usd-brl' | 'brl-pen' | 'brl-usd' | 'pen-brl'>('usd-brl')
 const editingId = ref<string | null>(null)
 const expandedHistoryId = ref<string | null>(null)
@@ -64,6 +68,7 @@ function formatReverse(value: string): string {
 }
 
 function startEditing(commission: Commission): void {
+  if (!canUpdateCommission.value) return
   editingId.value = commission.id
   editingForm.value = {
     coin_a: commission.coin_a,
@@ -88,11 +93,13 @@ function cancelEditing(): void {
 }
 
 async function saveCommission(id: string): Promise<void> {
+  if (!canUpdateCommission.value) return
   const ok = await comisionesStore.validateAndSaveCommission(id, editingForm.value)
   if (ok) cancelEditing()
 }
 
 async function deleteCommission(id: string): Promise<void> {
+  if (!canDeleteCommission.value) return
   const confirmed = window.confirm('¿Seguro que deseas eliminar esta comisión?')
   if (!confirmed) return
   await comisionesStore.deleteCommission(id)
@@ -207,7 +214,7 @@ onMounted(() => {
                   {{ expandedHistoryId === commission.id ? 'Ocultar historial' : 'Historial' }}
                 </button>
                 <button
-                  v-if="editingId !== commission.id"
+                  v-if="canUpdateCommission && editingId !== commission.id"
                   type="button"
                   class="rounded-lg border border-brasper-indigoStrong/30 bg-brasper-indigoStrong/10 px-3 py-1.5 text-sm font-medium text-brasper-indigoDark hover:bg-brasper-indigoStrong/20"
                   @click="startEditing(commission)"
@@ -215,6 +222,7 @@ onMounted(() => {
                   Editar
                 </button>
                 <button
+                  v-if="canDeleteCommission"
                   type="button"
                   class="rounded-lg border border-[#dc3545]/30 bg-[#dc3545]/10 px-3 py-1.5 text-sm font-medium text-[#dc3545] hover:bg-[#dc3545]/20 disabled:opacity-60"
                   :disabled="
@@ -290,6 +298,7 @@ onMounted(() => {
 
                 <div class="sm:col-span-2 lg:col-span-3 mt-2 flex flex-wrap items-center gap-2">
                   <button
+                    v-if="canUpdateCommission"
                     type="button"
                     class="cursor-pointer rounded-lg bg-gradient-to-r from-brasper-cyanLight to-brasper-indigoStrong px-3 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                     :disabled="comisionesStore.savingId === commission.id"

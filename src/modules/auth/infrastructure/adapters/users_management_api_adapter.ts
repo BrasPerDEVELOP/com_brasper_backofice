@@ -3,57 +3,15 @@ import { apiClient } from '@/interface/api/client'
 import { formatApiErrorBody } from '@/interface/api/format_api_error'
 import { Domain } from '@/interface/infrastructure/services'
 import { USER_ROLES } from '../../domain/models'
+import { parseUserListItem, type UserListItem } from '../parse_user'
 
 export { USER_ROLES }
+// Re-exportado para no romper importadores existentes (usuarios_view, transacciones).
+export type { UserListItem }
 
 export const DEFAULT_USER_TEMPORARY_PASSWORD = 'Pass123!'
 
-export interface UserListItem {
-  id: string
-  name: string
-  email: string
-  role?: string
-  names?: string
-  lastnames?: string
-  document_number?: string
-  document_type?: string
-  phone?: number | null
-  code_phone?: string | null
-}
-
-function parseUser(item: unknown): UserListItem | null {
-  if (item == null || typeof item !== 'object') return null
-  const o = item as Record<string, unknown>
-  const id = o.id ?? o.user_id
-  if (id == null) return null
-  const names = (o.names ?? '').toString().trim()
-  const lastnames = (o.lastnames ?? '').toString().trim()
-  const email = (o.email ?? o.username ?? '').toString().trim()
-  const fullName = [names, lastnames].filter(Boolean).join(' ') || email || String(id)
-  const role = o.role != null ? String(o.role) : undefined
-  const document_number = o.document_number != null ? String(o.document_number) : undefined
-  const document_type = o.document_type != null ? String(o.document_type) : undefined
-  const phoneVal = o.phone ?? o.telefono
-  const phone =
-    typeof phoneVal === 'number'
-      ? phoneVal
-      : typeof phoneVal === 'string' && phoneVal.trim()
-        ? Number(phoneVal)
-        : null
-  const codePhone = o.code_phone ?? o.codePhone ?? o.codigo_telefono
-  return {
-    id: String(id),
-    name: fullName,
-    email: email || '-',
-    role,
-    names: names || undefined,
-    lastnames: lastnames || undefined,
-    document_number,
-    document_type,
-    phone: Number.isFinite(phone) ? phone : null,
-    code_phone: codePhone != null ? String(codePhone) : null
-  }
-}
+const parseUser = parseUserListItem
 
 function extractArray(raw: unknown): unknown[] {
   if (Array.isArray(raw)) return raw

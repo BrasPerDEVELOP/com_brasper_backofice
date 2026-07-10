@@ -178,6 +178,16 @@ router.beforeEach(async (to) => {
       return { path: '/' }
     }
 
+    // B1 (Fase B) — el rol `client` (o cuentas sin permisos de backoffice) se
+    // bloquea también cuando la sesión se restaura desde localStorage, no solo
+    // en el login. Preservamos el motivo para mostrarlo en la pantalla de login.
+    if (!authStore.validateBackofficeAccess()) {
+      const reason = authStore.error
+      await authStore.logout()
+      authStore.setError(reason)
+      return { path: '/' }
+    }
+
     const permission = to.meta.permission
     if (typeof permission === 'string' && !authStore.hasPermission(permission)) {
       return { path: firstPermittedAppPath(authStore), replace: true }

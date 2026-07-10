@@ -87,7 +87,7 @@ Key `.env` variables (all prefixed `VITE_`):
 
 Active modules (fully implemented): `auth`, `transacciones`, `tasas`, `comisiones`, `cupones`, `cuentas-bancarias`, `calculator`, `dashboard`, `contabilidad`, `home-banner`, `blog`.
 
-Stub modules (scaffolded but empty — only `.gitkeep` files): `transactions/`, `accounts/`, `user/`. Do not add code to these unless intentionally implementing them.
+The empty stub modules `transactions/`, `accounts/`, `user/` were removed in Fase B. Do not confuse them with the real modules `transacciones`, `cuentas-bancarias`, and `auth` (user management lives under `auth/usuarios`).
 
 The `auth` module is larger than typical — it handles login, user management (`usuarios`), profile, and role/permission management across four view files and two API adapters.
 

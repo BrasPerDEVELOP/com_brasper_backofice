@@ -101,6 +101,7 @@
                   }}
                 </button>
                 <button
+                  v-if="canUpdateRate"
                   type="button"
                   :class="
                     compact
@@ -196,8 +197,9 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useTasasStore } from "../controllers/use_tasas_store_controller";
+import { useAuthStore } from "@modules/auth/presentation/controllers/use_auth_store_controller";
 
 withDefaults(
   defineProps<{
@@ -209,6 +211,8 @@ withDefaults(
 );
 
 const tasasStore = useTasasStore();
+const authStore = useAuthStore();
+const canUpdateRate = computed(() => authStore.hasPermission("rates.update"));
 const expandedHistoryId = ref<string | null>(null);
 const draftTaxes = ref<Record<string, string>>({});
 
@@ -217,6 +221,7 @@ async function saveRate(
   coinA: string,
   coinB: string,
 ): Promise<void> {
+  if (!canUpdateRate.value) return;
   const parsedTax = Number(draftTaxes.value[id] ?? "");
   const ok = await tasasStore.validateAndUpdateTaxRate(
     id,

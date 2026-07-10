@@ -3,9 +3,16 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { BlogApiAdapter } from '../../infrastructure/adapters/blog_api_adapter'
 import type { Blog } from '../../domain/models/blog'
 import type { BlogPayload } from '../../infrastructure/adapters/blog_repository'
+import { useAuthStore } from '@modules/auth/presentation/controllers/use_auth_store_controller'
 
 // Repositorio API
 const blogRepo = new BlogApiAdapter()
+
+// Permisos
+const authStore = useAuthStore()
+const canCreateBlog = computed(() => authStore.hasPermission('blog.create'))
+const canUpdateBlog = computed(() => authStore.hasPermission('blog.update'))
+const canDeleteBlog = computed(() => authStore.hasPermission('blog.delete'))
 
 // Estados de la lista
 const blogs = ref<Blog[]>([])
@@ -391,6 +398,7 @@ async function handleContentFileUpload(e: Event) {
 
 // Abrir modal de creación
 function openCreateModal() {
+  if (!canCreateBlog.value) return
   modalMode.value = 'create'
   activeBlogId.value = null
   isSlugManuallyEdited.value = false
@@ -415,6 +423,7 @@ function openCreateModal() {
 
 // Abrir modal de edición
 async function openEditModal(blog: Blog) {
+  if (!canUpdateBlog.value) return
   modalMode.value = 'edit'
   activeBlogId.value = blog.id
   isSlugManuallyEdited.value = true
@@ -457,6 +466,7 @@ function closeModal() {
 
 // Guardar Formulario (Crear o Actualizar)
 async function handleSaveBlog() {
+  if (!canCreateBlog.value && !canUpdateBlog.value) return
   if (!form.value.title || !form.value.slug || !form.value.content || !form.value.language) {
     showToast('error', 'Por favor complete todos los campos obligatorios.')
     return
@@ -502,6 +512,7 @@ async function handleSaveBlog() {
 
 // Eliminar post del blog
 async function handleDeleteBlog(blog: Blog) {
+  if (!canDeleteBlog.value) return
   if (!window.confirm(`¿Está seguro de eliminar el artículo "${blog.title}"? Esta acción no se puede deshacer.`)) {
     return
   }
@@ -560,6 +571,7 @@ function setPage(page: number) {
           </p>
         </div>
         <button
+          v-if="canCreateBlog"
           type="button"
           @click="openCreateModal"
           class="flex items-center gap-2 rounded-xl bg-gradient-to-r from-brasper-indigoStrong to-brasper-indigoDark px-5 py-2.5 text-sm font-semibold text-white shadow-md transition hover:scale-[1.02] hover:shadow-lg hover:shadow-brasper-indigoStrong/20 active:scale-[0.98]"
@@ -732,6 +744,7 @@ function setPage(page: number) {
                 <td class="px-6 py-4 text-right">
                   <div class="flex items-center justify-end gap-2">
                     <button
+                      v-if="canUpdateBlog"
                       type="button"
                       @click="openEditModal(blog)"
                       class="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-500 transition hover:bg-neutral-100 hover:text-brasper-indigoStrong"
@@ -742,6 +755,7 @@ function setPage(page: number) {
                       </svg>
                     </button>
                     <button
+                      v-if="canDeleteBlog"
                       type="button"
                       @click="handleDeleteBlog(blog)"
                       class="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 transition hover:bg-rose-50 hover:text-rose-600"
@@ -1072,6 +1086,7 @@ function setPage(page: number) {
             Cancelar
           </button>
           <button
+            v-if="canCreateBlog || canUpdateBlog"
             type="button"
             @click="handleSaveBlog"
             :disabled="isSaving"
