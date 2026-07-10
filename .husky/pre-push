@@ -1,4 +1,8 @@
 #!/bin/sh
-# Fase D — activar con: npm install -D husky && npx husky init
-# Capa 1 Stemis: bloquea push si check falla
+# Capa 1 Stemis — bloquea el push si `npm run check` falla (typecheck + lint + test).
+# Emergencias: SKIP_PREPUSH=1 git push
+if [ "$SKIP_PREPUSH" = "1" ]; then
+  echo "pre-push: omitido (SKIP_PREPUSH=1)"
+  exit 0
+fi
 npm run check

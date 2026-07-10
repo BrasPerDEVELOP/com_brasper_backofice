@@ -8,4 +8,10 @@ dev-dist
 
 .env
 
+# Playwright (E2E)
+/test-results
+/playwright-report
+/blob-report
+/playwright/.cache
+
 com_brasper_backofice.code-workspace

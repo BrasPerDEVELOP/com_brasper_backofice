@@ -1,16 +1,28 @@
-import { test, expect } from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
 
 /**
- * Fase D — Implementar helper real
- * @see docs/plans/FASE-D.md
+ * Credenciales E2E desde el entorno (nunca hardcodear). En CI se inyectan como
+ * secrets. Localmente: `E2E_ADMIN_EMAIL=... E2E_ADMIN_PASSWORD=... npm run test:e2e`.
  */
-export async function login(page: import('@playwright/test').Page, email: string, password: string) {
-  await page.goto('/')
-  // TODO: fill email/password, click ingresar
-  await expect(page).toHaveURL(/\/app\//)
+export const adminCredentials = {
+  email: process.env.E2E_ADMIN_EMAIL ?? '',
+  password: process.env.E2E_ADMIN_PASSWORD ?? ''
 }
 
-export async function loginAsAdmin(page: import('@playwright/test').Page) {
-  // TODO: usar credenciales de .env.test
-  await login(page, process.env.E2E_ADMIN_EMAIL ?? '', process.env.E2E_ADMIN_PASSWORD ?? '')
+/** true si hay credenciales de admin para specs que requieren backend real. */
+export function hasAdminCredentials(): boolean {
+  return Boolean(adminCredentials.email && adminCredentials.password)
+}
+
+/** Inicia sesión con el formulario real de `login_view.vue` y espera el backoffice. */
+export async function login(page: Page, email: string, password: string): Promise<void> {
+  await page.goto('/')
+  await page.fill('#login-username', email)
+  await page.fill('#login-password', password)
+  await page.click('button[type="submit"]')
+  await expect(page).toHaveURL(/\/app\//, { timeout: 15_000 })
+}
+
+export async function loginAsAdmin(page: Page): Promise<void> {
+  await login(page, adminCredentials.email, adminCredentials.password)
 }

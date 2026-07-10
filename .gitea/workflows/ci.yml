@@ -24,3 +24,30 @@ jobs:
       - run: npm run lint
       - run: npm run test
       - run: npm run build
+
+  e2e:
+    name: e2e (Playwright)
+    runs-on: ubuntu-latest
+    needs: [check]
+    # Capa 3 (gate merge): E2E solo en PRs. Specs con backend real se saltan sin secrets.
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+        env:
+          E2E_BASE_URL: http://localhost:5173
+          E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+          E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+          VITE_API_BASE_URL: ${{ secrets.E2E_API_BASE_URL }}
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
