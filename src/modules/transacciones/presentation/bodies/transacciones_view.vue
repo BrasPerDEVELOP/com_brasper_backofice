@@ -10,11 +10,7 @@ import {
   nextTick,
 } from "vue";
 import type { Ref } from "vue";
-import { useTransactionsStore } from "../controllers/use_transactions_store_controller";
-import { useCuentasBancariasStore } from "@modules/cuentas-bancarias/presentation/controllers/use_cuentas_bancarias_store_controller";
-import { useTasasStore } from "@modules/tasas/presentation/controllers/use_tasas_store_controller";
-import { useComisionesStore } from "@modules/comisiones/presentation/controllers/use_comisiones_store_controller";
-import { useCalculatorStore } from "@modules/calculator/presentation/controllers/use_calculator_store_controller";
+import { useTransactionPageContext } from "../composables/use_transaction_page_context";
 import { useAuthStore } from "@modules/auth/presentation/controllers/use_auth_store_controller";
 import type { BankAccount } from "@modules/cuentas-bancarias/domain/models";
 import type { Transaction } from "../../domain/models";
@@ -61,11 +57,9 @@ import { useTransactionPreviewController } from "../controllers/use_transaction_
 import { useTransactionStatusLabels } from "../composables/use_transaction_status_labels";
 import { fetchUsers } from "@modules/auth/infrastructure/adapters/users_management_api_adapter";
 
-const transactionsStore = useTransactionsStore();
-const cuentasStore = useCuentasBancariasStore();
-const tasasStore = useTasasStore();
-const comisionesStore = useComisionesStore();
-const calculatorStore = useCalculatorStore();
+// C1 (Fase C, H3) — facade multi-store en lugar de 5 useXStore() en la vista.
+const { transactionsStore, cuentasStore, tasasStore, comisionesStore, calculatorStore } =
+  useTransactionPageContext();
 const authStore = useAuthStore();
 
 // B4 (Fase B) — gates de permisos para acciones mutables (admin siempre pasa).
