@@ -16,6 +16,16 @@ export type TransactionSpecialDiscountMeta = {
   totalToSend: number | null
 }
 
+export type SpecialDiscountSnapshotInput = {
+  origin_amount: number
+  destination_amount: number
+  resultado_comision?: number | null
+  total_a_enviar?: number | null
+  specialDiscountAmount?: number | null
+  specialDiscountPercentage?: number | null
+  specialBaseReceive?: number
+}
+
 type MetaMap = Record<string, TransactionSpecialDiscountMeta>
 
 function readMetaMap(): MetaMap {
@@ -58,15 +68,9 @@ export function getTransactionSpecialDiscountMeta(
   return readMetaMap()[id] ?? null
 }
 
-export function buildSpecialDiscountMetaFromSnapshot(snapshot: {
-  origin_amount: number
-  destination_amount: number
-  resultado_comision?: number | null
-  total_a_enviar?: number | null
-  specialDiscountAmount?: number
-  specialDiscountPercentage?: number
-  specialBaseReceive?: number
-}): TransactionSpecialDiscountMeta | null {
+export function buildSpecialDiscountMetaFromSnapshot(
+  snapshot: SpecialDiscountSnapshotInput,
+): TransactionSpecialDiscountMeta | null {
   const discountCommission = roundMoneyAmount(
     Number(snapshot.specialDiscountAmount ?? 0),
   )
@@ -126,4 +130,15 @@ export function enrichTransactionsWithSpecialDiscountMeta(
   transactions: Transaction[],
 ): Transaction[] {
   return transactions.map(enrichTransactionWithSpecialDiscountMeta)
+}
+
+/** Tras PUT: persiste meta ESPECIAL en sessionStorage si el snapshot tiene descuento. */
+export function syncSpecialDiscountMetaAfterSave(
+  transaction: Transaction,
+  snapshot: SpecialDiscountSnapshotInput,
+): void {
+  const id = transaction.id?.trim()
+  if (!id) return
+  const meta = buildSpecialDiscountMetaFromSnapshot(snapshot)
+  if (meta) saveTransactionSpecialDiscountMeta(id, meta)
 }
