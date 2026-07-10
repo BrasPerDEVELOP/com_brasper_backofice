@@ -17,6 +17,15 @@ function getBoolEnv(key: string, fallback = false): boolean {
 }
 
 export const env = {
+  /**
+   * Versión de la app derivada del commit de git (inyectada por Vite en build/dev).
+   * `env.appVersion.flavor` es la cadena legible; `.commit`/`.commitCount` mapean
+   * al commit exacto. Ver `scripts/app-version.mjs`.
+   */
+  get appVersion(): AppVersion {
+    return __APP_VERSION__
+  },
+
   /** Tema oscuro (true) o claro (false) */
   get dark(): boolean {
     return getBoolEnv('VITE_DARK', false)

@@ -168,6 +168,7 @@
 
         <footer class="mt-8 text-center text-xs text-brasper-textSoft">
           © {{ currentYear }} Brasper &nbsp;•&nbsp; Términos &nbsp;•&nbsp; Privacidad
+          <span class="mt-1 block text-[10px] text-brasper-textSoft/70">{{ appVersion }}</span>
         </footer>
       </div>
     </div>
@@ -195,6 +196,8 @@ const showForgotHint = ref(false)
 
 const currentYear = new Date().getFullYear()
 const supportMailto = 'mailto:soporte@brasper.com?subject=Ayuda%20para%20acceder%20al%20backoffice'
+/** Versión (commit) para soporte: qué build está corriendo el usuario. */
+const appVersion = env.appVersion.flavor
 
 async function tryAdminSsoLogin() {
   const query = new URLSearchParams(window.location.search)

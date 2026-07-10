@@ -4,10 +4,17 @@ import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { getAppVersion } from './scripts/app-version.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
+// Versión derivada del commit, inyectada en el bundle como `__APP_VERSION__`.
+const appVersion = getAppVersion()
+
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion)
+  },
   plugins: [
     vue(),
     tailwindcss(),

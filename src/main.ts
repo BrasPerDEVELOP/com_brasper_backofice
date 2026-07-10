@@ -5,7 +5,13 @@ import App from './App.vue'
 import { router } from '@/interface/router'
 import { setAuthCallbacks } from '@/interface/api/client'
 import { useAuthStore } from '@modules/auth/presentation/controllers/use_auth_store_controller'
+import { env } from '@/interface/config/env'
 import '@/interface/styles/main.css'
+
+// Deja la versión (commit) en consola para soporte/depuración.
+console.info(
+  `Brasper Backoffice ${env.appVersion.flavor} · ${env.appVersion.branch}@${env.appVersion.commit}`
+)
 
 if (import.meta.env.DEV && 'serviceWorker' in navigator) {
   void navigator.serviceWorker.getRegistrations().then((registrations) => {
