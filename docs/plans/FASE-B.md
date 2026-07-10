@@ -1,9 +1,15 @@
 # Fase B — Auth, permisos UI, adopción de widgets
 
-**Estado:** 🔲 Pendiente  
+**Estado:** ✅ Completada (2026-07-10)  
 **PR sugerido:** `feat/fase-b-auth-widgets`  
 **Tiempo estimado:** 2–4 días (1 dev)  
 **Sin:** cambios visuales, features nuevas
+
+> **Resumen de cierre:** B1 (router bloquea `client`) · B2 (creds dev solo DEV) ·
+> B3 (`parse_user` canónico + tests) · B4 (`hasPermission` en 8 vistas + guards) ·
+> B5 (0 `window.confirm`; `ConfirmDialog` en 5 módulos) · B6 (PageHeader/EmptyState/
+> AppSpinner adoptados sin cambio visual) · B7 (modales divididos shell+form) ·
+> B8 (stubs eliminados). `npm run check` verde.
 
 ## Objetivo
 

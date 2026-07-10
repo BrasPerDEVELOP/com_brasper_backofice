@@ -40,13 +40,10 @@ Vue View (*_view.vue)
 | auth / roles | `/app/roles-permisos` | `roles.permissions.view` | auth store | `role_permissions_api_adapter` | `roles/permissions/` | Completo |
 | auth / perfil | `/app/perfil` | `profile.view` | auth store | `auth_api_adapter` | `env.authProfilePath` | Completo |
 
-### Módulos stub — ELIMINAR (Fase B)
+### Módulos stub — ELIMINADOS (Fase B ✅)
 
-| Carpeta | Conflicto con |
-|---------|---------------|
-| `modules/accounts/` | `cuentas-bancarias` |
-| `modules/transactions/` | `transacciones` |
-| `modules/user/` | `auth/usuarios` |
+`modules/accounts/`, `modules/transactions/`, `modules/user/` fueron eliminados.
+No confundir con los reales `transacciones`, `cuentas-bancarias`, `auth/usuarios`.
 
 ---
 
@@ -64,7 +61,9 @@ Vue View (*_view.vue)
 | home_banner | — | `.update` | — | |
 | world_cup | — | `.manage` | — | `.approve` |
 
-**Gate UI (Fase B):** botones mutables deben usar `auth.hasPermission('module.action')`.
+**Gate UI (Fase B ✅):** botones mutables gateados con `auth.hasPermission('module.action')`
+en transacciones, cupones, comisiones, tasas, cuentas, blog, banner, usuarios (+ guards
+defensivos en los handlers).
 
 ---
 
@@ -83,11 +82,11 @@ Vue View (*_view.vue)
 
 | Widget | Ruta | Fase |
 |--------|------|------|
-| PageHeader | `interface/widgets/PageHeader.vue` | A ✅ |
-| EmptyState | `interface/widgets/EmptyState.vue` | A ✅ |
-| AppSpinner | `interface/widgets/AppSpinner.vue` | A ✅ |
-| ConfirmDialog | `interface/widgets/ConfirmDialog.vue` | A ✅ |
-| DataTable | `interface/widgets/DataTable.vue` | C 🔲 |
+| PageHeader | `interface/widgets/PageHeader.vue` | A ✅ (adoptado en comisiones) |
+| EmptyState | `interface/widgets/EmptyState.vue` | A ✅ (adoptado en blog) |
+| AppSpinner | `interface/widgets/AppSpinner.vue` | A ✅ (adoptado en blog) |
+| ConfirmDialog | `interface/widgets/ConfirmDialog.vue` | A ✅ (adoptado en 5 módulos) |
+| DataTable | `interface/widgets/DataTable.vue` | C ✅ (implementado; adopción en transacciones pendiente) |
 
 ---
 

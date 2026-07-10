@@ -1,8 +1,14 @@
 # Fase D — E2E, pre-push, smoke, documentación ops
 
-**Estado:** 🔲 Pendiente  
+**Estado:** ✅ Completada (2026-07-10) — salvo D6 (branch protection = config manual en GitHub/Gitea)  
 **PR sugerido:** `feat/fase-d-e2e-ops`  
 **Depende de:** Fase B (permisos) recomendada antes de E2E de auth
+
+> **Resumen de cierre:** Playwright instalado + config + helper de login real;
+> specs `smoke` y `denied` corren sin backend (6 passed en local); `login`/`list`/
+> `sidebar` se saltan sin credenciales. Scripts `test:e2e`. Husky `pre-push` con
+> `npm run check` (+ `SKIP_PREPUSH=1`). CI job `e2e` (solo PR) en `.github` y `.gitea`.
+> D6 (branch protection) es configuración manual en el servidor Git.
 
 ## Objetivo
 

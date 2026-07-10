@@ -292,4 +292,4 @@ Sin tocar diseño visual ni features de negocio.
 
 ---
 
-*Fin Fase 1. **Fase A ejecutada el 2026-07-09**. Planes B/C/D y scaffolds en [`docs/plans/00-ROADMAP.md`](../plans/00-ROADMAP.md). **Siguiente: Fase B** — [`docs/plans/FASE-B.md`](../plans/FASE-B.md).*
+*Fin Fase 1. **Estado de ejecución (2026-07-10):** Fase A ✅ · Fase B ✅ · Fase D ✅ · Fase C 🟡 (C1 y C3 ✅; C2 — split de `transacciones_view` a <500 líneas — pendiente como esfuerzo mayor). Detalle en [`docs/plans/00-ROADMAP.md`](../plans/00-ROADMAP.md).*

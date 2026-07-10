@@ -8,9 +8,24 @@
 | Fase | Nombre | Estado | Doc | PR sugerido |
 |------|--------|--------|-----|-------------|
 | **A** | Tooling + widgets base + CI | ✅ Completada | [FASE-A.md](./FASE-A.md) | — |
-| **B** | Auth UI + widgets adoption + higiene | 🔲 Pendiente | [FASE-B.md](./FASE-B.md) | `feat/fase-b-auth-widgets` |
-| **C** | Split transacciones + DataTable | 🔲 Pendiente | [FASE-C.md](./FASE-C.md) | `feat/fase-c-transacciones-1` … `3` |
-| **D** | E2E + pre-push + smoke + ops docs | 🔲 Pendiente | [FASE-D.md](./FASE-D.md) | `feat/fase-d-e2e-ops` |
+| **B** | Auth UI + widgets adoption + higiene | ✅ Completada | [FASE-B.md](./FASE-B.md) | `feat/fase-b-auth-widgets` |
+| **C** | Split transacciones + DataTable | 🟡 Parcial (C1 + C3 ✅; C2 split de vista pendiente) | [FASE-C.md](./FASE-C.md) | `feat/fase-c-transacciones-1` … `3` |
+| **D** | E2E + pre-push + smoke + ops docs | ✅ Completada (branch protection D6 = config manual) | [FASE-D.md](./FASE-D.md) | `feat/fase-d-e2e-ops` |
+
+> **Estado real (2026-07-10):** A, B y D completadas; C parcial. Detalle de C abajo.
+
+### Fase C — detalle de avance
+
+- ✅ **C1** `use_transaction_status_labels` (extraído + testeado) y
+  `use_transaction_page_context` (facade multi-store, adoptado en la vista).
+- ✅ **C3** mappers del adapter (`transactions_api_adapter` 609→288) con
+  `parse_transaction` / `transaction_list_response` / `transaction_form_payload`
+  + tests; widget `DataTable` implementado.
+- 🔲 **C2** split de `transacciones_view` en componentes (`TransactionFiltersBar`,
+  `TransactionTable`, `TransactionCreateEditWizard`, etc.) hasta orquestador
+  <500 líneas. **Pendiente**: es el esfuerzo mayor (3 sub-PRs) y requiere smoke
+  manual del wizard/preview/import contra backend; no se hizo a ciegas para no
+  arriesgar la vista núcleo. Scaffolds listos en `presentation/components/`.
 
 ## Orden de ejecución (no saltar)
 

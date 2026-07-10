@@ -96,9 +96,9 @@ npx vitest run src/modules/calculator/presentation/controllers/use_calculator_st
 | Fase | Estado | Doc |
 |------|--------|-----|
 | A — Tooling + CI | ✅ | [FASE-A](docs/plans/FASE-A.md) |
-| B — Auth + widgets | 🔲 **empezar aquí** | [FASE-B](docs/plans/FASE-B.md) |
-| C — Split transacciones | 🔲 | [FASE-C](docs/plans/FASE-C.md) |
-| D — E2E + smoke | 🔲 | [FASE-D](docs/plans/FASE-D.md) |
+| B — Auth + widgets | ✅ | [FASE-B](docs/plans/FASE-B.md) |
+| C — Split transacciones | 🟡 C1+C3 ✅ · C2 pendiente | [FASE-C](docs/plans/FASE-C.md) |
+| D — E2E + smoke | ✅ | [FASE-D](docs/plans/FASE-D.md) |
 
 Índice completo: [`docs/plans/00-ROADMAP.md`](docs/plans/00-ROADMAP.md)  
 Mapa módulos: [`FEATURE_MAP.md`](FEATURE_MAP.md)  

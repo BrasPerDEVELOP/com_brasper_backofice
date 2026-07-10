@@ -1,9 +1,17 @@
 # Fase C — Split transacciones + DataTable + tests adapter
 
-**Estado:** 🔲 Pendiente  
+**Estado:** 🟡 Parcial — C1 ✅ · C3 ✅ · C2 pendiente (2026-07-10)  
 **PRs sugeridos:** 3 sub-PRs (no uno solo)  
 **Tiempo estimado:** 1–2 semanas  
-**Archivo crítico:** `transacciones_view.vue` (~5621 líneas)
+**Archivo crítico:** `transacciones_view.vue` (~5600 líneas)
+
+> **Avance:** C1 (composable de labels/badges testeado + facade multi-store
+> adoptado) y C3 (mappers `parse_transaction`/`transaction_list_response`/
+> `transaction_form_payload` con tests; adapter 609→288; widget `DataTable`) están
+> **completos y verificados**. **C2** (extraer `TransactionFiltersBar`/`Table`/
+> `Wizard`/`Import`/… hasta orquestador <500 líneas) queda **pendiente**: es el
+> esfuerzo mayor y exige smoke manual del wizard/preview/import contra backend
+> antes de merge; no se ejecutó a ciegas para no arriesgar la vista núcleo.
 
 ## Objetivo
 
