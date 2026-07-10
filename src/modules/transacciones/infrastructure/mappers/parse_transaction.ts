@@ -255,6 +255,15 @@ export function parseTransaction(item: unknown): Transaction {
         ? String(raw).trim()
         : undefined
     })(),
+    social_reason_bank_id: (() => {
+      const hasExactField = Object.prototype.hasOwnProperty.call(
+        o,
+        'social_reason_bank_id'
+      )
+      const raw = hasExactField ? o.social_reason_bank_id : o.social_reason_bank
+      if (raw === null) return null
+      return coerceBankAccountId(raw)
+    })(),
     send_date: o.send_date != null ? String(o.send_date) : undefined,
     payment_date: o.payment_date != null ? String(o.payment_date) : undefined,
     send_voucher: (() => {

@@ -164,6 +164,9 @@ export class TransactionsApiAdapter implements TransactionsRepository {
     if (payload.company_name != null) {
       formData.append('company_name', String(payload.company_name))
     }
+    if (payload.social_reason_bank_id?.trim()) {
+      formData.append('social_reason_bank_id', payload.social_reason_bank_id.trim())
+    }
 
     /**
      * `fetch` + FormData evita que axios 1.x deje `Content-Type: application/json`
@@ -219,6 +222,11 @@ export class TransactionsApiAdapter implements TransactionsRepository {
     }
     if (body.total_a_enviar != null) {
       body.total_to_send = body.total_a_enviar
+    }
+    if (typeof body.social_reason_bank_id === 'string') {
+      const socialReasonBankId = body.social_reason_bank_id.trim()
+      if (socialReasonBankId) body.social_reason_bank_id = socialReasonBankId
+      else body.social_reason_bank_id = null
     }
     /**
      * El servidor recalcula `status`, pero permitimos enviar estados terminales

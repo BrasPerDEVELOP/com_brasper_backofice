@@ -15,12 +15,14 @@ import { useAuthStore } from "@modules/auth/presentation/controllers/use_auth_st
 import type { BankAccount } from "@modules/cuentas-bancarias/domain/models";
 import type { Transaction } from "../../domain/models";
 import type { GetTransactionsParams } from "../../infrastructure/adapters/transactions_repository";
+import { resolveSocialReasonBankId } from "../../infrastructure/mappers/resolve_social_reason_bank_id";
 import { parseSimpleImportExcel } from "../../infrastructure/utils/excel_simple_import";
 import {
   buildSpecialDiscountMetaFromSnapshot,
   saveTransactionSpecialDiscountMeta,
   enrichTransactionWithSpecialDiscountMeta,
   getTransactionSpecialDiscountMeta,
+  syncSpecialDiscountMetaAfterSave,
 } from "../../infrastructure/utils/transaction_special_discount_meta";
 import {
   TRANSACTION_STATUSES,
@@ -114,11 +116,16 @@ const createdAtTo = ref<string>("");
 /** Razón social Brasper (catálogo): filtrada por moneda de envío; independiente de cuenta destino del cliente. */
 const destinationBankFilterId = ref("");
 /**
- * Razón social (`company_name`) guardada en la transacción que se edita.
- * Solo el `company_name` persiste (no el id de catálogo), así que lo conservamos para:
- * 1) reconstruir la selección del dropdown, y 2) no perderlo al guardar si no está en catálogo.
+ * Empresa guardada en la transacción que se edita. Se conserva mientras llegan
+ * los catálogos y como respaldo para registros legacy sin banco exacto.
  */
 const editStoredCompanyName = ref("");
+/** ID exacto persistido para la razón social; nunca se reconstruye por orden de catálogo. */
+const editStoredSocialReasonBankId = ref("");
+/** Distingue un FK nuevo (incluso `null`) de una transacción legacy sin el campo. */
+const editHasStoredSocialReasonBankIdField = ref(false);
+/** Distingue un vacío elegido por el usuario de un catálogo que todavía no resolvió. */
+const socialReasonSelectionTouched = ref(false);
 const perPage = ref(10);
 const currentPage = ref(1);
 const fileInput = ref<HTMLInputElement | null>(null);
@@ -264,6 +271,24 @@ const editingId = ref<string | null>(null);
 const editSourceTransaction = ref<Transaction | null>(null);
 const isEditingMode = computed(() => Boolean(editingId.value));
 const isHydratingTransactionForm = ref(false);
+
+function clearStoredSocialReasonSelection() {
+  editStoredCompanyName.value = "";
+  editStoredSocialReasonBankId.value = "";
+  editHasStoredSocialReasonBankIdField.value = false;
+}
+
+/** Contrato v-model: solo una elección emitida por el dropdown toma control del valor. */
+const destinationBankSelectionModel = computed({
+  get: () => destinationBankFilterId.value,
+  set: (value: string) => {
+    destinationBankFilterId.value = value?.trim() ?? "";
+    // La hidratación escribe directamente en `destinationBankFilterId`; este setter
+    // solo representa una decisión de UI y debe ganar incluso si un GET tardío sigue activo.
+    socialReasonSelectionTouched.value = true;
+    clearStoredSocialReasonSelection();
+  },
+});
 
 const CREATE_FLOW_STEPS = [
   {
@@ -543,7 +568,12 @@ function findBankAccountById(accountId: string): BankAccount | undefined {
 /** Metadatos de banco desde el catálogo (razón social / empresa que recibe el envío). */
 function bankMetaFromCatalogBankId(
   bankId: string,
-): { bank_id: string; bank_name: string; company_name: string } | null {
+): {
+  bank_id: string;
+  bank_name: string;
+  company_name: string;
+  social_reason_bank_id: string;
+} | null {
   const trimmed = bankId?.trim();
   if (!trimmed) return null;
   const bank = cuentasStore.banks.find((b) => String(b.id).trim() === trimmed);
@@ -551,27 +581,28 @@ function bankMetaFromCatalogBankId(
   const bank_name = (bank.bank ?? "").trim();
   const company_name =
     (bank.company ?? "").toString().trim() || bank_name || trimmed;
-  return { bank_id: trimmed, bank_name, company_name };
+  return {
+    bank_id: trimmed,
+    bank_name,
+    company_name,
+    social_reason_bank_id: trimmed,
+  };
 }
 
 /**
- * Id de catálogo (razón social) cuya empresa coincide con `company_name`.
- * Solo `company_name` persiste en la transacción, así reconstruimos la selección del dropdown.
- * Prefiere una coincidencia en la moneda de envío (el catálogo se filtra por esa moneda).
+ * Resuelve la selección persistida. El fallback legacy por empresa + moneda solo
+ * devuelve un ID cuando existe una coincidencia inequívoca.
  */
-function findCatalogBankIdByCompany(companyName: string): string {
-  const target = companyName?.trim().toLowerCase();
-  if (!target) return "";
-  const matches = cuentasStore.banks.filter(
-    (b) => (b.company ?? "").toString().trim().toLowerCase() === target,
-  );
-  if (matches.length === 0) return "";
-  const originCurrency = selectedAccountCurrencies.value.origin;
-  const byCurrency = matches.find((b) => {
-    const bankCurrency = normalizeCurrencyCode(b.currency);
-    return !originCurrency || !bankCurrency || bankCurrency === originCurrency;
+function resolveStoredSocialReasonBankId(
+  persistedBankId: string,
+  companyName: string,
+): string {
+  return resolveSocialReasonBankId({
+    persistedBankId,
+    companyName,
+    originCurrency: selectedAccountCurrencies.value.origin,
+    banks: cuentasStore.banks,
   });
-  return (byCurrency ?? matches[0])?.id ?? "";
 }
 
 /** Metadatos de banco para POST/PUT desde la cuenta destino del cliente. */
@@ -612,11 +643,21 @@ function resolveTransactionBankMeta(): {
   bank_id: string;
   bank_name: string;
   company_name: string;
+  social_reason_bank_id?: string | null;
 } | null {
   const fromAccount = bankMetaFromDestinationAccount(
     form.bank_account_destination_id,
   );
   const razonSocial = bankMetaFromCatalogBankId(destinationBankFilterId.value);
+  const socialReasonBankId = (
+    destinationBankFilterId.value ||
+    (editingId.value ? editStoredSocialReasonBankId.value : "")
+  ).trim();
+  const socialReasonBankPayload = socialReasonBankId
+    ? socialReasonBankId
+    : editingId.value && socialReasonSelectionTouched.value
+      ? null
+      : undefined;
   // Empresa a persistir: la elegida en el dropdown; o —en edición y sin selección
   // nueva— la que ya traía la transacción, para no perderla si no está en catálogo.
   const razonSocialCompany = (
@@ -624,11 +665,21 @@ function resolveTransactionBankMeta(): {
     (editingId.value ? editStoredCompanyName.value : "")
   ).trim();
   if (fromAccount) {
-    return razonSocialCompany
-      ? { ...fromAccount, company_name: razonSocialCompany }
-      : fromAccount;
+    return {
+      ...fromAccount,
+      ...(razonSocialCompany ? { company_name: razonSocialCompany } : {}),
+      ...(socialReasonBankPayload !== undefined
+        ? { social_reason_bank_id: socialReasonBankPayload }
+        : {}),
+    };
   }
-  return razonSocial;
+  if (!razonSocial) return null;
+  return {
+    ...razonSocial,
+    ...(socialReasonBankPayload !== undefined
+      ? { social_reason_bank_id: socialReasonBankPayload }
+      : {}),
+  };
 }
 
 function getBankAccountCurrency(a: BankAccount): string {
@@ -935,12 +986,12 @@ function onBancoCrudSaved(payload?: {
     const deletedId = payload.deletedBankId.trim();
     cuentasStore.removeBankFromCatalog(deletedId);
     if (destinationBankFilterId.value === deletedId) {
-      destinationBankFilterId.value = "";
+      destinationBankSelectionModel.value = "";
     }
     return;
   }
   if (payload?.selectBankId?.trim()) {
-    destinationBankFilterId.value = payload.selectBankId.trim();
+    destinationBankSelectionModel.value = payload.selectBankId.trim();
   }
   void cuentasStore.loadBanks(true);
 }
@@ -1252,7 +1303,8 @@ function resetForm() {
   confirmedNegativeSpecialDiscountSignature.value = null;
   createQuoteSnapshot.value = null;
   destinationBankFilterId.value = "";
-  editStoredCompanyName.value = "";
+  clearStoredSocialReasonSelection();
+  socialReasonSelectionTouched.value = false;
   void cuentasStore.loadBankAccountsForTransactionUser(undefined);
   calculatorStore.resetCalculatorMode();
   calculatorStore.resetAmounts();
@@ -1598,14 +1650,28 @@ async function hydrateEditForm(row: Transaction) {
     form.payment_voucher = [];
     form.checked_image = [];
     editSourceTransaction.value = row;
-    {
-      // La razón social se persiste como `company_name` (no como id). `row.bank_id`
-      // es el banco de la cuenta destino, NO la razón social: usarlo la corrompía.
-      // Si el re-fetch en segundo plano no trae `company_name`, se conserva el ya cargado.
+    if (!socialReasonSelectionTouched.value) {
+      // `row.bank_id` es el banco de la cuenta destino, NO la razón social.
+      // El ID exacto tiene prioridad y se conserva aunque el catálogo llegue después.
+      // Si el usuario ya eligió otro valor, un GET de detalle tardío no puede pisarlo.
       const storedCompany =
         (row.company_name ?? "").toString().trim() || editStoredCompanyName.value;
+      const rowHasSocialReasonBankId = Object.prototype.hasOwnProperty.call(
+        row,
+        "social_reason_bank_id",
+      );
+      const hasStoredSocialReasonBankIdField =
+        rowHasSocialReasonBankId || editHasStoredSocialReasonBankIdField.value;
+      const storedSocialReasonBankId = rowHasSocialReasonBankId
+        ? (row.social_reason_bank_id ?? "").toString().trim()
+        : editStoredSocialReasonBankId.value;
       editStoredCompanyName.value = storedCompany;
-      destinationBankFilterId.value = findCatalogBankIdByCompany(storedCompany);
+      editStoredSocialReasonBankId.value = storedSocialReasonBankId;
+      editHasStoredSocialReasonBankIdField.value =
+        hasStoredSocialReasonBankIdField;
+      destinationBankFilterId.value = hasStoredSocialReasonBankIdField
+        ? storedSocialReasonBankId
+        : resolveStoredSocialReasonBankId("", storedCompany);
     }
     await nextTick();
   } finally {
@@ -1789,12 +1855,43 @@ async function submitForm() {
     };
     if (editingId.value) {
       /** PUT: el backend recalcula `status` y asigna `payment_date` al pasar a finalizada. */
-      await transactionsStore.updateTransaction(editingId.value, {
+      const updated = await transactionsStore.updateTransaction(editingId.value, {
         ...commonAmounts,
         operation_number: operationNumber || null,
         send_date: formDateTimeToApi(form.send_date),
         payment_date: formDateTimeToApi(form.payment_date),
       });
+      const calculatorResult = calculatorStore.result;
+      const isSpecialEdit =
+        isEditingSpecialTransaction() ||
+        calculatorStore.calculationMode === "special" ||
+        calculatorResult?.calculationMode === "special" ||
+        (calculatorResult?.specialDiscountAmount ?? 0) > 0.005;
+      syncSpecialDiscountMetaAfterSave(updated, {
+        origin_amount: commonAmounts.origin_amount,
+        destination_amount: commonAmounts.destination_amount,
+        resultado_comision: commonAmounts.resultado_comision ?? null,
+        total_a_enviar: commonAmounts.total_a_enviar ?? null,
+        ...(isSpecialEdit && calculatorResult
+          ? {
+              specialDiscountAmount: calculatorResult.specialDiscountAmount,
+              specialDiscountPercentage: calculatorResult.specialDiscountPercentage,
+              specialBaseReceive: calculatorResult.specialBaseReceive,
+            }
+          : {
+              specialDiscountAmount:
+                editSourceTransaction.value?.coupon_discount_commission ?? null,
+              specialDiscountPercentage:
+                editSourceTransaction.value?.coupon_discount_percentage ?? null,
+            }),
+      });
+      const idx = transactionsStore.transactions.findIndex(
+        (row) => row.id === updated.id,
+      );
+      if (idx >= 0) {
+        transactionsStore.transactions[idx] =
+          enrichTransactionWithSpecialDiscountMeta(updated);
+      }
     } else {
       /** POST: servidor fuerza `verification`, `checked: false` y `send_date` en el alta. */
       const created = await transactionsStore.createTransaction({
@@ -2548,7 +2645,7 @@ watch(
     } else {
       form.agent_id = "";
     }
-    destinationBankFilterId.value = "";
+    destinationBankSelectionModel.value = "";
     void cuentasStore.loadBankAccountsForTransactionUser(userId?.trim() || undefined);
   },
 );
@@ -2559,10 +2656,16 @@ watch(
     if (isHydratingTransactionForm.value) return;
     const selectedId = destinationBankFilterId.value?.trim();
     if (!selectedId || !currency) return;
+    if (
+      editStoredSocialReasonBankId.value.trim() &&
+      selectedId === editStoredSocialReasonBankId.value.trim()
+    ) {
+      return;
+    }
     const bank = cuentasStore.banks.find((b) => String(b.id).trim() === selectedId);
     const bankCurrency = normalizeCurrencyCode(bank?.currency);
     if (bankCurrency && bankCurrency !== currency) {
-      destinationBankFilterId.value = "";
+      destinationBankSelectionModel.value = "";
     }
   },
 );
@@ -2571,25 +2674,28 @@ watch(showBancoCrudModal, (open) => {
   if (!open) bancoCrudOpenForCreate.value = false;
 });
 
-// El usuario tomó control de la razón social: su elección (incluido "Todos") manda
-// sobre el `company_name` que traía la transacción, así ya no se aplica el respaldo.
-watch(
-  () => destinationBankFilterId.value,
-  () => {
-    if (isHydratingTransactionForm.value) return;
-    editStoredCompanyName.value = "";
-  },
-);
-
 // Reconstruye la razón social guardada en el dropdown cuando el catálogo de bancos
 // llega después de hidratar el formulario de edición.
 watch(
-  () => [cuentasStore.banks.length, selectedAccountCurrencies.value.origin],
+  () => [
+    cuentasStore.banks
+      .map((bank) => `${bank.id}|${bank.company ?? ""}|${bank.currency ?? ""}`)
+      .join("\u0001"),
+    selectedAccountCurrencies.value.origin,
+  ],
   () => {
     if (!editingId.value || isHydratingTransactionForm.value) return;
     const company = editStoredCompanyName.value.trim();
-    if (!company || destinationBankFilterId.value.trim()) return;
-    const id = findCatalogBankIdByCompany(company);
+    const persistedBankId = editStoredSocialReasonBankId.value.trim();
+    if (
+      (!company && !persistedBankId) ||
+      editHasStoredSocialReasonBankIdField.value ||
+      destinationBankFilterId.value.trim() ||
+      socialReasonSelectionTouched.value
+    ) {
+      return;
+    }
+    const id = resolveStoredSocialReasonBankId(persistedBankId, company);
     if (id) destinationBankFilterId.value = id;
   },
 );
@@ -4160,7 +4266,7 @@ onActivated(() => {
                               </p>
                               <div class="flex gap-2">
                                 <AppDropdown
-                                  v-model="destinationBankFilterId"
+                                  v-model="destinationBankSelectionModel"
                                   :options="destinationBankFilterOptions"
                                   placeholder="Todos"
                                   :searchable="destinationBankFilterOptions.length > 8"
@@ -4715,7 +4821,7 @@ onActivated(() => {
                     </p>
                     <div class="flex gap-2">
                       <AppDropdown
-                        v-model="destinationBankFilterId"
+                        v-model="destinationBankSelectionModel"
                         :options="destinationBankFilterOptions"
                         placeholder="Todos"
                         :searchable="destinationBankFilterOptions.length > 8"

@@ -40,6 +40,8 @@ export interface CreateTransactionPayload {
   bank_id?: string
   bank_name?: string
   company_name?: string
+  /** Banco exacto del catálogo elegido como razón social. */
+  social_reason_bank_id?: string | null
   /** En POST el servidor ignora y deja `false`; usar solo en PUT. */
   checked?: boolean
 }

@@ -44,6 +44,8 @@ export interface Transaction {
   bank_id?: string
   bank_name?: string
   company_name?: string
+  /** Banco exacto del catálogo elegido como razón social. */
+  social_reason_bank_id?: string | null
   /** Contabilidad / respuesta API extendida */
   comision_final_interna?: number
   impuesto_final_interno?: number

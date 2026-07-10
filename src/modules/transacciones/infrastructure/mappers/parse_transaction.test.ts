@@ -47,6 +47,18 @@ describe('parseTransaction', () => {
     expect(parseTransaction({ business_name: 'BizCo' }).company_name).toBe('BizCo')
   })
 
+  it('conserva el id exacto del banco usado como razón social', () => {
+    expect(
+      parseTransaction({ social_reason_bank_id: '  santander-id  ' })
+        .social_reason_bank_id
+    ).toBe('santander-id')
+    expect(
+      parseTransaction({ social_reason_bank: { id: 'picpay-id' } })
+        .social_reason_bank_id
+    ).toBe('picpay-id')
+    expect(parseTransaction({ social_reason_bank_id: null }).social_reason_bank_id).toBeNull()
+  })
+
   it('coacciona user_id/agent_id desde string u objeto anidado', () => {
     expect(parseTransaction({ user_id: 'u1' }).user_id).toBe('u1')
     expect(parseTransaction({ user: { id: 'u2' } }).user_id).toBe('u2')

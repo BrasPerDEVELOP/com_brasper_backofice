@@ -74,6 +74,7 @@ defensivos en los handlers).
 | PUT transaction `id` en body | `transactions_api_adapter.ts` | No en URL path |
 | FormData POST transaction | adapter + `fetch` | No axios (boundary) |
 | Field aliases | adapters | `resultado_comision` ↔ `commission_result` |
+| Razón social exacta | `social_reason_bank_id` | FK independiente; `bank_id` sigue perteneciendo a la cuenta destino |
 | Cloudinary blog | `blog_view.vue` | Mover a adapter + env (Fase C blog) |
 
 ---
