@@ -30,7 +30,6 @@ import {
   TRANSACTION_STATUSES,
   TRANSACTION_STATUS_LABELS,
   isTransactionChecked,
-  normalizeTransactionStatus,
   resolveTransactionStatusForDisplay,
   roundMoneyAmount,
   localDateInputStartMs,
@@ -59,6 +58,7 @@ import type { CurrencyCode } from "@modules/calculator/domain/models";
 import { CURRENCY_FLAG_SRC_BY_CODE } from "@modules/calculator/presentation/utils/calculator_format";
 import { Domain } from "@/interface/infrastructure/services";
 import { useTransactionPreviewController } from "../controllers/use_transaction_preview_controller";
+import { useTransactionStatusLabels } from "../composables/use_transaction_status_labels";
 import { fetchUsers } from "@modules/auth/infrastructure/adapters/users_management_api_adapter";
 
 const transactionsStore = useTransactionsStore();
@@ -72,6 +72,9 @@ const authStore = useAuthStore();
 const canCreateTransactions = computed(() => authStore.hasPermission("transactions.create"));
 const canUpdateTransactions = computed(() => authStore.hasPermission("transactions.update"));
 const canDeleteTransactions = computed(() => authStore.hasPermission("transactions.delete"));
+
+// C1 (Fase C) — labels/badges de estado extraídos a composable puro y testeado.
+const { getStatusLabel, statusRowBadgeClass } = useTransactionStatusLabels();
 
 /** Catálogo coin listo para el paso Cotización sin parpadeo de carga. */
 function transactionCatalogReadyForCurrentMode(): boolean {
@@ -2218,36 +2221,6 @@ function voucherMediaHref(path: unknown): string {
   // Los vouchers pueden venir solo con nombre de archivo; no deben caer en
   // `profile_images`, sino resolverse directamente bajo `/media/`.
   return Domain.mediaUrl(`media/${s}`);
-}
-
-function getStatusLabel(status: string | undefined): string {
-  if (!status) return "-";
-  const s = normalizeTransactionStatus(status);
-  return (
-    TRANSACTION_STATUS_LABELS[s as keyof typeof TRANSACTION_STATUS_LABELS] ??
-    status
-  );
-}
-
-function statusRowBadgeClass(status: string | undefined): string {
-  const s = normalizeTransactionStatus(status ?? "");
-  switch (s) {
-    case "verification":
-    case "pending":
-      return "bg-amber-100 text-amber-900";
-    case "verified":
-      return "bg-violet-100 text-violet-900";
-    case "completed":
-      return "bg-emerald-100 text-emerald-900";
-    case "failed":
-      return "bg-red-100 text-red-800";
-    case "checked":
-      return "bg-sky-100 text-sky-900";
-    case "cancelled":
-      return "bg-gray-100 text-gray-800";
-    default:
-      return "bg-[#dbeafe] text-brasper-indigoDark";
-  }
 }
 
 /** Tabla: solo banco + moneda (sin número de cuenta ni titular). */
