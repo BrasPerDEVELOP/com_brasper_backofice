@@ -4,6 +4,7 @@ import { BlogApiAdapter } from '../../infrastructure/adapters/blog_api_adapter'
 import type { Blog } from '../../domain/models/blog'
 import type { BlogPayload } from '../../infrastructure/adapters/blog_repository'
 import { useAuthStore } from '@modules/auth/presentation/controllers/use_auth_store_controller'
+import { ConfirmDialog, AppSpinner, EmptyState } from '@interface/widgets'
 
 // Repositorio API
 const blogRepo = new BlogApiAdapter()
@@ -511,11 +512,25 @@ async function handleSaveBlog() {
 }
 
 // Eliminar post del blog
-async function handleDeleteBlog(blog: Blog) {
+const pendingDelete = ref<Blog | null>(null)
+const showDeleteConfirm = ref(false)
+const deleteConfirmMessage = computed(() =>
+  pendingDelete.value
+    ? `¿Está seguro de eliminar el artículo "${pendingDelete.value.title}"? Esta acción no se puede deshacer.`
+    : ''
+)
+
+function handleDeleteBlog(blog: Blog) {
   if (!canDeleteBlog.value) return
-  if (!window.confirm(`¿Está seguro de eliminar el artículo "${blog.title}"? Esta acción no se puede deshacer.`)) {
-    return
-  }
+  pendingDelete.value = blog
+  showDeleteConfirm.value = true
+}
+
+async function confirmDelete(): Promise<void> {
+  const blog = pendingDelete.value
+  showDeleteConfirm.value = false
+  pendingDelete.value = null
+  if (!blog) return
 
   isLoading.value = true
   errorMessage.value = ''
@@ -646,21 +661,13 @@ function setPage(page: number) {
 
     <!-- Tabla Principal -->
     <div class="overflow-hidden rounded-2xl border border-[#d8e5fb] bg-white shadow-lg shadow-brasper-indigoStrong/10">
-      <div v-if="isLoading" class="flex flex-col items-center justify-center py-16 gap-3">
-        <svg class="h-10 w-10 animate-spin text-brasper-indigoStrong" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-        </svg>
-        <span class="text-sm font-medium text-neutral-500">Cargando artículos...</span>
-      </div>
+      <AppSpinner v-if="isLoading" center size="lg" label="Cargando artículos..." />
 
-      <div v-else-if="filteredBlogs.length === 0" class="py-16 text-center text-neutral-500">
-        <svg class="mx-auto h-12 w-12 text-neutral-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 4a2 2 0 00-2-2m2 2a2 2 0 11-4 0m4 0v8a2 2 0 01-2 2h-1m-4-7h3m-3 4h3m-6-4h.01M9 16h.01" />
-        </svg>
-        <h3 class="mt-4 text-lg font-semibold text-neutral-700">No se encontraron artículos</h3>
-        <p class="mt-1 text-sm text-neutral-500">Intenta cambiar los términos de búsqueda o crear una nueva publicación.</p>
-      </div>
+      <EmptyState
+        v-else-if="filteredBlogs.length === 0"
+        title="No se encontraron artículos"
+        description="Intenta cambiar los términos de búsqueda o crear una nueva publicación."
+      />
 
       <template v-else>
         <div class="overflow-x-auto">
@@ -1101,6 +1108,15 @@ function setPage(page: number) {
         </div>
       </div>
     </div>
+
+    <ConfirmDialog
+      v-model="showDeleteConfirm"
+      title="Eliminar artículo"
+      :message="deleteConfirmMessage"
+      confirm-text="Eliminar"
+      :loading="isLoading"
+      @confirm="confirmDelete"
+    />
   </div>
 </template>
 

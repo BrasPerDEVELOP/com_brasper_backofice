@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useComisionesStore } from '../controllers/use_comisiones_store_controller'
 import { useAuthStore } from '@modules/auth/presentation/controllers/use_auth_store_controller'
+import { ConfirmDialog, PageHeader } from '@interface/widgets'
 import type { Commission } from '../../domain/models'
 
 const comisionesStore = useComisionesStore()
@@ -98,10 +99,20 @@ async function saveCommission(id: string): Promise<void> {
   if (ok) cancelEditing()
 }
 
-async function deleteCommission(id: string): Promise<void> {
+const pendingDeleteId = ref<string | null>(null)
+const showDeleteConfirm = ref(false)
+
+function deleteCommission(id: string): void {
   if (!canDeleteCommission.value) return
-  const confirmed = window.confirm('¿Seguro que deseas eliminar esta comisión?')
-  if (!confirmed) return
+  pendingDeleteId.value = id
+  showDeleteConfirm.value = true
+}
+
+async function confirmDelete(): Promise<void> {
+  const id = pendingDeleteId.value
+  showDeleteConfirm.value = false
+  pendingDeleteId.value = null
+  if (!id || !canDeleteCommission.value) return
   await comisionesStore.deleteCommission(id)
   if (editingId.value === id) cancelEditing()
 }
@@ -164,10 +175,7 @@ onMounted(() => {
 <template>
   <div class="space-y-6">
     <section class="rounded-2xl border border-[#d8e5fb] bg-white p-6 shadow-lg shadow-brasper-indigoStrong/10">
-      <div class="mb-4">
-        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brasper-indigoStrong">Configuración</p>
-        <h1 class="text-2xl font-semibold text-[#232b4d]">Comisiones</h1>
-      </div>
+      <PageHeader eyebrow="Configuración" title="Comisiones" />
 
       <div v-if="comisionesStore.isLoading" class="mt-4 text-[#666]">Cargando comisiones...</div>
       <template v-else>
@@ -399,5 +407,14 @@ onMounted(() => {
         </div>
       </template>
     </section>
+
+    <ConfirmDialog
+      v-model="showDeleteConfirm"
+      title="Eliminar comisión"
+      message="¿Seguro que deseas eliminar esta comisión?"
+      confirm-text="Eliminar"
+      :loading="comisionesStore.deletingId !== null"
+      @confirm="confirmDelete"
+    />
   </div>
 </template>

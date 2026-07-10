@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, useTemplateRef } from 'vue'
+import { computed, onMounted, ref, useTemplateRef } from 'vue'
 import CouponCreateForm from '../components/CouponCreateForm.vue'
 import CouponList from '../components/CouponList.vue'
 import { useCuponesStore } from '../controllers/use_cupones_store_controller'
 import { useAuthStore } from '@modules/auth/presentation/controllers/use_auth_store_controller'
+import { ConfirmDialog } from '@interface/widgets'
 
 interface CouponFormModel {
   code: string
@@ -35,9 +36,25 @@ async function handleUpdate(id: string, payload: CouponFormModel): Promise<void>
   await cuponesStore.validateAndUpdateCoupon(id, payload)
 }
 
-async function handleDelete(coupon: { id: string; code: string }): Promise<void> {
+const pendingDeleteCoupon = ref<{ id: string; code: string } | null>(null)
+const showDeleteConfirm = ref(false)
+const deleteConfirmMessage = computed(() =>
+  pendingDeleteCoupon.value
+    ? `¿Eliminar el cupón "${pendingDeleteCoupon.value.code}"? Esta acción no se puede deshacer.`
+    : ''
+)
+
+function handleDelete(coupon: { id: string; code: string }): void {
   if (!canDelete.value) return
-  if (!window.confirm(`¿Eliminar el cupón "${coupon.code}"? Esta acción no se puede deshacer.`)) return
+  pendingDeleteCoupon.value = coupon
+  showDeleteConfirm.value = true
+}
+
+async function confirmDeleteCoupon(): Promise<void> {
+  const coupon = pendingDeleteCoupon.value
+  showDeleteConfirm.value = false
+  pendingDeleteCoupon.value = null
+  if (!coupon || !canDelete.value) return
   await cuponesStore.deleteCoupon(coupon.id)
 }
 
@@ -88,5 +105,14 @@ onMounted(() => {
         @delete="handleDelete"
       />
     </template>
+
+    <ConfirmDialog
+      v-model="showDeleteConfirm"
+      title="Eliminar cupón"
+      :message="deleteConfirmMessage"
+      confirm-text="Eliminar"
+      :loading="cuponesStore.deletingId !== null"
+      @confirm="confirmDeleteCoupon"
+    />
   </div>
 </template>

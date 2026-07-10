@@ -14,6 +14,7 @@ import * as XLSX from 'xlsx'
 import AppDropdown from '@/interface/components/AppDropdown.vue'
 import UsuarioCreateFormModal from '@/interface/components/UsuarioCreateFormModal.vue'
 import { useAuthStore } from '../controllers/use_auth_store_controller'
+import { ConfirmDialog } from '@interface/widgets'
 
 const authStore = useAuthStore()
 const users = ref<UserListItem[]>([])
@@ -190,6 +191,11 @@ async function submitImport() {
 }
 
 const deletingId = ref<string | null>(null)
+const pendingDelete = ref<UserListItem | null>(null)
+const showDeleteConfirm = ref(false)
+const deleteConfirmMessage = computed(() =>
+  pendingDelete.value ? `¿Eliminar a ${pendingDelete.value.name} (${pendingDelete.value.email})?` : ''
+)
 
 function toggleMenu(id: string) {
   if (openMenuId.value === id) {
@@ -206,9 +212,17 @@ function toggleMenu(id: string) {
   })
 }
 
-async function handleDelete(u: UserListItem) {
+function handleDelete(u: UserListItem): void {
   if (!canDeleteUsers.value) return
-  if (!confirm(`¿Eliminar a ${u.name} (${u.email})?`)) return
+  pendingDelete.value = u
+  showDeleteConfirm.value = true
+}
+
+async function confirmDelete(): Promise<void> {
+  const u = pendingDelete.value
+  showDeleteConfirm.value = false
+  pendingDelete.value = null
+  if (!u) return
   openMenuId.value = null
   deletingId.value = u.id
   error.value = ''
@@ -709,6 +723,15 @@ onMounted(() => {
       </div>
     </div>
   </Teleport>
+
+  <ConfirmDialog
+    v-model="showDeleteConfirm"
+    title="Eliminar usuario"
+    :message="deleteConfirmMessage"
+    confirm-text="Eliminar"
+    :loading="deletingId !== null"
+    @confirm="confirmDelete"
+  />
 </template>
 
 <style scoped>

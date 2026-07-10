@@ -50,6 +50,7 @@ import { blockNumberInputWheel } from "@/interface/helpers/block_number_input_wh
 import UsuarioCreateFormModal from "@/interface/components/UsuarioCreateFormModal.vue";
 import CuentaBancariaCreateFormModal from "@/interface/components/CuentaBancariaCreateFormModal.vue";
 import BancoCrudModal from "@/interface/components/BancoCrudModal.vue";
+import { ConfirmDialog } from "@interface/widgets";
 import type { BankOption } from "@modules/cuentas-bancarias/infrastructure/adapters/banks_api_adapter";
 import type { UserListItem } from "@modules/auth/infrastructure/adapters/users_management_api_adapter";
 import CalculatorConversionCard from "@modules/calculator/presentation/components/CalculatorConversionCard.vue";
@@ -335,6 +336,15 @@ function negativeSpecialDiscountSignature(): string | null {
   ].join("|");
 }
 
+const showNegativeDiscountConfirm = ref(false);
+const negativeDiscountMessage = ref("");
+
+/**
+ * Gate del descuento especial negativo. Si aún no se confirmó para la firma
+ * actual, abre el ConfirmDialog y devuelve `false` (bloquea el avance). Tras
+ * confirmar, `confirmNegativeSpecialDiscount()` registra la firma y reintenta
+ * `goCreateNext()`, de modo que el flujo prosigue igual que con el confirm nativo.
+ */
 function confirmNegativeSpecialDiscountIfNeeded(): boolean {
   const signature = negativeSpecialDiscountSignature();
   if (!signature || confirmedNegativeSpecialDiscountSignature.value === signature) {
@@ -344,17 +354,25 @@ function confirmNegativeSpecialDiscountIfNeeded(): boolean {
   const res = calculatorStore.result;
   if (!res) return true;
 
-  const confirmed = window.confirm(
-    `El descuento especial calculado es negativo (${formatValue(
-      res.specialDiscountAmount,
-    )}). ¿Deseas consignar este monto negativo?`,
-  );
+  negativeDiscountMessage.value = `El descuento especial calculado es negativo (${formatValue(
+    res.specialDiscountAmount,
+  )}). ¿Deseas consignar este monto negativo?`;
+  showNegativeDiscountConfirm.value = true;
+  return false;
+}
 
-  if (confirmed) {
-    confirmedNegativeSpecialDiscountSignature.value = signature;
-  }
+function confirmNegativeSpecialDiscount() {
+  showNegativeDiscountConfirm.value = false;
+  const signature = negativeSpecialDiscountSignature();
+  if (signature) confirmedNegativeSpecialDiscountSignature.value = signature;
+  transactionsStore.error = null;
+  goCreateNext();
+}
 
-  return confirmed;
+function cancelNegativeSpecialDiscount() {
+  showNegativeDiscountConfirm.value = false;
+  transactionsStore.error =
+    "Confirma si deseas consignar el descuento especial en negativo para continuar.";
 }
 
 function goCreateNext() {
@@ -376,8 +394,8 @@ function goCreateNext() {
       return;
     }
     if (!confirmNegativeSpecialDiscountIfNeeded()) {
-      transactionsStore.error =
-        "Confirma si deseas consignar el descuento especial en negativo para continuar.";
+      // Descuento negativo sin confirmar: el ConfirmDialog quedó abierto y, al
+      // confirmar, se reintenta este avance; al cancelar se muestra el aviso.
       return;
     }
     transactionsStore.error = null;
@@ -1809,10 +1827,26 @@ async function submitForm() {
   }
 }
 
-async function handleDelete(t: Transaction) {
+const pendingDeleteTransaction = ref<Transaction | null>(null);
+const showDeleteTransactionConfirm = ref(false);
+const deleteTransactionMessage = computed(() =>
+  pendingDeleteTransaction.value
+    ? `¿Eliminar transacción ${pendingDeleteTransaction.value.code ?? pendingDeleteTransaction.value.id}?`
+    : "",
+);
+
+function handleDelete(t: Transaction) {
   if (!canDeleteTransactions.value) return;
   if (!t.id) return;
-  if (!confirm(`¿Eliminar transacción ${t.code ?? t.id}?`)) return;
+  pendingDeleteTransaction.value = t;
+  showDeleteTransactionConfirm.value = true;
+}
+
+async function confirmDeleteTransaction() {
+  const t = pendingDeleteTransaction.value;
+  showDeleteTransactionConfirm.value = false;
+  pendingDeleteTransaction.value = null;
+  if (!t?.id || !canDeleteTransactions.value) return;
   openMenuId.value = null;
   deletingId.value = t.id;
   transactionsStore.error = null;
@@ -5580,6 +5614,26 @@ onActivated(() => {
       :hint-country="bancoCrudHintCountry"
       :start-on-create-form="bancoCrudOpenForCreate"
       @saved="onBancoCrudSaved"
+    />
+
+    <ConfirmDialog
+      v-model="showDeleteTransactionConfirm"
+      title="Eliminar transacción"
+      :message="deleteTransactionMessage"
+      confirm-text="Eliminar"
+      :loading="deletingId !== null"
+      @confirm="confirmDeleteTransaction"
+    />
+
+    <ConfirmDialog
+      v-model="showNegativeDiscountConfirm"
+      title="Descuento especial negativo"
+      :message="negativeDiscountMessage"
+      confirm-text="Sí, consignar"
+      cancel-text="Revisar"
+      variant="primary"
+      @confirm="confirmNegativeSpecialDiscount"
+      @cancel="cancelNegativeSpecialDiscount"
     />
   </div>
 </template>
