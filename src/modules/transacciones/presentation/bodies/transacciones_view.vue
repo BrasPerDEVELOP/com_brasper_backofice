@@ -9,7 +9,6 @@ import {
   watch,
   nextTick,
 } from "vue";
-import type { Ref } from "vue";
 import { useTransactionPageContext } from "../composables/use_transaction_page_context";
 import { useAuthStore } from "@modules/auth/presentation/controllers/use_auth_store_controller";
 import type { BankAccount } from "@modules/cuentas-bancarias/domain/models";
@@ -59,6 +58,7 @@ import { useTransactionPreviewController } from "../controllers/use_transaction_
 import { useTransactionStatusLabels } from "../composables/use_transaction_status_labels";
 import { fetchUsers } from "@modules/auth/infrastructure/adapters/users_management_api_adapter";
 import TransactionDestinationsEditor from "../components/TransactionDestinationsEditor.vue";
+import TransactionVoucherFileList from "../components/TransactionVoucherFileList.vue";
 import {
   emptyTransactionDestination,
   validateTransactionDestinations,
@@ -87,8 +87,11 @@ function transactionCatalogReadyForCurrentMode(): boolean {
   );
 }
 
-const { ensurePreviewCatalogLoaded, buildPreviewSections } =
-  useTransactionPreviewController();
+const {
+  ensurePreviewCatalogLoaded,
+  buildPreviewSections,
+  buildPreviewDestinations,
+} = useTransactionPreviewController();
 
 const showCreateModal = ref(false);
 const showImportModal = ref(false);
@@ -280,6 +283,17 @@ const editSourceTransaction = ref<Transaction | null>(null);
 const isEditingMode = computed(() => Boolean(editingId.value));
 const isHydratingTransactionForm = ref(false);
 
+/**
+ * Comprobantes ya persistidos que el usuario quitó durante la edición.
+ * Al guardar se envía `<campo>s_keep` con los que se conservan; el backend
+ * borra los demás y agrega los archivos nuevos del mismo request.
+ */
+const removedPersistedVouchers = reactive<Record<VoucherField, string[]>>({
+  send_voucher: [],
+  payment_voucher: [],
+  checked_image: [],
+});
+
 const destinationDraftsModel = computed({
   get: () => form.destinations,
   set: (value: TransactionDestinationDraft[]) => {
@@ -291,6 +305,25 @@ const destinationDraftsModel = computed({
 
 const destinationDistributionValidation = computed(() =>
   validateTransactionDestinations(form.destinations, form.destination_amount),
+);
+
+/**
+ * Con una sola cuenta destino, su monto sigue automáticamente al monto a
+ * recibir (calculadora o corrección de montos). Sin esto, corregir la
+ * cotización dejaba la distribución desfasada y bloqueaba el guardado.
+ * Con varias cuentas el usuario redistribuye manualmente.
+ */
+watch(
+  () => form.destination_amount,
+  (amount) => {
+    if (form.destinations.length !== 1) return;
+    const destination = form.destinations[0];
+    if (!destination) return;
+    const rounded = roundMoneyAmount(Number(amount) || 0);
+    if (rounded <= 0) return;
+    if (roundMoneyAmount(Number(destination.amount) || 0) === rounded) return;
+    form.destinations = [{ ...destination, amount: rounded }];
+  },
 );
 
 function clearStoredSocialReasonSelection() {
@@ -1333,6 +1366,10 @@ function resetForm() {
   form.send_voucher = [];
   form.payment_voucher = [];
   form.checked_image = [];
+  removedPersistedVouchers.send_voucher = [];
+  removedPersistedVouchers.payment_voucher = [];
+  removedPersistedVouchers.checked_image = [];
+  revokeVoucherFileObjectUrls();
   editingId.value = null;
   editSourceTransaction.value = null;
   editQuoteCorrectionMode.value = false;
@@ -1776,6 +1813,37 @@ async function openEditModal(t: Transaction) {
   }
 }
 
+/**
+ * PUT: enviar `destinations` solo cuando la distribución realmente cambió
+ * (cuentas agregadas/quitadas/cambiadas o montos redistribuidos en multicuenta).
+ * Con cuenta única sin cambio de cuenta, el backend sincroniza el monto de la
+ * fila desde `destination_amount`; omitir la lista evita reemplazar filas
+ * (el reemplazo con la misma cuenta provocaba un 500 por la restricción única).
+ */
+function destinationsChangedForUpdate(): boolean {
+  const source = editSourceTransaction.value;
+  const stored = (source?.destinations ?? [])
+    .map((destination) => ({
+      id: normalizeSelectId(destination.bank_account_id),
+      amount: roundMoneyAmount(Number(destination.amount) || 0),
+    }))
+    .filter((destination) => destination.id);
+  const current = form.destinations.map((destination) => ({
+    id: destination.bank_account_id.trim(),
+    amount: roundMoneyAmount(Number(destination.amount) || 0),
+  }));
+  if (stored.length <= 1 && current.length === 1) {
+    const storedId =
+      stored[0]?.id || normalizeSelectId(source?.bank_account_destination_id);
+    return current[0]?.id !== storedId;
+  }
+  if (stored.length !== current.length) return true;
+  return stored.some(
+    (row, index) =>
+      row.id !== current[index]?.id || row.amount !== current[index]?.amount,
+  );
+}
+
 async function submitForm() {
   // B4 — el submit sirve para crear y editar; exige el permiso según el modo.
   if (editingId.value ? !canUpdateTransactions.value : !canCreateTransactions.value) return;
@@ -1818,18 +1886,32 @@ async function submitForm() {
     return;
   }
   try {
-    const sendVoucher =
-      editingId.value && !hasNewVoucherFiles("send_voucher")
-        ? undefined
-        : formVoucherValues("send_voucher");
-    const paymentVoucher =
-      editingId.value && !hasNewVoucherFiles("payment_voucher")
-        ? undefined
-        : formVoucherValues("payment_voucher");
-    const checkedImage =
-      editingId.value && !hasNewVoucherFiles("checked_image")
-        ? undefined
-        : formVoucherValues("checked_image");
+    /**
+     * Edición: el backend agrega los archivos nuevos sin tocar los existentes.
+     * Si el usuario quitó comprobantes ya subidos, `<campo>s_keep` lleva la
+     * lista de los que se conservan; un campo intacto se omite por completo.
+     */
+    const voucherAttachmentPayload = (field: VoucherField) => {
+      const values = formVoucherValues(field);
+      if (!editingId.value) return values;
+      return values.length > 0 ? values : undefined;
+    };
+    const sendVoucher = voucherAttachmentPayload("send_voucher");
+    const paymentVoucher = voucherAttachmentPayload("payment_voucher");
+    const checkedImage = voucherAttachmentPayload("checked_image");
+    const voucherKeepPayload = editingId.value
+      ? {
+          ...(hasRemovedPersistedVouchers("send_voucher")
+            ? { send_vouchers_keep: persistedVoucherStrings("send_voucher") }
+            : {}),
+          ...(hasRemovedPersistedVouchers("payment_voucher")
+            ? { payment_vouchers_keep: persistedVoucherStrings("payment_voucher") }
+            : {}),
+          ...(hasRemovedPersistedVouchers("checked_image")
+            ? { checked_images_keep: persistedVoucherStrings("checked_image") }
+            : {}),
+        }
+      : {};
 
     const code =
       form.code?.trim() ||
@@ -1916,6 +1998,10 @@ async function submitForm() {
       /** PUT: el backend recalcula `status` y asigna `payment_date` al pasar a finalizada. */
       const updated = await transactionsStore.updateTransaction(editingId.value, {
         ...commonAmounts,
+        ...voucherKeepPayload,
+        destinations: destinationsChangedForUpdate()
+          ? commonAmounts.destinations
+          : undefined,
         operation_number: operationNumber || null,
         send_date: formDateTimeToApi(form.send_date),
         payment_date: formDateTimeToApi(form.payment_date),
@@ -2061,6 +2147,13 @@ const previewSections = computed(() => {
   return buildPreviewSections(t);
 });
 
+/** Cuentas destino estructuradas para el preview (multicuentas con titular visible). */
+const previewDestinations = computed(() => {
+  const t = previewTransaction.value;
+  if (!t) return { rows: [], totalLabel: "—" };
+  return buildPreviewDestinations(t);
+});
+
 const previewSectionGroups = computed(() => {
   const s = previewSections.value;
   return {
@@ -2070,6 +2163,49 @@ const previewSectionGroups = computed(() => {
     bottom: s.filter((sec) => ["registro", "extra"].includes(sec.id)),
   };
 });
+
+type PreviewVoucherEntry = {
+  href: string;
+  label: string;
+  isImage: boolean;
+};
+
+type PreviewVoucherGroup = {
+  key: VoucherField;
+  title: string;
+  entries: PreviewVoucherEntry[];
+};
+
+/** Comprobantes del preview: TODAS las imágenes de cada grupo (no solo la primera). */
+const previewVoucherGroups = computed<PreviewVoucherGroup[]>(() => {
+  const t = previewTransaction.value;
+  if (!t) return [];
+  const groups: Array<{ key: VoucherField; title: string }> = [
+    { key: "send_voucher", title: "Voucher envío" },
+    { key: "payment_voucher", title: "Voucher pago" },
+    { key: "checked_image", title: "Checklist verificación" },
+  ];
+  return groups
+    .map(({ key, title }) => ({
+      key,
+      title,
+      entries: transactionVoucherValues(t, key)
+        .filter((value): value is string => typeof value === "string")
+        .map((value) => ({
+          href: voucherMediaHref(value),
+          label: getVoucherLabel(value),
+          isImage: isImagePath(value),
+        })),
+    }))
+    .filter((group) => group.entries.length > 0);
+});
+
+const previewVoucherTotal = computed(() =>
+  previewVoucherGroups.value.reduce(
+    (sum, group) => sum + group.entries.length,
+    0,
+  ),
+);
 
 const editPreviewTransaction = computed<Transaction | null>(() => {
   if (!isEditingMode.value) return null;
@@ -2468,11 +2604,19 @@ function transactionVoucherValues(
 ): VoucherFormValue[] {
   if (!transaction) return [];
   const rec = transaction as Record<string, unknown>;
+  // El parser ya fusiona singular+plural en `field`; el API además conserva
+  // `${field}s` crudo. Sin dedupe cada archivo aparecería dos veces.
+  const seen = new Set<string>();
   return voucherValues([
     rec[field],
     rec[`${field}s`],
     rec[`${field}_files`],
-  ]);
+  ]).filter((value) => {
+    if (typeof value !== "string") return true;
+    if (seen.has(value)) return false;
+    seen.add(value);
+    return true;
+  });
 }
 
 function formVoucherValues(field: VoucherField): VoucherFormValue[] {
@@ -2480,15 +2624,45 @@ function formVoucherValues(field: VoucherField): VoucherFormValue[] {
 }
 
 function persistedVoucherValues(field: VoucherField): VoucherFormValue[] {
-  return transactionVoucherValues(editSourceTransaction.value, field);
+  const removed = removedPersistedVouchers[field];
+  return transactionVoucherValues(editSourceTransaction.value, field).filter(
+    (value) => typeof value !== "string" || !removed.includes(value),
+  );
+}
+
+/** Comprobantes persistidos que se conservan (para `<campo>s_keep` del PUT). */
+function persistedVoucherStrings(field: VoucherField): string[] {
+  return persistedVoucherValues(field).filter(
+    (value): value is string => typeof value === "string",
+  );
+}
+
+function hasRemovedPersistedVouchers(field: VoucherField): boolean {
+  return removedPersistedVouchers[field].length > 0;
 }
 
 function displayedVoucherValues(field: VoucherField): VoucherFormValue[] {
   return [...persistedVoucherValues(field), ...formVoucherValues(field)];
 }
 
-function hasNewVoucherFiles(field: VoucherField): boolean {
-  return formVoucherValues(field).some(isFileValue);
+/**
+ * Quita un comprobante de la lista visible: los persistidos se marcan para
+ * borrarse al guardar; los recién agregados salen del formulario directamente.
+ */
+function removeDisplayedVoucher(field: VoucherField, index: number) {
+  const persistedCount = persistedVoucherValues(field).length;
+  if (index < persistedCount) {
+    const value = persistedVoucherValues(field)[index];
+    if (typeof value === "string") {
+      removedPersistedVouchers[field] = [
+        ...removedPersistedVouchers[field],
+        value,
+      ];
+      syncStatusFromVoucherFiles();
+    }
+    return;
+  }
+  removeVoucherAt(field, index - persistedCount);
 }
 
 function isFileValue(v: unknown): v is File {
@@ -2510,47 +2684,63 @@ function isImagePath(path: string): boolean {
   );
 }
 
-function voucherOpenHref(value: unknown): string {
-  if (isFileValue(value)) return "";
-  return typeof value === "string" && value.trim() ? voucherMediaHref(value.trim()) : "";
+/** ObjectURLs de miniaturas de archivos recién elegidos; se revocan al resetear o desmontar. */
+const voucherFileObjectUrls = new Map<File, string>();
+
+function voucherFileThumbSrc(file: File): string {
+  if (!isImageFile(file)) return "";
+  let url = voucherFileObjectUrls.get(file);
+  if (!url) {
+    url = URL.createObjectURL(file);
+    voucherFileObjectUrls.set(file, url);
+  }
+  return url;
 }
 
-const sendVoucherPreviewSrc = ref<string | null>(null);
-const paymentVoucherPreviewSrc = ref<string | null>(null);
-const checkedImagePreviewSrc = ref<string | null>(null);
-const sendVoucherPreviewSrcs = ref<string[]>([]);
-const paymentVoucherPreviewSrcs = ref<string[]>([]);
-const checkedImagePreviewSrcs = ref<string[]>([]);
+function revokeVoucherFileObjectUrls() {
+  voucherFileObjectUrls.forEach((url) => URL.revokeObjectURL(url));
+  voucherFileObjectUrls.clear();
+}
 
-const persistedSendVoucherPreviewSrc = computed(() => {
-  return persistedVoucherValues("send_voucher")
-    .filter((value): value is string => typeof value === "string" && isImagePath(value))
-    .map((value) => voucherMediaHref(value))[0] ?? null;
+type VoucherDisplayEntry = {
+  id: string;
+  label: string;
+  href: string;
+  thumbSrc: string;
+  persisted: boolean;
+};
+
+/** Lista visible de comprobantes de un grupo: persistidos (menos quitados) + nuevos. */
+function voucherDisplayEntries(field: VoucherField): VoucherDisplayEntry[] {
+  const persistedCount = persistedVoucherValues(field).length;
+  return displayedVoucherValues(field).map((value, index) => {
+    if (typeof value === "string") {
+      const href = voucherMediaHref(value);
+      return {
+        id: `${field}-stored-${value}`,
+        label: getVoucherLabel(value),
+        href,
+        thumbSrc: isImagePath(value) ? href : "",
+        persisted: index < persistedCount,
+      };
+    }
+    return {
+      id: `${field}-file-${index}-${value.name}-${value.size}`,
+      label: value.name,
+      href: "",
+      thumbSrc: voucherFileThumbSrc(value),
+      persisted: false,
+    };
+  });
+}
+
+/** Primera imagen disponible del comprobante de envío (panel "Ver imagen de envío"). */
+const activeSendVoucherPreviewSrc = computed(() => {
+  const entry = voucherDisplayEntries("send_voucher").find(
+    (item) => item.thumbSrc,
+  );
+  return entry?.thumbSrc ?? null;
 });
-
-const persistedPaymentVoucherPreviewSrc = computed(() => {
-  return persistedVoucherValues("payment_voucher")
-    .filter((value): value is string => typeof value === "string" && isImagePath(value))
-    .map((value) => voucherMediaHref(value))[0] ?? null;
-});
-
-const persistedCheckedImagePreviewSrc = computed(() => {
-  return persistedVoucherValues("checked_image")
-    .filter((value): value is string => typeof value === "string" && isImagePath(value))
-    .map((value) => voucherMediaHref(value))[0] ?? null;
-});
-
-const activeSendVoucherPreviewSrc = computed(
-  () => sendVoucherPreviewSrc.value ?? persistedSendVoucherPreviewSrc.value,
-);
-
-const activePaymentVoucherPreviewSrc = computed(
-  () => paymentVoucherPreviewSrc.value ?? persistedPaymentVoucherPreviewSrc.value,
-);
-
-const activeCheckedImagePreviewSrc = computed(
-  () => checkedImagePreviewSrc.value ?? persistedCheckedImagePreviewSrc.value,
-);
 
 /** Imagen de verificación (checklist) ya elegida o cargada en el formulario */
 const isCheckedImageVoucherPresent = computed(() =>
@@ -2611,48 +2801,8 @@ function syncStatusFromVoucherFiles() {
   }
 }
 
-function revokeIfBlob(url: string | null) {
-  if (url?.startsWith("blob:")) URL.revokeObjectURL(url);
-}
-
-function revokeBlobList(urls: string[]) {
-  urls.forEach((url) => revokeIfBlob(url));
-}
-
-function updateVoucherPreview(target: Ref<string | null>, listTarget: Ref<string[]>, v: unknown) {
-  revokeIfBlob(target.value);
-  revokeBlobList(listTarget.value);
-  const urls = voucherValues(v)
-    .map((value) => {
-      if (isFileValue(value) && isImageFile(value)) return URL.createObjectURL(value);
-      if (typeof value === "string" && isImagePath(value)) return voucherMediaHref(value);
-      return "";
-    })
-    .filter(Boolean);
-  listTarget.value = urls;
-  target.value = urls[0] ?? null;
-}
-
-watch(
-  () => form.send_voucher,
-  (v) => updateVoucherPreview(sendVoucherPreviewSrc, sendVoucherPreviewSrcs, v),
-);
-watch(
-  () => form.payment_voucher,
-  (v) => updateVoucherPreview(paymentVoucherPreviewSrc, paymentVoucherPreviewSrcs, v),
-);
-watch(
-  () => form.checked_image,
-  (v) => updateVoucherPreview(checkedImagePreviewSrc, checkedImagePreviewSrcs, v),
-);
-
 onBeforeUnmount(() => {
-  revokeIfBlob(sendVoucherPreviewSrc.value);
-  revokeIfBlob(paymentVoucherPreviewSrc.value);
-  revokeIfBlob(checkedImagePreviewSrc.value);
-  revokeBlobList(sendVoucherPreviewSrcs.value);
-  revokeBlobList(paymentVoucherPreviewSrcs.value);
-  revokeBlobList(checkedImagePreviewSrcs.value);
+  revokeVoucherFileObjectUrls();
 });
 
 async function submitImport() {
@@ -3586,15 +3736,142 @@ onActivated(() => {
                       {{ previewSectionGroups.resumen.items.find(i => i.label === 'Ventas / asesor')?.value ?? '—' }}
                     </p>
                   </div>
+                  <div class="hidden h-10 w-px bg-[#d1d5db] sm:block" />
+                  <div>
+                    <p class="text-[10px] font-semibold uppercase tracking-widest text-[#9ca3af]">N.º operación</p>
+                    <p class="mt-1 font-mono text-sm font-semibold tabular-nums text-[#111827]">
+                      {{ previewSectionGroups.resumen.items.find(i => i.label === 'N.º operación')?.value ?? '—' }}
+                    </p>
+                  </div>
                 </div>
               </div>
 
               <!-- Grid principal: izquierda / derecha -->
               <div class="grid grid-cols-1 lg:grid-cols-2 lg:divide-x lg:divide-[#e8eef8]">
-                <!-- Columna izquierda: Participantes + Condiciones -->
+                <!-- Columna izquierda: Participantes + Cuentas destino + Condiciones -->
                 <div class="space-y-4 p-5">
                   <section
-                    v-for="section in previewSectionGroups.left"
+                    v-for="section in previewSectionGroups.left.filter(s => s.id === 'participantes')"
+                    :key="section.id"
+                    class="rounded-xl border border-[#e8eef8] bg-[#fbfdff] p-4 shadow-sm"
+                  >
+                    <div class="mb-3 border-b border-[#e5e7eb]/80 pb-2">
+                      <h3 class="text-[11px] font-semibold uppercase tracking-[0.14em] text-brasper-indigoStrong">
+                        {{ section.title }}
+                      </h3>
+                      <p v-if="section.subtitle" class="mt-1 text-xs text-[#6b7280]">
+                        {{ section.subtitle }}
+                      </p>
+                    </div>
+                    <dl class="space-y-2.5">
+                      <div
+                        v-for="(item, i) in section.items"
+                        :key="`${section.id}-${i}-${item.label}`"
+                        class="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4"
+                      >
+                        <dt class="shrink-0 text-xs font-medium uppercase tracking-wide text-[#6b7280] sm:min-w-[8rem]">
+                          {{ item.label }}
+                        </dt>
+                        <dd class="min-w-0 text-right text-sm font-medium">
+                          <span
+                            v-if="item.variant === 'mono'"
+                            class="break-all text-xs text-[#374151]"
+                          >{{ item.value }}</span>
+                          <span v-else class="text-[#111827]">{{ item.value }}</span>
+                        </dd>
+                      </div>
+                    </dl>
+                  </section>
+
+                  <!-- Cuentas destino: una fila por cuenta con titular y monto -->
+                  <section
+                    v-if="previewDestinations.rows.length"
+                    class="rounded-xl border border-[#e8eef8] bg-[#fbfdff] p-4 shadow-sm"
+                  >
+                    <div class="mb-3 flex items-start justify-between gap-3 border-b border-[#e5e7eb]/80 pb-2">
+                      <div>
+                        <h3 class="text-[11px] font-semibold uppercase tracking-[0.14em] text-brasper-indigoStrong">
+                          Cuentas destino
+                        </h3>
+                        <p class="mt-1 text-xs text-[#6b7280]">
+                          Distribución del monto a recibir
+                        </p>
+                      </div>
+                      <span class="shrink-0 rounded-full bg-[#eef2ff] px-2.5 py-0.5 text-[11px] font-semibold tabular-nums text-brasper-indigoStrong">
+                        {{ previewDestinations.rows.length }}
+                        {{ previewDestinations.rows.length === 1 ? "cuenta" : "cuentas" }}
+                      </span>
+                    </div>
+                    <ul class="space-y-2">
+                      <li
+                        v-for="row in previewDestinations.rows"
+                        :key="`preview-destination-${row.position}`"
+                        class="rounded-lg border border-[#e8eef8] bg-white px-3 py-2.5"
+                      >
+                        <div class="flex items-start justify-between gap-3">
+                          <div class="min-w-0">
+                            <p
+                              class="truncate text-sm font-semibold text-[#111827]"
+                              :title="row.bankLabel"
+                            >
+                              {{ row.bankLabel }}
+                            </p>
+                            <p
+                              class="mt-0.5 truncate text-xs tabular-nums text-[#6b7280]"
+                              :title="row.accountLabel"
+                            >
+                              {{ row.accountLabel }}
+                            </p>
+                            <p
+                              class="mt-1 flex min-w-0 items-center gap-1.5 text-xs font-medium text-[#374151]"
+                              :title="row.holderLabel"
+                            >
+                              <svg
+                                class="h-3.5 w-3.5 shrink-0 text-[#9ca3af]"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                              >
+                                <path
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  stroke-width="2"
+                                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                                />
+                              </svg>
+                              <span class="truncate">{{ row.holderLabel }}</span>
+                            </p>
+                          </div>
+                          <div class="shrink-0 text-right">
+                            <p class="text-sm font-semibold tabular-nums text-[#111827]">
+                              {{ row.amountLabel }}
+                            </p>
+                            <p
+                              v-if="row.shareLabel"
+                              class="mt-0.5 text-[11px] font-medium tabular-nums text-[#6b7280]"
+                            >
+                              {{ row.shareLabel }} del total
+                            </p>
+                          </div>
+                        </div>
+                      </li>
+                    </ul>
+                    <div
+                      v-if="previewDestinations.rows.length > 1"
+                      class="mt-2.5 flex items-baseline justify-between gap-3 border-t border-[#e8eef8] pt-2"
+                    >
+                      <span class="text-xs font-medium uppercase tracking-wide text-[#6b7280]">
+                        Total distribuido
+                      </span>
+                      <span class="text-sm font-semibold tabular-nums text-[#111827]">
+                        {{ previewDestinations.totalLabel }}
+                      </span>
+                    </div>
+                  </section>
+
+                  <section
+                    v-for="section in previewSectionGroups.left.filter(s => s.id === 'condiciones')"
                     :key="section.id"
                     class="rounded-xl border border-[#e8eef8] bg-[#fbfdff] p-4 shadow-sm"
                   >
@@ -3716,101 +3993,87 @@ onActivated(() => {
                 </section>
               </div>
 
-              <!-- Comprobantes: 3 columnas, incluye checked_image -->
+              <!-- Comprobantes: todas las imágenes de cada grupo -->
               <div
-                v-if="previewTransaction.send_voucher || previewTransaction.payment_voucher || previewTransaction.checked_image"
+                v-if="previewVoucherGroups.length > 0"
                 class="border-t border-[#e8eef8] px-5 pb-5 pt-4"
               >
-                <div class="mb-3">
-                  <h3 class="text-[11px] font-semibold uppercase tracking-[0.14em] text-brasper-indigoStrong">
-                    Comprobantes
-                  </h3>
-                  <p class="mt-1 text-xs text-[#6b7280]">
-                    Vista previa · clic para abrir en tamaño completo
-                  </p>
+                <div class="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+                  <div>
+                    <h3 class="text-[11px] font-semibold uppercase tracking-[0.14em] text-brasper-indigoStrong">
+                      Comprobantes
+                    </h3>
+                    <p class="mt-1 text-xs text-[#6b7280]">
+                      Clic en una miniatura para abrir en tamaño completo
+                    </p>
+                  </div>
+                  <span class="rounded-full bg-[#eef2ff] px-2.5 py-1 text-[11px] font-semibold tabular-nums text-brasper-indigoStrong">
+                    {{ previewVoucherTotal }} {{ previewVoucherTotal === 1 ? "archivo" : "archivos" }}
+                  </span>
                 </div>
                 <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  <div
-                    v-if="previewTransaction.send_voucher"
+                  <section
+                    v-for="group in previewVoucherGroups"
+                    :key="group.key"
                     class="flex flex-col overflow-hidden rounded-xl border border-[#e5e7eb] bg-[#f9fafb]"
                   >
-                    <div class="flex items-center justify-between border-b border-[#e5e7eb] bg-white px-3 py-2">
-                      <span class="text-xs font-semibold text-[#374151]">Voucher envío</span>
+                    <div class="flex items-center justify-between gap-2 border-b border-[#e5e7eb] bg-white px-3 py-2">
+                      <span class="text-xs font-semibold text-[#374151]">{{ group.title }}</span>
+                      <span class="rounded-full bg-[#f3f4f6] px-2 py-0.5 text-[10px] font-semibold tabular-nums text-[#6b7280]">
+                        {{ group.entries.length }}
+                      </span>
+                    </div>
+                    <div class="flex-1 space-y-2 p-2">
                       <a
-                        :href="voucherMediaHref(previewTransaction.send_voucher)"
+                        v-for="(entry, entryIdx) in group.entries"
+                        :key="`${group.key}-${entryIdx}-${entry.href}`"
+                        :href="entry.href"
                         target="_blank"
                         rel="noopener noreferrer"
-                        class="text-xs font-medium text-brasper-indigoStrong hover:underline"
-                      >Abrir</a>
+                        class="group/voucher block cursor-pointer overflow-hidden rounded-lg border border-[#e5e7eb] bg-white transition hover:border-brasper-indigoStrong/40 hover:shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-brasper-indigoStrong"
+                        :title="entry.label"
+                      >
+                        <img
+                          v-if="entry.isImage"
+                          :src="entry.href"
+                          :alt="`${group.title} · ${entry.label}`"
+                          loading="lazy"
+                          class="max-h-40 w-full bg-[#f3f4f6] object-contain transition group-hover/voucher:opacity-90"
+                          @error="($event.target as HTMLImageElement).classList.add('hidden')"
+                        />
+                        <span class="flex items-center gap-2 px-3 py-2">
+                          <svg
+                            class="h-3.5 w-3.5 shrink-0 text-[#9ca3af]"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                          >
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="2"
+                              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                              v-if="!entry.isImage"
+                            />
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="2"
+                              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                              v-else
+                            />
+                          </svg>
+                          <span class="min-w-0 truncate text-xs font-medium text-[#374151]">
+                            {{ entry.label }}
+                          </span>
+                          <span class="ml-auto shrink-0 text-[11px] font-semibold text-brasper-indigoStrong opacity-0 transition group-hover/voucher:opacity-100">
+                            Abrir
+                          </span>
+                        </span>
+                      </a>
                     </div>
-                    <a
-                      :href="voucherMediaHref(previewTransaction.send_voucher)"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="block bg-[#f3f4f6]"
-                    >
-                      <img
-                        :src="voucherMediaHref(previewTransaction.send_voucher)"
-                        alt="Comprobante envío"
-                        class="mx-auto max-h-48 w-full object-contain"
-                        @error="($event.target as HTMLImageElement).classList.add('hidden')"
-                      />
-                    </a>
-                  </div>
-                  <div
-                    v-if="previewTransaction.payment_voucher"
-                    class="flex flex-col overflow-hidden rounded-xl border border-[#e5e7eb] bg-[#f9fafb]"
-                  >
-                    <div class="flex items-center justify-between border-b border-[#e5e7eb] bg-white px-3 py-2">
-                      <span class="text-xs font-semibold text-[#374151]">Voucher pago</span>
-                      <a
-                        :href="voucherMediaHref(previewTransaction.payment_voucher)"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="text-xs font-medium text-brasper-indigoStrong hover:underline"
-                      >Abrir</a>
-                    </div>
-                    <a
-                      :href="voucherMediaHref(previewTransaction.payment_voucher)"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="block bg-[#f3f4f6]"
-                    >
-                      <img
-                        :src="voucherMediaHref(previewTransaction.payment_voucher)"
-                        alt="Comprobante pago"
-                        class="mx-auto max-h-48 w-full object-contain"
-                        @error="($event.target as HTMLImageElement).classList.add('hidden')"
-                      />
-                    </a>
-                  </div>
-                  <div
-                    v-if="previewTransaction.checked_image"
-                    class="flex flex-col overflow-hidden rounded-xl border border-[#e5e7eb] bg-[#f9fafb]"
-                  >
-                    <div class="flex items-center justify-between border-b border-[#e5e7eb] bg-white px-3 py-2">
-                      <span class="text-xs font-semibold text-[#374151]">Checklist verificación</span>
-                      <a
-                        :href="voucherMediaHref(previewTransaction.checked_image)"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="text-xs font-medium text-brasper-indigoStrong hover:underline"
-                      >Abrir</a>
-                    </div>
-                    <a
-                      :href="voucherMediaHref(previewTransaction.checked_image)"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="block bg-[#f3f4f6]"
-                    >
-                      <img
-                        :src="voucherMediaHref(previewTransaction.checked_image)"
-                        alt="Imagen verificación"
-                        class="mx-auto max-h-48 w-full object-contain"
-                        @error="($event.target as HTMLImageElement).classList.add('hidden')"
-                      />
-                    </a>
-                  </div>
+                  </section>
                 </div>
               </div>
             </template>
@@ -4517,7 +4780,8 @@ onActivated(() => {
                           <div class="mb-4">
                             <h3 class="text-sm font-semibold text-[#1f2937]">Archivos</h3>
                             <p class="mt-1 text-xs text-[#6b7280]">
-                              Adjunta o reemplaza comprobantes.
+                              Los archivos ya subidos se conservan al guardar;
+                              «Quitar» los elimina y puedes agregar nuevos.
                             </p>
                           </div>
                           <div class="grid gap-4 md:grid-cols-3">
@@ -4542,46 +4806,11 @@ onActivated(() => {
                                 />
                                 Agregar archivos
                               </label>
-                              <img
-                                v-if="activeSendVoucherPreviewSrc"
-                                :src="activeSendVoucherPreviewSrc"
-                                alt="Vista previa comprobante de envío"
-                                class="mt-3 max-h-24 w-full rounded-lg border border-[#e5e7eb] object-contain"
+                              <TransactionVoucherFileList
+                                :entries="voucherDisplayEntries('send_voucher')"
+                                empty-label="Sin comprobantes de envío"
+                                @remove="removeDisplayedVoucher('send_voucher', $event)"
                               />
-                              <div
-                                v-if="displayedVoucherValues('send_voucher').length"
-                                class="mt-3 space-y-2"
-                              >
-                                <div
-                                  v-for="(voucher, idx) in displayedVoucherValues('send_voucher')"
-                                  :key="`edit-send-${idx}-${getVoucherLabel(voucher)}`"
-                                  class="flex items-center justify-between gap-2 rounded-lg border border-[#e8eef8] bg-[#fbfdff] px-3 py-2"
-                                >
-                                  <a
-                                    v-if="voucherOpenHref(voucher)"
-                                    :href="voucherOpenHref(voucher)"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    class="min-w-0 truncate text-xs font-medium text-brasper-indigoStrong hover:underline"
-                                  >
-                                    {{ getVoucherLabel(voucher) }}
-                                  </a>
-                                  <span
-                                    v-else
-                                    class="min-w-0 truncate text-xs font-medium text-[#374151]"
-                                  >
-                                    {{ getVoucherLabel(voucher) }}
-                                  </span>
-                                  <button
-                                    v-if="idx >= persistedVoucherValues('send_voucher').length"
-                                    type="button"
-                                    class="shrink-0 text-xs font-semibold text-[#dc3545] hover:underline"
-                                    @click="removeVoucherAt('send_voucher', idx - persistedVoucherValues('send_voucher').length)"
-                                  >
-                                    Quitar
-                                  </button>
-                                </div>
-                              </div>
                             </div>
 
                             <div class="order-3 rounded-2xl border border-[#e8eef8] bg-white p-4">
@@ -4605,46 +4834,11 @@ onActivated(() => {
                                 />
                                 Agregar archivos
                               </label>
-                              <img
-                                v-if="activePaymentVoucherPreviewSrc"
-                                :src="activePaymentVoucherPreviewSrc"
-                                alt="Vista previa comprobante de pago"
-                                class="mt-3 max-h-24 w-full rounded-lg border border-[#e5e7eb] object-contain"
+                              <TransactionVoucherFileList
+                                :entries="voucherDisplayEntries('payment_voucher')"
+                                empty-label="Sin comprobantes de pago"
+                                @remove="removeDisplayedVoucher('payment_voucher', $event)"
                               />
-                              <div
-                                v-if="displayedVoucherValues('payment_voucher').length"
-                                class="mt-3 space-y-2"
-                              >
-                                <div
-                                  v-for="(voucher, idx) in displayedVoucherValues('payment_voucher')"
-                                  :key="`edit-payment-${idx}-${getVoucherLabel(voucher)}`"
-                                  class="flex items-center justify-between gap-2 rounded-lg border border-[#e8eef8] bg-[#fbfdff] px-3 py-2"
-                                >
-                                  <a
-                                    v-if="voucherOpenHref(voucher)"
-                                    :href="voucherOpenHref(voucher)"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    class="min-w-0 truncate text-xs font-medium text-brasper-indigoStrong hover:underline"
-                                  >
-                                    {{ getVoucherLabel(voucher) }}
-                                  </a>
-                                  <span
-                                    v-else
-                                    class="min-w-0 truncate text-xs font-medium text-[#374151]"
-                                  >
-                                    {{ getVoucherLabel(voucher) }}
-                                  </span>
-                                  <button
-                                    v-if="idx >= persistedVoucherValues('payment_voucher').length"
-                                    type="button"
-                                    class="shrink-0 text-xs font-semibold text-[#dc3545] hover:underline"
-                                    @click="removeVoucherAt('payment_voucher', idx - persistedVoucherValues('payment_voucher').length)"
-                                  >
-                                    Quitar
-                                  </button>
-                                </div>
-                              </div>
                             </div>
 
                             <div class="order-2 rounded-2xl border border-[#e8eef8] bg-white p-4">
@@ -4670,46 +4864,11 @@ onActivated(() => {
                                 />
                                 Agregar archivos
                               </label>
-                              <img
-                                v-if="activeCheckedImagePreviewSrc"
-                                :src="activeCheckedImagePreviewSrc"
-                                alt="Vista previa imagen de verificación"
-                                class="mt-3 max-h-24 w-full rounded-lg border border-[#e5e7eb] object-contain"
+                              <TransactionVoucherFileList
+                                :entries="voucherDisplayEntries('checked_image')"
+                                empty-label="Sin imagen de verificación"
+                                @remove="removeDisplayedVoucher('checked_image', $event)"
                               />
-                              <div
-                                v-if="displayedVoucherValues('checked_image').length"
-                                class="mt-3 space-y-2"
-                              >
-                                <div
-                                  v-for="(voucher, idx) in displayedVoucherValues('checked_image')"
-                                  :key="`edit-checked-${idx}-${getVoucherLabel(voucher)}`"
-                                  class="flex items-center justify-between gap-2 rounded-lg border border-[#e8eef8] bg-[#fbfdff] px-3 py-2"
-                                >
-                                  <a
-                                    v-if="voucherOpenHref(voucher)"
-                                    :href="voucherOpenHref(voucher)"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    class="min-w-0 truncate text-xs font-medium text-brasper-indigoStrong hover:underline"
-                                  >
-                                    {{ getVoucherLabel(voucher) }}
-                                  </a>
-                                  <span
-                                    v-else
-                                    class="min-w-0 truncate text-xs font-medium text-[#374151]"
-                                  >
-                                    {{ getVoucherLabel(voucher) }}
-                                  </span>
-                                  <button
-                                    v-if="idx >= persistedVoucherValues('checked_image').length"
-                                    type="button"
-                                    class="shrink-0 text-xs font-semibold text-[#dc3545] hover:underline"
-                                    @click="removeVoucherAt('checked_image', idx - persistedVoucherValues('checked_image').length)"
-                                  >
-                                    Quitar
-                                  </button>
-                                </div>
-                              </div>
                             </div>
                           </div>
                         </section>
@@ -5232,40 +5391,10 @@ onActivated(() => {
                     />
                     Agregar archivos
                   </label>
-                  <img
-                    v-if="sendVoucherPreviewSrc"
-                    :src="sendVoucherPreviewSrc"
-                    alt="Vista previa comprobante de envío"
-                    class="mt-4 max-h-44 w-full rounded-lg border border-[#e5e7eb] object-contain"
+                  <TransactionVoucherFileList
+                    :entries="voucherDisplayEntries('send_voucher')"
+                    @remove="removeDisplayedVoucher('send_voucher', $event)"
                   />
-                  <p
-                    v-if="formVoucherValues('send_voucher').length"
-                    class="mt-3 truncate text-xs font-medium text-[#374151]"
-                    :title="getVoucherLabel(form.send_voucher)"
-                  >
-                    {{ getVoucherLabel(form.send_voucher) }}
-                  </p>
-                  <div
-                    v-if="formVoucherValues('send_voucher').length"
-                    class="mt-3 space-y-2"
-                  >
-                    <div
-                      v-for="(voucher, idx) in formVoucherValues('send_voucher')"
-                      :key="`create-send-${idx}-${getVoucherLabel(voucher)}`"
-                      class="flex items-center justify-between gap-2 rounded-lg border border-[#e8eef8] bg-[#fbfdff] px-3 py-2"
-                    >
-                      <span class="min-w-0 truncate text-xs font-medium text-[#374151]">
-                        {{ getVoucherLabel(voucher) }}
-                      </span>
-                      <button
-                        type="button"
-                        class="shrink-0 text-xs font-semibold text-[#dc3545] hover:underline"
-                        @click="removeVoucherAt('send_voucher', idx)"
-                      >
-                        Quitar
-                      </button>
-                    </div>
-                  </div>
                 </div>
 
                 <div
@@ -5311,40 +5440,10 @@ onActivated(() => {
                     />
                     Agregar archivos
                   </label>
-                  <img
-                    v-if="paymentVoucherPreviewSrc"
-                    :src="paymentVoucherPreviewSrc"
-                    alt="Vista previa comprobante de pago"
-                    class="mt-4 max-h-44 w-full rounded-lg border border-[#e5e7eb] object-contain"
+                  <TransactionVoucherFileList
+                    :entries="voucherDisplayEntries('payment_voucher')"
+                    @remove="removeDisplayedVoucher('payment_voucher', $event)"
                   />
-                  <p
-                    v-if="formVoucherValues('payment_voucher').length"
-                    class="mt-3 truncate text-xs font-medium text-[#374151]"
-                    :title="getVoucherLabel(form.payment_voucher)"
-                  >
-                    {{ getVoucherLabel(form.payment_voucher) }}
-                  </p>
-                  <div
-                    v-if="formVoucherValues('payment_voucher').length"
-                    class="mt-3 space-y-2"
-                  >
-                    <div
-                      v-for="(voucher, idx) in formVoucherValues('payment_voucher')"
-                      :key="`create-payment-${idx}-${getVoucherLabel(voucher)}`"
-                      class="flex items-center justify-between gap-2 rounded-lg border border-[#e8eef8] bg-[#fbfdff] px-3 py-2"
-                    >
-                      <span class="min-w-0 truncate text-xs font-medium text-[#374151]">
-                        {{ getVoucherLabel(voucher) }}
-                      </span>
-                      <button
-                        type="button"
-                        class="shrink-0 text-xs font-semibold text-[#dc3545] hover:underline"
-                        @click="removeVoucherAt('payment_voucher', idx)"
-                      >
-                        Quitar
-                      </button>
-                    </div>
-                  </div>
                 </div>
 
                 <div
@@ -5412,40 +5511,10 @@ onActivated(() => {
                     />
                     Agregar archivos
                   </label>
-                  <img
-                    v-if="checkedImagePreviewSrc"
-                    :src="checkedImagePreviewSrc"
-                    alt="Vista previa imagen de verificación"
-                    class="mt-4 max-h-44 w-full rounded-lg border border-[#e5e7eb] object-contain"
+                  <TransactionVoucherFileList
+                    :entries="voucherDisplayEntries('checked_image')"
+                    @remove="removeDisplayedVoucher('checked_image', $event)"
                   />
-                  <p
-                    v-if="formVoucherValues('checked_image').length"
-                    class="mt-3 truncate text-xs font-medium text-[#374151]"
-                    :title="getVoucherLabel(form.checked_image)"
-                  >
-                    {{ getVoucherLabel(form.checked_image) }}
-                  </p>
-                  <div
-                    v-if="formVoucherValues('checked_image').length"
-                    class="mt-3 space-y-2"
-                  >
-                    <div
-                      v-for="(voucher, idx) in formVoucherValues('checked_image')"
-                      :key="`create-checked-${idx}-${getVoucherLabel(voucher)}`"
-                      class="flex items-center justify-between gap-2 rounded-lg border border-[#e8eef8] bg-[#fbfdff] px-3 py-2"
-                    >
-                      <span class="min-w-0 truncate text-xs font-medium text-[#374151]">
-                        {{ getVoucherLabel(voucher) }}
-                      </span>
-                      <button
-                        type="button"
-                        class="shrink-0 text-xs font-semibold text-[#dc3545] hover:underline"
-                        @click="removeVoucherAt('checked_image', idx)"
-                      >
-                        Quitar
-                      </button>
-                    </div>
-                  </div>
                 </div>
               </div>
 

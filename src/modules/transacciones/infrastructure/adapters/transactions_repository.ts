@@ -55,6 +55,14 @@ export interface CreateTransactionPayload {
 export interface UpdateTransactionPayload extends Partial<CreateTransactionPayload> {
   /** PUT: el servidor recalcula `status` salvo `failed`. */
   checked?: boolean
+  /**
+   * Borrado individual de comprobantes ya subidos: lista autoritativa de los
+   * archivos EXISTENTES que deben conservarse (keys o URLs del GET). Los
+   * archivos nuevos del mismo request se agregan después en el servidor.
+   */
+  send_vouchers_keep?: string[]
+  payment_vouchers_keep?: string[]
+  checked_images_keep?: string[]
 }
 
 export interface GetTransactionsParams {

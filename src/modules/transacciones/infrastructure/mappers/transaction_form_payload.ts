@@ -23,11 +23,22 @@ export function appendFormValue(form: FormData, key: string, value: unknown): vo
     return
   }
 
+  // `null` significa "limpiar el campo": el backend interpreta cadena vacía como None.
+  // (String(null) enviaría el literal "null" y corrompería campos de texto.)
+  if (value === null) {
+    form.append(key, '')
+    return
+  }
   if (value instanceof File) {
     appendFileToForm(form, key, value)
     return
   }
   if (key === 'destinations' && Array.isArray(value)) {
+    form.append(key, JSON.stringify(value))
+    return
+  }
+  // Listas de conservación de comprobantes (borrado individual): JSON para form-data.
+  if (key.endsWith('_keep') && Array.isArray(value)) {
     form.append(key, JSON.stringify(value))
     return
   }

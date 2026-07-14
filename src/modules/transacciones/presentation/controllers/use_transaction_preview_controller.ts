@@ -28,6 +28,23 @@ export type PreviewSection = {
   items: PreviewItem[];
 };
 
+/** Fila estructurada de una cuenta destino para el preview (multicuentas). */
+export type PreviewDestinationRow = {
+  position: number;
+  bankLabel: string;
+  accountLabel: string;
+  /** Titular de la cuenta (usuario o razón social según el tipo). */
+  holderLabel: string;
+  amountLabel: string;
+  /** Porcentaje del total a recibir; null con una sola cuenta. */
+  shareLabel: string | null;
+};
+
+export type PreviewDestinationsSummary = {
+  rows: PreviewDestinationRow[];
+  totalLabel: string;
+};
+
 const SKIP_KEYS = new Set([
   "send_voucher",
   "payment_voucher",
@@ -73,23 +90,38 @@ export function useTransactionPreviewController() {
   const comisionesStore = useComisionesStore();
   const cuentasStore = useCuentasBancariasStore();
 
-  function bankAccountToLabel(a: BankAccount): string {
+  function bankAccountBankLabel(a: BankAccount): string {
     const bank = cuentasStore.banks.find((b) => b.id === a.bank_id);
-    const bankName = bank
+    return bank
       ? `${bank.bank}${bank.currency ? ` (${bank.currency})` : ""}`
       : "—";
-    const holder =
-      (a.account_holder_type ?? "").toLowerCase().includes("juridica") ||
-      (a.account_holder_type ?? "").toLowerCase().includes("legal")
-        ? (a.business_name ?? "—")
-        : [a.holder_names, a.holder_surnames].filter(Boolean).join(" ") ||
-          "—";
+  }
+
+  function bankAccountHolderLabel(a: BankAccount): string {
+    const type = (a.account_holder_type ?? "").toLowerCase();
+    if (
+      type.includes("juridica") ||
+      type.includes("jurídica") ||
+      type.includes("legal")
+    ) {
+      return (a.business_name ?? "").trim() || "—";
+    }
+    return (
+      [a.holder_names, a.holder_surnames].filter(Boolean).join(" ").trim() ||
+      "—"
+    );
+  }
+
+  function bankAccountNumbersLabel(a: BankAccount): string {
     const nums = [];
     if (a.account_number?.trim()) nums.push(a.account_number.trim());
     if (a.cci_number?.trim()) nums.push(`CCI: ${a.cci_number.trim()}`);
     if (a.pix_key?.trim()) nums.push(`PIX: ${a.pix_key.trim()}`);
-    const accNum = nums.length > 0 ? nums.join(" / ") : "—";
-    return `${bankName} - ${accNum} (${holder})`;
+    return nums.length > 0 ? nums.join(" / ") : "—";
+  }
+
+  function bankAccountToLabel(a: BankAccount): string {
+    return `${bankAccountBankLabel(a)} - ${bankAccountNumbersLabel(a)} (${bankAccountHolderLabel(a)})`;
   }
 
   function getBankLabel(id: string | undefined): string {
@@ -188,6 +220,64 @@ export function useTransactionPreviewController() {
     ]);
   }
 
+  /**
+   * Cuentas destino estructuradas (banco, número, titular, monto y % del total).
+   * Con transacciones legacy sin `destinations`, cae a la cuenta destino única.
+   */
+  function buildPreviewDestinations(t: Transaction): PreviewDestinationsSummary {
+    const rec = t as Record<string, unknown>;
+    const currencies = getTransactionCurrencies(rec);
+    const total = Number(rec.destination_amount) || 0;
+
+    const stored = Array.isArray(rec.destinations)
+      ? rec.destinations
+          .map((item) => {
+            if (item == null || typeof item !== "object") return null;
+            const destination = item as Record<string, unknown>;
+            const accountId = String(destination.bank_account_id ?? "").trim();
+            if (!accountId) return null;
+            return { accountId, amount: Number(destination.amount) };
+          })
+          .filter((item): item is { accountId: string; amount: number } =>
+            Boolean(item),
+          )
+      : [];
+
+    const fallbackId = String(rec.bank_account_destination_id ?? "").trim();
+    const items =
+      stored.length > 0
+        ? stored
+        : fallbackId
+          ? [{ accountId: fallbackId, amount: total }]
+          : [];
+
+    const rows = items.map((item, index) => {
+      const acc = cuentasStore.bankAccounts.find(
+        (candidate) => candidate.id === item.accountId,
+      );
+      const amountValid = Number.isFinite(item.amount);
+      const share =
+        items.length > 1 && total > 0 && amountValid
+          ? Math.round((item.amount / total) * 100)
+          : null;
+      return {
+        position: index + 1,
+        bankLabel: acc ? bankAccountBankLabel(acc) : item.accountId || "—",
+        accountLabel: acc ? bankAccountNumbersLabel(acc) : "—",
+        holderLabel: acc ? bankAccountHolderLabel(acc) : "—",
+        amountLabel: amountValid
+          ? formatMoneyWithCurrency(item.amount, currencies.destination)
+          : "—",
+        shareLabel: share != null ? `${share}%` : null,
+      };
+    });
+
+    return {
+      rows,
+      totalLabel: formatMoneyWithCurrency(total, currencies.destination),
+    };
+  }
+
   function buildPreviewSections(t: Transaction): PreviewSection[] {
     const rec = t as Record<string, unknown>;
     const sections: PreviewSection[] = [];
@@ -221,36 +311,30 @@ export function useTransactionPreviewController() {
           label: "Ventas / asesor",
           value: getClientLabel(rec.agent_id as string),
         },
+        {
+          label: "N.º operación",
+          value:
+            rec.operation_number != null && String(rec.operation_number).trim()
+              ? String(rec.operation_number).trim()
+              : "—",
+          variant: "mono",
+        },
       ],
     });
 
     const razonSocial = typeof rec.company_name === "string" ? rec.company_name.trim() : "";
-    const destinationSummary = Array.isArray(rec.destinations) && rec.destinations.length > 0
-      ? rec.destinations
-          .map((item) => {
-            if (item == null || typeof item !== "object") return "";
-            const destination = item as Record<string, unknown>;
-            const accountId = String(destination.bank_account_id ?? "").trim();
-            const amount = Number(destination.amount);
-            if (!accountId) return "";
-            return Number.isFinite(amount)
-              ? `${getBankLabel(accountId)}: ${amount.toFixed(2)}`
-              : getBankLabel(accountId);
-          })
-          .filter(Boolean)
-          .join(" · ")
-      : getBankLabel(rec.bank_account_destination_id as string);
 
+    // Las cuentas destino se muestran estructuradas vía buildPreviewDestinations.
     sections.push({
       id: "participantes",
       title: "Participantes",
-      subtitle: "Cliente y cuentas vinculadas",
+      subtitle: "Cliente y razón social",
       items: [
         { label: "Cliente", value: getClientLabel(rec.user_id as string) },
         { label: "Razón social", value: razonSocial || "—" },
         {
-          label: "Cuentas destino",
-          value: destinationSummary,
+          label: "Cuenta origen",
+          value: getBankLabel(rec.bank_account_origin_id as string),
         },
       ],
     });
@@ -478,6 +562,22 @@ export function useTransactionPreviewController() {
       "payment_voucher",
       "checked_image",
       "bank_account_id",
+      // Ya representados en otras secciones del preview (comprobantes,
+      // participantes, resumen); no repetirlos como texto crudo.
+      "send_vouchers",
+      "payment_vouchers",
+      "checked_images",
+      "send_voucher_files",
+      "payment_voucher_files",
+      "checked_image_files",
+      "destinations",
+      "bank_id",
+      "bank_name",
+      "company_name",
+      "social_reason_bank_id",
+      "operation_number",
+      "numero_operacion",
+      "agent",
     ]);
 
     const extra: PreviewItem[] = [];
@@ -508,5 +608,6 @@ export function useTransactionPreviewController() {
   return {
     ensurePreviewCatalogLoaded,
     buildPreviewSections,
+    buildPreviewDestinations,
   };
 }
