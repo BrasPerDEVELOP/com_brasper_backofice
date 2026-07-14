@@ -2,11 +2,19 @@
  * Transacción (API) — alineado con el modelo ORM / respuesta PUT+GET.
  * IDs planos + `user` anidado opcional en JSON; alias legacy en import/cálculos.
  */
+export interface TransactionDestination {
+  id?: string
+  bank_account_id: string
+  amount: number
+  position?: number
+}
+
 export interface Transaction {
   id?: string
   bank_account_id?: string
   bank_account_origin_id?: string
   bank_account_destination_id?: string
+  destinations?: TransactionDestination[]
   user_id?: string
   agent_id?: string
   tax_rate_id?: string

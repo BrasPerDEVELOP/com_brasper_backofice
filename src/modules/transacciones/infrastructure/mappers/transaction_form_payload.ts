@@ -27,6 +27,10 @@ export function appendFormValue(form: FormData, key: string, value: unknown): vo
     appendFileToForm(form, key, value)
     return
   }
+  if (key === 'destinations' && Array.isArray(value)) {
+    form.append(key, JSON.stringify(value))
+    return
+  }
   if (typeof value === 'boolean') {
     form.append(key, value ? 'true' : 'false')
     return

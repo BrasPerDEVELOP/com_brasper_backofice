@@ -225,6 +225,21 @@ export function useTransactionPreviewController() {
     });
 
     const razonSocial = typeof rec.company_name === "string" ? rec.company_name.trim() : "";
+    const destinationSummary = Array.isArray(rec.destinations) && rec.destinations.length > 0
+      ? rec.destinations
+          .map((item) => {
+            if (item == null || typeof item !== "object") return "";
+            const destination = item as Record<string, unknown>;
+            const accountId = String(destination.bank_account_id ?? "").trim();
+            const amount = Number(destination.amount);
+            if (!accountId) return "";
+            return Number.isFinite(amount)
+              ? `${getBankLabel(accountId)}: ${amount.toFixed(2)}`
+              : getBankLabel(accountId);
+          })
+          .filter(Boolean)
+          .join(" · ")
+      : getBankLabel(rec.bank_account_destination_id as string);
 
     sections.push({
       id: "participantes",
@@ -234,8 +249,8 @@ export function useTransactionPreviewController() {
         { label: "Cliente", value: getClientLabel(rec.user_id as string) },
         { label: "Razón social", value: razonSocial || "—" },
         {
-          label: "Cuenta destino",
-          value: getBankLabel(rec.bank_account_destination_id as string),
+          label: "Cuentas destino",
+          value: destinationSummary,
         },
       ],
     });

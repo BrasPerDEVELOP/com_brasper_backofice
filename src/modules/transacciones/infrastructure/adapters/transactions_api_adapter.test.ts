@@ -60,6 +60,28 @@ describe('TransactionsApiAdapter social_reason_bank_id', () => {
     expect(form.get('social_reason_bank_id')).toBe('santander-id')
   })
 
+  it('serializa las cuentas destino en el multipart del POST', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 'tx-1' }))
+    const destinations = [
+      { bank_account_id: 'bcp', amount: 300 },
+      { bank_account_id: 'interbank', amount: 330 }
+    ]
+
+    await adapter.createTransaction({
+      bank_account_destination: 'bcp',
+      destinations,
+      user_id: 'user-1',
+      tax_rate_id: 'rate-1',
+      commission_id: 'commission-1',
+      origin_amount: 1000,
+      destination_amount: 630,
+      code: 'TX-1'
+    })
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect((init.body as FormData).get('destinations')).toBe(JSON.stringify(destinations))
+  })
+
   it('conserva null explícito en PUT para limpiar la selección', async () => {
     putMock.mockResolvedValue({ data: { id: 'tx-1' } })
 

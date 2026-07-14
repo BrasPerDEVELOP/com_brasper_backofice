@@ -1,5 +1,10 @@
 import type { Transaction } from '../../domain/models'
 
+export interface TransactionDestinationPayload {
+  bank_account_id: string
+  amount: number
+}
+
 export type TransactionAttachmentValue = string | File
 export type TransactionAttachmentPayload =
   | TransactionAttachmentValue
@@ -10,6 +15,7 @@ export interface CreateTransactionPayload {
   /** Opcional: el flujo permite crear sin cuenta de origen asignada. */
   bank_account_origin?: string
   bank_account_destination: string
+  destinations?: TransactionDestinationPayload[]
   user_id: string
   agent_id?: string
   tax_rate_id: string

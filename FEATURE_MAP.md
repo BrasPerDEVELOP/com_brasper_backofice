@@ -75,6 +75,7 @@ defensivos en los handlers).
 | FormData POST transaction | adapter + `fetch` | No axios (boundary) |
 | Field aliases | adapters | `resultado_comision` ↔ `commission_result` |
 | Razón social exacta | `social_reason_bank_id` | FK independiente; `bank_id` sigue perteneciendo a la cuenta destino |
+| Múltiples cuentas destino | `destinations[]` | Lista cuenta+monto; `bank_account_destination_id` conserva el primer destino por compatibilidad |
 | Cloudinary blog | `blog_view.vue` | Mover a adapter + env (Fase C blog) |
 
 ---

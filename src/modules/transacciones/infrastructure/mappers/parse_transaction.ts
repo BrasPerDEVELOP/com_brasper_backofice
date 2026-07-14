@@ -1,4 +1,23 @@
-import type { Transaction } from '../../domain/models'
+import type { Transaction, TransactionDestination } from '../../domain/models'
+
+function parseDestinations(value: unknown): TransactionDestination[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  return value.flatMap((item, index) => {
+    if (item == null || typeof item !== 'object') return []
+    const record = item as Record<string, unknown>
+    const bankAccountId = coerceBankAccountId(
+      record.bank_account_id ?? record.bank_account ?? record.account_id
+    )
+    const amount = parseOptionalAmount(record.amount)
+    if (!bankAccountId || amount == null) return []
+    return [{
+      id: record.id != null ? String(record.id) : undefined,
+      bank_account_id: bankAccountId,
+      amount,
+      position: Number.isFinite(Number(record.position)) ? Number(record.position) : index
+    }]
+  })
+}
 
 function parseOptionalAmount(v: unknown): number | undefined {
   if (v == null || v === '') return undefined
@@ -211,6 +230,7 @@ export function parseTransaction(item: unknown): Transaction {
     bank_account_id: legacySingle,
     bank_account_origin_id: originFromFlat,
     bank_account_destination_id: destFromFlat,
+    destinations: parseDestinations(o.destinations),
     user_id: coerceUserId(o.user_id) ?? coerceUserId(o.user),
     agent_id:
       coerceUserId(o.agent_id) ??

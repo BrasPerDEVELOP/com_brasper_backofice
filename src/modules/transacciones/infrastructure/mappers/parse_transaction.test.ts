@@ -28,6 +28,18 @@ describe('parseTransaction', () => {
     expect(parseTransaction({}).origin_amount).toBe(0)
   })
 
+  it('normaliza múltiples cuentas destino', () => {
+    expect(parseTransaction({
+      destinations: [
+        { id: 1, bank_account_id: 'bcp', amount: '300', position: 0 },
+        { id: 2, bank_account: { id: 'interbank' }, amount: 330, position: 1 }
+      ]
+    }).destinations).toEqual([
+      { id: '1', bank_account_id: 'bcp', amount: 300, position: 0 },
+      { id: '2', bank_account_id: 'interbank', amount: 330, position: 1 }
+    ])
+  })
+
   it('resuelve alias de estado (estado/transaction_status/state)', () => {
     expect(parseTransaction({ estado: 'pending' }).status).toBe('pending')
     expect(parseTransaction({ transaction_status: 'failed' }).status).toBe('failed')

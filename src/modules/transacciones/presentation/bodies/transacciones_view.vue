@@ -58,6 +58,12 @@ import { Domain } from "@/interface/infrastructure/services";
 import { useTransactionPreviewController } from "../controllers/use_transaction_preview_controller";
 import { useTransactionStatusLabels } from "../composables/use_transaction_status_labels";
 import { fetchUsers } from "@modules/auth/infrastructure/adapters/users_management_api_adapter";
+import TransactionDestinationsEditor from "../components/TransactionDestinationsEditor.vue";
+import {
+  emptyTransactionDestination,
+  validateTransactionDestinations,
+  type TransactionDestinationDraft,
+} from "../composables/use_transaction_destinations";
 
 // C1 (Fase C, H3) — facade multi-store en lugar de 5 useXStore() en la vista.
 const { transactionsStore, cuentasStore, tasasStore, comisionesStore, calculatorStore } =
@@ -224,6 +230,7 @@ type VoucherFormValue = string | File;
 const form = reactive<{
   bank_account_origin_id: string;
   bank_account_destination_id: string;
+  destinations: TransactionDestinationDraft[];
   user_id: string;
   agent_id: string;
   tax_rate_id: string;
@@ -246,6 +253,7 @@ const form = reactive<{
 }>({
   bank_account_origin_id: "",
   bank_account_destination_id: "",
+  destinations: [emptyTransactionDestination()],
   user_id: "",
   agent_id: "",
   tax_rate_id: "",
@@ -271,6 +279,19 @@ const editingId = ref<string | null>(null);
 const editSourceTransaction = ref<Transaction | null>(null);
 const isEditingMode = computed(() => Boolean(editingId.value));
 const isHydratingTransactionForm = ref(false);
+
+const destinationDraftsModel = computed({
+  get: () => form.destinations,
+  set: (value: TransactionDestinationDraft[]) => {
+    form.destinations = value.length > 0 ? value : [emptyTransactionDestination()];
+    form.bank_account_destination_id =
+      form.destinations[0]?.bank_account_id?.trim() ?? "";
+  },
+});
+
+const destinationDistributionValidation = computed(() =>
+  validateTransactionDestinations(form.destinations, form.destination_amount),
+);
 
 function clearStoredSocialReasonSelection() {
   editStoredCompanyName.value = "";
@@ -504,7 +525,19 @@ async function onTransactionBankAccountCreated(account: BankAccount) {
   if (bankAccountCreateFlow.value === "origin") {
     form.bank_account_origin_id = account.id;
   } else {
-    form.bank_account_destination_id = account.id;
+    const emptyIndex = form.destinations.findIndex(
+      (destination) => !destination.bank_account_id.trim(),
+    );
+    const next = [...form.destinations];
+    if (emptyIndex >= 0) {
+      next[emptyIndex] = {
+        ...(next[emptyIndex] ?? emptyTransactionDestination()),
+        bank_account_id: account.id,
+      };
+    } else {
+      next.push({ bank_account_id: account.id, amount: null });
+    }
+    destinationDraftsModel.value = next;
   }
 }
 
@@ -907,8 +940,9 @@ function isBankAccountSelectable(
   const account = findBankAccountById(accountId);
   if (!account) return false;
   if (flow === "origin" && !bankAccountMatchesSide(account, flow)) return false;
-  if (flow === "destination" && userId && !bankAccountBelongsToClient(account, userId)) {
-    return false;
+  if (flow === "destination") {
+    if (!bankAccountMatchesSide(account, flow)) return false;
+    if (userId && !bankAccountBelongsToClient(account, userId)) return false;
   }
   return bankAccountMatchesCurrency(account, expectedCurrency);
 }
@@ -929,6 +963,7 @@ const destinationAccountOptions = computed(() => {
   const currency = selectedAccountCurrencies.value.destination;
   const base = bankAccountsForSelectedClient()
     .filter((a) => String(a.id ?? "").trim())
+    .filter((a) => bankAccountMatchesSide(a, "destination"))
     .filter((a) => bankAccountMatchesCurrency(a, currency))
     .map(destinationBankAccountToOption);
   return mergeMissingSelectedAccount(
@@ -1278,6 +1313,7 @@ function syncCurrentPageToTotal() {
 function resetForm() {
   form.bank_account_origin_id = "";
   form.bank_account_destination_id = "";
+  form.destinations = [emptyTransactionDestination()];
   form.user_id = "";
   form.agent_id = "";
   form.tax_rate_id = "";
@@ -1622,6 +1658,21 @@ async function hydrateEditForm(row: Transaction) {
         row.bank_account_destination_id ??
           (row as Record<string, unknown>).bank_account_destination,
       ) || normalizeSelectId(row.bank_account_id);
+    const storedDestinations = Array.isArray(row.destinations)
+      ? row.destinations
+          .map((destination) => ({
+            bank_account_id: normalizeSelectId(destination.bank_account_id),
+            amount: roundMoneyAmount(Number(destination.amount) || 0),
+          }))
+          .filter((destination) => destination.bank_account_id)
+      : [];
+    form.destinations = storedDestinations.length > 0
+      ? storedDestinations
+      : [{
+          bank_account_id: form.bank_account_destination_id,
+          amount: roundMoneyAmount(Number(row.destination_amount) || 0),
+        }];
+    form.bank_account_destination_id = form.destinations[0]?.bank_account_id ?? "";
     form.tax_rate_id = row.tax_rate_id ?? "";
     form.commission_id = row.commission_id ?? "";
     form.status = (row.status ?? "verification").toLowerCase();
@@ -1744,6 +1795,10 @@ async function submitForm() {
       "Cuenta destino y cliente son obligatorios";
     return;
   }
+  if (destinationDistributionValidation.value.error) {
+    transactionsStore.error = destinationDistributionValidation.value.error;
+    return;
+  }
   if (!form.tax_rate_id || !form.commission_id) {
     transactionsStore.error =
       editingId.value
@@ -1792,6 +1847,10 @@ async function submitForm() {
         ? { bank_account_origin: form.bank_account_origin_id.trim() }
         : {}),
       bank_account_destination: form.bank_account_destination_id,
+      destinations: form.destinations.map((destination) => ({
+        bank_account_id: destination.bank_account_id.trim(),
+        amount: roundMoneyAmount(Number(destination.amount) || 0),
+      })),
       user_id: form.user_id,
       agent_id:
         form.agent_id?.trim() &&
@@ -2023,6 +2082,11 @@ const editPreviewTransaction = computed<Transaction | null>(() => {
       form.bank_account_origin_id || base.bank_account_origin_id,
     bank_account_destination_id:
       form.bank_account_destination_id || base.bank_account_destination_id,
+    destinations: form.destinations.map((destination, position) => ({
+      bank_account_id: destination.bank_account_id,
+      amount: Number(destination.amount) || 0,
+      position,
+    })),
     tax_rate_id: form.tax_rate_id || base.tax_rate_id,
     commission_id: form.commission_id || base.commission_id,
     status: form.status || base.status,
@@ -2087,8 +2151,8 @@ const editHeroParticipants = computed(() => {
       value: getBankCurrencyTableLabel(t.bank_account_origin_id),
     },
     {
-      label: "Cuenta destino",
-      value: getBankCurrencyTableLabel(t.bank_account_destination_id),
+      label: "Cuentas destino",
+      value: getTransactionDestinationAccountsLabel(t),
     },
   ];
 });
@@ -2324,6 +2388,34 @@ function getBankCurrencyTableLabel(id: string | undefined): string {
   return bank.currency
     ? `${bank.bank} (${bank.currency})`
     : bank.bank;
+}
+
+function getTransactionDestinationAccountsLabel(t: Transaction): string {
+  const ids = (t.destinations ?? [])
+    .map((destination) => destination.bank_account_id?.trim())
+    .filter(Boolean);
+  const effectiveIds = ids.length > 0
+    ? ids
+    : [t.bank_account_destination_id?.trim()].filter(Boolean) as string[];
+  if (effectiveIds.length === 0) return "-";
+  const first = getBankCurrencyTableLabel(effectiveIds[0]);
+  const additional = effectiveIds.length - 1;
+  return additional > 0
+    ? `${first} +${additional} ${additional === 1 ? "cuenta" : "cuentas"}`
+    : first;
+}
+
+function getTransactionDestinationAccountsTitle(t: Transaction): string {
+  const destinations = t.destinations ?? [];
+  if (destinations.length === 0) {
+    return getBankCurrencyTableLabel(t.bank_account_destination_id);
+  }
+  const currency = getTransactionCurrencies(t).destination;
+  return destinations
+    .map((destination) =>
+      `${getBankCurrencyTableLabel(destination.bank_account_id)}: ${formatValueWithCurrency(destination.amount, currency)}`,
+    )
+    .join(" · ");
 }
 
 /** Tabla: razón social de la empresa (`company_name` en API). */
@@ -2729,15 +2821,23 @@ watch(
       form.bank_account_origin_id = "";
     }
 
-    if (
-      form.bank_account_destination_id &&
+    const normalizedDestinations = form.destinations.map((destination) =>
+      destination.bank_account_id &&
       !isBankAccountSelectable(
-        form.bank_account_destination_id,
+        destination.bank_account_id,
         "destination",
         selectedAccountCurrencies.value.destination,
       )
+        ? { ...destination, bank_account_id: "" }
+        : destination,
+    );
+    if (
+      normalizedDestinations.some(
+        (destination, index) =>
+          destination.bank_account_id !== form.destinations[index]?.bank_account_id,
+      )
     ) {
-      form.bank_account_destination_id = "";
+      destinationDraftsModel.value = normalizedDestinations;
     }
   },
 );
@@ -3200,9 +3300,9 @@ onActivated(() => {
             </td>
             <td
               class="max-w-[180px] truncate px-4 py-3 text-[#374151]"
-              :title="getBankCurrencyTableLabel(t.bank_account_destination_id)"
+              :title="getTransactionDestinationAccountsTitle(t)"
             >
-              {{ getBankCurrencyTableLabel(t.bank_account_destination_id) }}
+              {{ getTransactionDestinationAccountsLabel(t) }}
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-center tabular-nums text-[#374151]">
               {{
@@ -4303,50 +4403,16 @@ onActivated(() => {
                             </div>
                             <div class="space-y-1.5 sm:col-span-2">
                               <label class="block text-sm font-medium text-[#374151]"
-                                >Cuenta destino *</label
+                                >Cuentas destino *</label
                               >
-                              <div class="flex gap-2">
-                                <AppDropdown
-                                  v-model="form.bank_account_destination_id"
-                                  :options="destinationAccountOptions"
-                                  placeholder="Cuenta destino"
-                                  :searchable="destinationAccountOptions.length > 5"
-                                  class="min-w-0 flex-1"
-                                />
-                                <button
-                                  type="button"
-                                  class="flex shrink-0 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white p-2.5 text-[#6b7280] transition hover:border-[#d1d5db] hover:bg-[#f9fafb] hover:text-[#374151]"
-                                  title="Nueva cuenta bancaria (destino)"
-                                  @click="openBankAccountModalFromTransaction('destination')"
-                                >
-                                  <svg
-                                    class="h-5 w-5"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                    aria-hidden="true"
-                                  >
-                                    <path
-                                      stroke-linecap="round"
-                                      stroke-linejoin="round"
-                                      stroke-width="2"
-                                      d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                                    />
-                                    <path
-                                      stroke-linecap="round"
-                                      stroke-linejoin="round"
-                                      stroke-width="2"
-                                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                                    />
-                                  </svg>
-                                </button>
-                              </div>
-                              <p
-                                v-if="destinationAccountsLoading"
-                                class="text-xs text-[#6b7280]"
-                              >
-                                Cargando cuentas del cliente…
-                              </p>
+                              <TransactionDestinationsEditor
+                                v-model="destinationDraftsModel"
+                                :options="destinationAccountOptions"
+                                :expected-total="form.destination_amount"
+                                :currency="selectedAccountCurrencies.destination"
+                                :loading="destinationAccountsLoading"
+                                @create-account="openBankAccountModalFromTransaction('destination')"
+                              />
                             </div>
                             <div
                               v-if="showDestinationBankCatalogWarning"
@@ -4858,50 +4924,16 @@ onActivated(() => {
                   </div>
                   <div class="space-y-1.5 sm:col-span-2">
                     <label class="block text-sm font-medium text-[#374151]"
-                      >Cuenta destino *</label
+                      >Cuentas destino *</label
                     >
-                    <div class="flex gap-2">
-                      <AppDropdown
-                        v-model="form.bank_account_destination_id"
-                        :options="destinationAccountOptions"
-                        placeholder="Cuenta de destino"
-                        :searchable="destinationAccountOptions.length > 5"
-                        class="min-w-0 flex-1"
-                      />
-                      <button
-                        type="button"
-                        class="flex shrink-0 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white p-2.5 text-[#6b7280] transition hover:border-[#d1d5db] hover:bg-[#f9fafb] hover:text-[#374151]"
-                        title="Nueva cuenta bancaria (destino)"
-                        @click="openBankAccountModalFromTransaction('destination')"
-                      >
-                        <svg
-                          class="h-5 w-5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                          aria-hidden="true"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                          />
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                          />
-                        </svg>
-                      </button>
-                    </div>
-                    <p
-                      v-if="destinationAccountsLoading"
-                      class="text-xs text-[#6b7280]"
-                    >
-                      Cargando cuentas del cliente…
-                    </p>
+                    <TransactionDestinationsEditor
+                      v-model="destinationDraftsModel"
+                      :options="destinationAccountOptions"
+                      :expected-total="form.destination_amount"
+                      :currency="selectedAccountCurrencies.destination"
+                      :loading="destinationAccountsLoading"
+                      @create-account="openBankAccountModalFromTransaction('destination')"
+                    />
                   </div>
                   <div
                     v-if="showDestinationBankCatalogWarning"

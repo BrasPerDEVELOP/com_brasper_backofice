@@ -109,6 +109,9 @@ export class TransactionsApiAdapter implements TransactionsRepository {
       formData.append('bank_account_origin', payload.bank_account_origin.trim())
     }
     formData.append('bank_account_destination', payload.bank_account_destination)
+    if (payload.destinations != null) {
+      formData.append('destinations', JSON.stringify(payload.destinations))
+    }
     formData.append('user_id', payload.user_id)
     if (payload.agent_id != null && payload.agent_id !== '') {
       formData.append('agent_id', payload.agent_id)
