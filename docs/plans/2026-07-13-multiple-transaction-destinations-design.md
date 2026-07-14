@@ -11,7 +11,9 @@ transacción.
 
 La API incorpora `destinations`, una lista ordenada de objetos con
 `bank_account_id` y `amount`. La suma monetaria, redondeada a dos decimales,
-debe coincidir con `destination_amount`. No se aceptan montos no positivos,
+debe coincidir con `destination_amount`. El servidor tolera una diferencia de
+un centavo causada por el orden de redondeo y normaliza el total a la
+distribución manual. No se aceptan montos no positivos,
 cuentas repetidas, cuentas de otro usuario ni cuentas con otra moneda.
 
 Una tabla hija `transaction_destinations` es la fuente de verdad. Los campos
