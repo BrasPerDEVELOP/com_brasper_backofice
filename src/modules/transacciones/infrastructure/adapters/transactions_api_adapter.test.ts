@@ -1,9 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { putMock } = vi.hoisted(() => ({ putMock: vi.fn() }))
+const { deleteMock, putMock } = vi.hoisted(() => ({
+  deleteMock: vi.fn(),
+  putMock: vi.fn()
+}))
 
 vi.mock('@/interface/api/client', () => ({
   apiClient: {
+    delete: deleteMock,
     put: putMock
   },
   getApiAuthHeaders: () => ({}),
@@ -33,6 +37,7 @@ describe('TransactionsApiAdapter social_reason_bank_id', () => {
   beforeEach(() => {
     adapter = new TransactionsApiAdapter()
     fetchMock.mockReset()
+    deleteMock.mockReset()
     putMock.mockReset()
     vi.stubGlobal('fetch', fetchMock)
   })
@@ -102,5 +107,13 @@ describe('TransactionsApiAdapter social_reason_bank_id', () => {
       id: 'tx-1',
       social_reason_bank_id: null
     })
+  })
+
+  it('elimina sin barra final para evitar la redirección 307 hacia HTTP', async () => {
+    deleteMock.mockResolvedValue({ data: null })
+
+    await adapter.deleteTransaction('tx-1')
+
+    expect(deleteMock).toHaveBeenCalledWith('transactions/tx-1')
   })
 })

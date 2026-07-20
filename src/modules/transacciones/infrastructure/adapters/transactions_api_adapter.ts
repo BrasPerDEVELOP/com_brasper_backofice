@@ -263,7 +263,9 @@ export class TransactionsApiAdapter implements TransactionsRepository {
   }
 
   async deleteTransaction(id: string): Promise<void> {
-    const url = this.endpoint(`${id}/`)
+    // La ruta detail del backend no lleva barra final. Con `/`, el proxy responde
+    // 307 hacia HTTP y el navegador bloquea el DELETE por contenido mixto.
+    const url = this.endpoint(id)
     await apiClient.delete(url)
   }
 
