@@ -2763,6 +2763,12 @@ function onVoucherFileSelect(
     input.value = "";
     return;
   }
+  appendVoucherFiles(field, files);
+  input.value = "";
+}
+
+/** Agrega archivos elegidos o imágenes pegadas al grupo de comprobantes. */
+function appendVoucherFiles(field: VoucherField, files: File[]) {
   form[field] = [...formVoucherValues(field), ...files];
   if (field === "payment_voucher") {
     if (!form.payment_date?.trim()) {
@@ -2770,7 +2776,16 @@ function onVoucherFileSelect(
     }
   }
   syncStatusFromVoucherFiles();
-  input.value = "";
+}
+
+/** Recibe imágenes copiadas desde WhatsApp, capturas u otra aplicación. */
+function onVoucherImagePaste(field: VoucherField, event: ClipboardEvent) {
+  const imageFiles = Array.from(event.clipboardData?.files ?? []).filter(
+    isImageFile,
+  );
+  if (!imageFiles.length) return;
+  event.preventDefault();
+  appendVoucherFiles(field, imageFiles);
 }
 
 function hasVoucherValue(value: unknown): boolean {
@@ -4785,7 +4800,12 @@ onActivated(() => {
                             </p>
                           </div>
                           <div class="grid gap-4 md:grid-cols-3">
-                            <div class="order-1 rounded-2xl border border-[#e8eef8] bg-white p-4">
+                            <div
+                              class="order-1 rounded-2xl border border-[#e8eef8] bg-white p-4 outline-none transition focus-within:border-brasper-indigoStrong/50 focus-within:ring-2 focus-within:ring-brasper-indigoStrong/10"
+                              tabindex="0"
+                              aria-label="Comprobante de envío: pega una imagen aquí"
+                              @paste="onVoucherImagePaste('send_voucher', $event)"
+                            >
                               <div class="mb-3 flex items-start justify-between gap-3">
                                 <div>
                                   <h4 class="text-sm font-semibold text-[#232b4d]">
@@ -4806,6 +4826,9 @@ onActivated(() => {
                                 />
                                 Agregar archivos
                               </label>
+                              <p class="mt-2 text-xs text-[#6b7280]">
+                                O pega una imagen aquí con Ctrl+V / Cmd+V
+                              </p>
                               <TransactionVoucherFileList
                                 :entries="voucherDisplayEntries('send_voucher')"
                                 empty-label="Sin comprobantes de envío"
@@ -4813,7 +4836,12 @@ onActivated(() => {
                               />
                             </div>
 
-                            <div class="order-3 rounded-2xl border border-[#e8eef8] bg-white p-4">
+                            <div
+                              class="order-3 rounded-2xl border border-[#e8eef8] bg-white p-4 outline-none transition focus-within:border-brasper-indigoStrong/50 focus-within:ring-2 focus-within:ring-brasper-indigoStrong/10"
+                              tabindex="0"
+                              aria-label="Comprobante de pago: pega una imagen aquí"
+                              @paste="onVoucherImagePaste('payment_voucher', $event)"
+                            >
                               <div class="mb-3 flex items-start justify-between gap-3">
                                 <div>
                                   <h4 class="text-sm font-semibold text-[#232b4d]">
@@ -4834,6 +4862,9 @@ onActivated(() => {
                                 />
                                 Agregar archivos
                               </label>
+                              <p class="mt-2 text-xs text-[#6b7280]">
+                                O pega una imagen aquí con Ctrl+V / Cmd+V
+                              </p>
                               <TransactionVoucherFileList
                                 :entries="voucherDisplayEntries('payment_voucher')"
                                 empty-label="Sin comprobantes de pago"
@@ -4841,7 +4872,12 @@ onActivated(() => {
                               />
                             </div>
 
-                            <div class="order-2 rounded-2xl border border-[#e8eef8] bg-white p-4">
+                            <div
+                              class="order-2 rounded-2xl border border-[#e8eef8] bg-white p-4 outline-none transition focus-within:border-brasper-indigoStrong/50 focus-within:ring-2 focus-within:ring-brasper-indigoStrong/10"
+                              tabindex="0"
+                              aria-label="Imagen de verificación: pega una imagen aquí"
+                              @paste="onVoucherImagePaste('checked_image', $event)"
+                            >
                               <div class="mb-3 flex items-start justify-between gap-3">
                                 <div>
                                   <h4 class="text-sm font-semibold text-[#232b4d]">
@@ -4864,6 +4900,9 @@ onActivated(() => {
                                 />
                                 Agregar archivos
                               </label>
+                              <p class="mt-2 text-xs text-[#6b7280]">
+                                O pega una imagen aquí con Ctrl+V / Cmd+V
+                              </p>
                               <TransactionVoucherFileList
                                 :entries="voucherDisplayEntries('checked_image')"
                                 empty-label="Sin imagen de verificación"
@@ -5349,7 +5388,10 @@ onActivated(() => {
 
               <div class="grid gap-5 md:grid-cols-3">
                 <div
-                  class="order-1 flex flex-col rounded-xl border border-[#d8e5fb] bg-white p-5 shadow-sm shadow-brasper-indigoStrong/5"
+                  class="order-1 flex flex-col rounded-xl border border-[#d8e5fb] bg-white p-5 shadow-sm shadow-brasper-indigoStrong/5 outline-none transition focus-within:border-brasper-indigoStrong/50 focus-within:ring-2 focus-within:ring-brasper-indigoStrong/10"
+                  tabindex="0"
+                  aria-label="Comprobante de envío: pega una imagen aquí"
+                  @paste="onVoucherImagePaste('send_voucher', $event)"
                 >
                   <div class="mb-4 flex items-start gap-3">
                     <span
@@ -5391,6 +5433,9 @@ onActivated(() => {
                     />
                     Agregar archivos
                   </label>
+                  <p class="mt-2 text-xs text-[#6b7280]">
+                    O pega una imagen aquí con Ctrl+V / Cmd+V
+                  </p>
                   <TransactionVoucherFileList
                     :entries="voucherDisplayEntries('send_voucher')"
                     @remove="removeDisplayedVoucher('send_voucher', $event)"
@@ -5398,7 +5443,10 @@ onActivated(() => {
                 </div>
 
                 <div
-                  class="order-3 flex flex-col rounded-xl border border-[#d8e5fb] bg-white p-5 shadow-sm shadow-brasper-indigoStrong/5"
+                  class="order-3 flex flex-col rounded-xl border border-[#d8e5fb] bg-white p-5 shadow-sm shadow-brasper-indigoStrong/5 outline-none transition focus-within:border-brasper-indigoStrong/50 focus-within:ring-2 focus-within:ring-brasper-indigoStrong/10"
+                  tabindex="0"
+                  aria-label="Comprobante de pago: pega una imagen aquí"
+                  @paste="onVoucherImagePaste('payment_voucher', $event)"
                 >
                   <div class="mb-4 flex items-start gap-3">
                     <span
@@ -5440,6 +5488,9 @@ onActivated(() => {
                     />
                     Agregar archivos
                   </label>
+                  <p class="mt-2 text-xs text-[#6b7280]">
+                    O pega una imagen aquí con Ctrl+V / Cmd+V
+                  </p>
                   <TransactionVoucherFileList
                     :entries="voucherDisplayEntries('payment_voucher')"
                     @remove="removeDisplayedVoucher('payment_voucher', $event)"
@@ -5447,7 +5498,10 @@ onActivated(() => {
                 </div>
 
                 <div
-                  class="order-2 flex flex-col rounded-xl border border-[#d8e5fb] bg-white p-5 shadow-sm shadow-brasper-indigoStrong/5"
+                  class="order-2 flex flex-col rounded-xl border border-[#d8e5fb] bg-white p-5 shadow-sm shadow-brasper-indigoStrong/5 outline-none transition focus-within:border-brasper-indigoStrong/50 focus-within:ring-2 focus-within:ring-brasper-indigoStrong/10"
+                  tabindex="0"
+                  aria-label="Imagen de verificación: pega una imagen aquí"
+                  @paste="onVoucherImagePaste('checked_image', $event)"
                 >
                   <div class="mb-4 flex items-start gap-3">
                     <span
@@ -5511,6 +5565,9 @@ onActivated(() => {
                     />
                     Agregar archivos
                   </label>
+                  <p class="mt-2 text-xs text-[#6b7280]">
+                    O pega una imagen aquí con Ctrl+V / Cmd+V
+                  </p>
                   <TransactionVoucherFileList
                     :entries="voucherDisplayEntries('checked_image')"
                     @remove="removeDisplayedVoucher('checked_image', $event)"
