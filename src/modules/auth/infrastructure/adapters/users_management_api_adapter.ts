@@ -3,11 +3,11 @@ import { apiClient } from '@/interface/api/client'
 import { formatApiErrorBody } from '@/interface/api/format_api_error'
 import { Domain } from '@/interface/infrastructure/services'
 import { USER_ROLES } from '../../domain/models'
-import { parseUserListItem, type UserListItem } from '../parse_user'
+import { parseUserListItem, type UserIdentification, type UserListItem } from '../parse_user'
 
 export { USER_ROLES }
 // Re-exportado para no romper importadores existentes (usuarios_view, transacciones).
-export type { UserListItem }
+export type { UserIdentification, UserListItem }
 
 export const DEFAULT_USER_TEMPORARY_PASSWORD = 'Pass123!'
 
@@ -52,6 +52,34 @@ export async function fetchAllUsers(): Promise<UserListItem[]> {
   return fetchUsers()
 }
 
+/**
+ * Obtiene el detalle canónico de un usuario para precargar el formulario de
+ * edición con la colección COMPLETA de identificaciones. Intenta `GET
+ * /user/{id}/` y, si el endpoint de detalle no existe todavía, cae al listado
+ * filtrado por id para no romper la edición durante la transición del backend.
+ */
+export async function fetchUserById(id: string): Promise<UserListItem | null> {
+  const trimmed = id.trim()
+  if (!trimmed) return null
+  try {
+    const response = await apiClient.get<unknown>(Domain.apiPath(`user/${trimmed}/`), {
+      headers: { Accept: 'application/json' },
+      skipAuthRedirect: true
+    })
+    const raw = response.data
+    const payload =
+      raw != null && typeof raw === 'object'
+        ? ((raw as Record<string, unknown>).user ?? (raw as Record<string, unknown>).data ?? raw)
+        : raw
+    const detail = parseUser(Array.isArray(payload) ? payload[0] : payload)
+    if (detail) return detail
+  } catch {
+    // El endpoint de detalle puede no existir aún: caemos al listado filtrado por id.
+  }
+  const filtered = await fetchUsers({ user_id: trimmed })
+  return filtered.find((u) => u.id === trimmed) ?? filtered[0] ?? null
+}
+
 export interface CreateUserPayload {
   email?: string
   names?: string
@@ -60,6 +88,7 @@ export interface CreateUserPayload {
   password?: string
   document_number?: string
   document_type?: string
+  identifications?: UserIdentification[]
   profile_image?: File | null
   phone?: number | string | null
   code_phone?: string
@@ -81,6 +110,9 @@ function appendUserFormFields(
   if ('password' in payload && payload.password?.trim()) form.append('password', payload.password.trim())
   if (payload.document_number?.trim()) form.append('document_number', payload.document_number.trim())
   if (payload.document_type?.trim()) form.append('document_type', payload.document_type.trim())
+  if (payload.identifications !== undefined) {
+    form.append('identifications', JSON.stringify(payload.identifications))
+  }
   const phoneVal = payload.phone
   const phoneNum =
     phoneVal != null && phoneVal !== ''

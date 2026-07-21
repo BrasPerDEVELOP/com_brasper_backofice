@@ -18,8 +18,59 @@ export interface UserListItem {
   lastnames?: string
   document_number?: string
   document_type?: string
+  identifications: UserIdentification[]
   phone?: number | null
   code_phone?: string | null
+}
+
+export interface UserIdentification {
+  document_type: string
+  document_number: string
+  is_primary: boolean
+}
+
+function parseIdentifications(o: Record<string, unknown>): UserIdentification[] {
+  const raw = o.identifications ?? o.documents ?? o.documentos
+  const parsed = Array.isArray(raw)
+    ? raw.flatMap((item, index) => {
+        if (item == null || typeof item !== 'object') return []
+        const document = item as Record<string, unknown>
+        const type = document.document_type ?? document.type ?? document.tipo_documento
+        const number = document.document_number ?? document.number ?? document.numero_documento
+        if (type == null || number == null) return []
+        return [{
+          document_type: String(type),
+          document_number: String(number),
+          is_primary: Boolean(document.is_primary ?? document.primary ?? index === 0)
+        }]
+      })
+    : []
+
+  const legacyType = o.document_type ?? o.documentType ?? o.tipo_documento
+  const legacyNumber = o.document_number ?? o.documentNumber ?? o.numero_documento
+  if (legacyType != null && legacyNumber != null) {
+    const alreadyIncluded = parsed.some(
+      (item) => item.document_type === String(legacyType) && item.document_number === String(legacyNumber)
+    )
+    if (!alreadyIncluded) {
+      parsed.unshift({
+        document_type: String(legacyType),
+        document_number: String(legacyNumber),
+        is_primary: true
+      })
+    }
+  }
+
+  // Garantiza exactamente una identificación principal: conserva la primera
+  // marcada como principal y, si ninguna lo está, promueve la primera fila.
+  let primaryFound = false
+  const normalized = parsed.map((item) => {
+    const isPrimary = item.is_primary && !primaryFound
+    if (isPrimary) primaryFound = true
+    return { ...item, is_primary: isPrimary }
+  })
+  if (!primaryFound && normalized[0]) normalized[0].is_primary = true
+  return normalized
 }
 
 /**
@@ -77,8 +128,10 @@ export function parseUserListItem(item: unknown): UserListItem | null {
   const email = (o.email ?? o.username ?? '').toString().trim()
   const fullName = [names, lastnames].filter(Boolean).join(' ') || email || String(id)
   const role = o.role != null ? String(o.role) : undefined
-  const document_number = o.document_number != null ? String(o.document_number) : undefined
-  const document_type = o.document_type != null ? String(o.document_type) : undefined
+  const identifications = parseIdentifications(o)
+  const primaryIdentification = identifications.find((document) => document.is_primary) ?? identifications[0]
+  const document_number = primaryIdentification?.document_number
+  const document_type = primaryIdentification?.document_type
   const phoneVal = o.phone ?? o.telefono
   const phone =
     typeof phoneVal === 'number'
@@ -96,6 +149,7 @@ export function parseUserListItem(item: unknown): UserListItem | null {
     lastnames: lastnames || undefined,
     document_number,
     document_type,
+    identifications,
     phone: Number.isFinite(phone) ? phone : null,
     code_phone: codePhone != null ? String(codePhone) : null
   }

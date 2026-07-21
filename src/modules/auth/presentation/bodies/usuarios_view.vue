@@ -93,8 +93,10 @@ const searchedUsers = computed(() => {
   return list.filter((u) => {
     const name = (u.name ?? '').toLowerCase()
     const email = (u.email ?? '').toLowerCase()
-    const doc = (u.document_number ?? '').toLowerCase()
-    return name.includes(q) || email.includes(q) || doc.includes(q)
+    const documents = u.identifications
+      .map((item) => `${item.document_type} ${item.document_number}`.toLowerCase())
+      .join(' ')
+    return name.includes(q) || email.includes(q) || documents.includes(q)
   })
 })
 
@@ -302,23 +304,33 @@ watch(showCreateModal, (open) => {
 })
 
 function getDocumentType(u: UserListItem): string {
+  if (u.identifications.length > 1) {
+    return u.identifications.map((item) => item.document_type.toUpperCase()).join(', ')
+  }
   return (u.document_type ?? '-').toUpperCase()
 }
 
 function getDocumentNumber(u: UserListItem): string {
+  if (u.identifications.length > 1) {
+    return u.identifications.map((item) => item.document_number).join(', ')
+  }
   return u.document_number ?? '-'
 }
 
 function exportUsersToExcel() {
   const headers = ['uuid', 'nombres', 'email', 'tipo_documento', 'n_documento', 'rol']
-  const rows = searchedUsers.value.map((u) => [
-    u.id,
-    u.name ?? '',
-    u.email ?? '',
-    (u.document_type ?? '').toUpperCase(),
-    u.document_number ?? '',
-    USER_ROLE_LABELS[u.role as keyof typeof USER_ROLE_LABELS] ?? (u.role ?? '')
-  ])
+  const rows = searchedUsers.value.map((u) => {
+    const documentType = getDocumentType(u)
+    const documentNumber = getDocumentNumber(u)
+    return [
+      u.id,
+      u.name ?? '',
+      u.email ?? '',
+      documentType === '-' ? '' : documentType,
+      documentNumber === '-' ? '' : documentNumber,
+      USER_ROLE_LABELS[u.role as keyof typeof USER_ROLE_LABELS] ?? (u.role ?? '')
+    ]
+  })
   const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'Usuarios')
