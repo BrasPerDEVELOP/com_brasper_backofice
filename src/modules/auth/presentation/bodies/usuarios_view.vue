@@ -1,29 +1,42 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, watch, nextTick, toRef } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
   fetchUsers,
   deleteUser,
-  createUser,
-  resetUserPassword,
   USER_ROLES,
   type UserListItem
 } from '../../infrastructure/adapters/users_management_api_adapter'
-import { parseUsersFromExcel } from '../../infrastructure/utils/excel_users_parser'
 import { USER_ROLE_LABELS } from '../../domain/models'
 import * as XLSX from 'xlsx'
-import AppDropdown from '@/interface/components/AppDropdown.vue'
 import UsuarioCreateFormModal from '@/interface/components/UsuarioCreateFormModal.vue'
+import CuentaBancariaCreateFormModal from '@/interface/components/CuentaBancariaCreateFormModal.vue'
+import CuentaBancariaEditFormModal from '@/interface/components/CuentaBancariaEditFormModal.vue'
+import UserWorkspacePanel from '../components/UserWorkspacePanel.vue'
+import UserManagementHeader from '../components/UserManagementHeader.vue'
+import UserFiltersBar from '../components/UserFiltersBar.vue'
+import UserDirectoryTable from '../components/UserDirectoryTable.vue'
+import UserResetPasswordModal from '../components/UserResetPasswordModal.vue'
+import UserImportExcelModal from '../components/UserImportExcelModal.vue'
+import { queryString, useUserWorkspace } from '../composables/use_user_workspace'
+import { useCuentasBancariasStore } from '@/modules/cuentas-bancarias/presentation/controllers/use_cuentas_bancarias_store_controller'
+import type { BankAccount } from '@/modules/cuentas-bancarias/domain/models'
 import { useAuthStore } from '../controllers/use_auth_store_controller'
 import { ConfirmDialog } from '@interface/widgets'
 
 const authStore = useAuthStore()
 const router = useRouter()
+const route = useRoute()
+const cuentasStore = useCuentasBancariasStore()
+const workspace = useUserWorkspace({ query: toRef(route, 'query'), router })
+const canViewUsers = computed(() => authStore.hasPermission('users.view'))
 const canViewBankAccounts = computed(() => authStore.hasPermission('bank_accounts.view'))
+const canCreateBankAccounts = computed(() => authStore.hasPermission('bank_accounts.create'))
+const canUpdateBankAccounts = computed(() => authStore.hasPermission('bank_accounts.update'))
 
-/** Abre /app/cuentas con el usuario preseleccionado (master-detail de cuentas). */
 function goToUserBankAccounts(user: UserListItem) {
-  void router.push({ path: '/app/cuentas', query: { user: user.id } })
+  openMenuId.value = null
+  workspace.selectUser(user.id, 'accounts')
 }
 
 const users = ref<UserListItem[]>([])
@@ -33,41 +46,44 @@ const successMessage = ref('')
 const showCreateModal = ref(false)
 const showImportModal = ref(false)
 const selectedUser = ref<UserListItem | null>(null)
-const importFile = ref<File | null>(null)
-const fileInput = ref<HTMLInputElement | null>(null)
-const importing = ref(false)
-const importError = ref('')
-const searchQuery = ref('')
+const showBankAccountCreateModal = ref(false)
+const showBankAccountEditModal = ref(false)
+const editingBankAccount = ref<BankAccount | null>(null)
+const highlightedAccountId = ref<string | null>(null)
+const accountSuccessMessage = ref('')
+const searchQuery = ref(queryString(route.query.search) ?? '')
 const openMenuId = ref<string | null>(null)
 const resetPasswordUser = ref<UserListItem | null>(null)
-const resetPasswordForm = ref({
-  new_password: '',
-  confirm_password: ''
-})
-const resetPasswordLoading = ref(false)
-const resetPasswordError = ref('')
 
-const roleSelectFilter = ref<string>('todos')
+const requestedRole = queryString(route.query.role)
+const roleSelectFilter = ref<string>(
+  canViewUsers.value && requestedRole ? requestedRole : canViewUsers.value ? 'todos' : 'client'
+)
 
 const canCreateUsers = computed(() => authStore.hasPermission('users.create'))
 const canUpdateUsers = computed(() => authStore.hasPermission('users.update'))
 const canDeleteUsers = computed(() => authStore.hasPermission('users.delete'))
 const canResetPasswords = computed(() => authStore.hasPermission('users.reset_password'))
 
-const perPage = ref(10)
-const currentPage = ref(1)
+const workspaceUser = computed(
+  () => users.value.find((user) => user.id === workspace.selectedUserId.value) ?? null
+)
+
+function isClient(user: UserListItem | null): boolean {
+  return ['client', 'cliente'].includes((user?.role ?? '').toLowerCase())
+}
+
+const requestedPerPage = Number(queryString(route.query.perPage))
+const perPage = ref([5, 10, 25, 50].includes(requestedPerPage) ? requestedPerPage : 10)
+const requestedPage = Number(queryString(route.query.page))
+const currentPage = ref(Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1)
 
 const roleOptions = computed(() => [
-  { value: 'todos', label: 'Todos' },
-  ...USER_ROLES.map((r) => ({ value: r, label: USER_ROLE_LABELS[r] }))
+  ...(canViewUsers.value ? [{ value: 'todos', label: 'Todos' }] : []),
+  ...USER_ROLES
+    .filter((role) => canViewUsers.value || role === 'client')
+    .map((r) => ({ value: r, label: USER_ROLE_LABELS[r] }))
 ])
-
-const perPageOptions = [
-  { value: '5', label: '5' },
-  { value: '10', label: '10' },
-  { value: '25', label: '25' },
-  { value: '50', label: '50' }
-]
 
 const perPageStr = computed({
   get: () => String(perPage.value),
@@ -122,9 +138,10 @@ async function loadUsers() {
   loading.value = true
   error.value = ''
   try {
-    const role = roleSelectFilter.value.toLowerCase()
+    const role = canViewUsers.value ? roleSelectFilter.value.toLowerCase() : 'client'
     const params = role !== 'todos' ? { role } : undefined
     users.value = await fetchUsers(params)
+    currentPage.value = Math.min(currentPage.value, totalPages.value)
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Error al cargar usuarios'
     users.value = []
@@ -150,55 +167,57 @@ function openEditModal(user: UserListItem) {
   showCreateModal.value = true
 }
 
-async function onUserSaved() {
-  successMessage.value = selectedUser.value
+async function onUserSaved(savedUser: UserListItem) {
+  const wasEditing = Boolean(selectedUser.value)
+  successMessage.value = wasEditing
     ? 'Usuario actualizado correctamente'
-    : 'Usuario creado correctamente'
+    : 'Usuario creado correctamente. Ya puedes registrar su primera cuenta.'
   selectedUser.value = null
   await loadUsers()
+  workspace.selectUser(
+    savedUser.id,
+    !wasEditing && isClient(savedUser) && canViewBankAccounts.value ? 'accounts' : 'profile'
+  )
 }
 
-async function submitImport() {
-  if (!importFile.value) return
-  importing.value = true
-  importError.value = ''
-  error.value = ''
-  try {
-    const defaultRole =
-      roleSelectFilter.value.toLowerCase() === 'todos' ? 'client' : roleSelectFilter.value
-    const payloads = await parseUsersFromExcel(importFile.value, defaultRole)
-    if (payloads.length === 0) {
-      importError.value = 'No se encontraron filas válidas con email en el archivo'
-      return
-    }
-    let created = 0
-    const errors: string[] = []
-    for (const p of payloads) {
-      try {
-        await createUser(p)
-        created++
-      } catch (e) {
-        errors.push(`${p.email}: ${e instanceof Error ? e.message : 'Error'}`)
-      }
-    }
-    showImportModal.value = false
-    importFile.value = null
-    if (fileInput.value) fileInput.value.value = ''
-    if (created > 0) {
-      successMessage.value =
-        errors.length > 0
-          ? `Se importaron ${created} usuario(s). Errores: ${errors.length}`
-          : `Se importaron ${created} usuario(s) correctamente`
-      await loadUsers()
-    }
-    if (errors.length > 0) {
-      error.value = errors.slice(0, 5).join('; ') + (errors.length > 5 ? ` ... y ${errors.length - 5} más` : '')
-    }
-  } catch (e) {
-    importError.value = e instanceof Error ? e.message : 'Error al procesar el archivo Excel'
-  } finally {
-    importing.value = false
-  }
+function openCreateBankAccount(userId: string) {
+  if (!canCreateBankAccounts.value) return
+  workspace.selectUser(userId, 'accounts')
+  accountSuccessMessage.value = ''
+  showBankAccountCreateModal.value = true
+}
+
+function openEditBankAccount(account: BankAccount) {
+  if (!canUpdateBankAccounts.value) return
+  editingBankAccount.value = account
+  accountSuccessMessage.value = ''
+  showBankAccountEditModal.value = true
+}
+
+function highlightAccount(account: BankAccount, message: string) {
+  highlightedAccountId.value = account.id
+  accountSuccessMessage.value = message
+  window.setTimeout(() => {
+    if (highlightedAccountId.value === account.id) highlightedAccountId.value = null
+  }, 8000)
+}
+
+function onBankAccountCreated(account: BankAccount) {
+  workspace.selectUser(account.user_id, 'accounts')
+  highlightAccount(account, 'Cuenta bancaria creada correctamente.')
+}
+
+function onBankAccountUpdated(account: BankAccount) {
+  workspace.selectUser(account.user_id, 'accounts')
+  highlightAccount(account, 'Cuenta bancaria actualizada correctamente.')
+}
+
+async function onUsersImported(result: { created: number; errors: string[] }) {
+  successMessage.value = result.errors.length
+    ? `Se importaron ${result.created} usuario(s). Errores: ${result.errors.length}`
+    : `Se importaron ${result.created} usuario(s) correctamente`
+  error.value = result.errors.slice(0, 5).join('; ')
+  await loadUsers()
 }
 
 const deletingId = ref<string | null>(null)
@@ -252,50 +271,10 @@ function openResetPasswordModal(user: UserListItem) {
   if (!canResetPasswords.value) return
   openMenuId.value = null
   resetPasswordUser.value = user
-  resetPasswordForm.value = {
-    new_password: '',
-    confirm_password: ''
-  }
-  resetPasswordError.value = ''
 }
 
 function closeResetPasswordModal() {
-  if (resetPasswordLoading.value) return
   resetPasswordUser.value = null
-  resetPasswordError.value = ''
-}
-
-async function submitResetPassword() {
-  const user = resetPasswordUser.value
-  if (!user) return
-  const next = resetPasswordForm.value.new_password.trim()
-  const confirm = resetPasswordForm.value.confirm_password.trim()
-  resetPasswordError.value = ''
-  if (!next || !confirm) {
-    resetPasswordError.value = 'Completa la contraseña temporal y su confirmación'
-    return
-  }
-  if (next.length < 8) {
-    resetPasswordError.value = 'La contraseña temporal debe tener al menos 8 caracteres'
-    return
-  }
-  if (next !== confirm) {
-    resetPasswordError.value = 'La confirmación no coincide'
-    return
-  }
-  resetPasswordLoading.value = true
-  try {
-    await resetUserPassword({
-      userId: user.id,
-      new_password: next
-    })
-    successMessage.value = 'Contraseña temporal actualizada correctamente'
-    resetPasswordUser.value = null
-  } catch (e) {
-    resetPasswordError.value = e instanceof Error ? e.message : 'Error al resetear contraseña'
-  } finally {
-    resetPasswordLoading.value = false
-  }
 }
 
 function goToPage(page: number) {
@@ -306,11 +285,38 @@ watch([searchQuery, roleSelectFilter, perPage], () => {
   currentPage.value = 1
 })
 
+watch([searchQuery, roleSelectFilter, perPage, currentPage], () => {
+  const query = { ...route.query }
+  if (searchQuery.value.trim()) query.search = searchQuery.value.trim()
+  else delete query.search
+  if (roleSelectFilter.value !== 'todos') query.role = roleSelectFilter.value
+  else delete query.role
+  if (perPage.value !== 10) query.perPage = String(perPage.value)
+  else delete query.perPage
+  if (currentPage.value > 1) query.page = String(currentPage.value)
+  else delete query.page
+  void router.replace({ query })
+})
+
 watch(roleSelectFilter, loadUsers)
 
 watch(showCreateModal, (open) => {
   if (!open) selectedUser.value = null
 })
+
+watch(
+  [workspaceUser, workspace.activeTab, canViewBankAccounts],
+  async ([user, tab, canView]) => {
+    const userId = user?.id ?? null
+    if (!userId || tab !== 'accounts' || !canView || !isClient(user)) return
+    accountSuccessMessage.value = ''
+    await Promise.all([
+      cuentasStore.loadBankAccounts({ userId }),
+      cuentasStore.loadBanks()
+    ])
+  },
+  { immediate: true }
+)
 
 function getDocumentType(u: UserListItem): string {
   if (u.identifications.length > 1) {
@@ -347,106 +353,18 @@ function exportUsersToExcel() {
   XLSX.writeFile(wb, filename)
 }
 
-onMounted(() => {
-  loadUsers()
+onMounted(async () => {
+  await loadUsers()
+  const requested = workspace.selectedUserId.value
+  if (requested && !users.value.some((user) => user.id === requested)) {
+    workspace.clearSelection()
+  }
 })
 </script>
 
 <template>
-  <!-- Header -->
-  <div class="mb-6">
-    <div class="mb-4 flex flex-wrap items-center justify-between gap-4">
-      <h1 class="text-2xl font-medium text-[#1f2937]">Usuarios</h1>
-      <div class="flex items-center gap-2">
-        <button
-          v-if="canCreateUsers"
-          type="button"
-          class="rounded-lg border border-[#e5e7eb] bg-white p-2 text-[#6b7280] hover:bg-[#f9fafb]"
-          title="Vista tabla"
-        >
-          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          class="rounded-lg border border-[#e5e7eb] bg-white p-2 text-[#6b7280] hover:bg-[#f9fafb]"
-          title="Vista cuadrícula"
-        >
-          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-          </svg>
-        </button>
-        <button
-          v-if="canCreateUsers"
-          type="button"
-          class="inline-flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-white px-4 py-2.5 text-sm font-medium text-[#374151] transition hover:bg-[#f9fafb]"
-          @click="showImportModal = true"
-        >
-          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-          </svg>
-          Importar Excel
-        </button>
-        <button
-          type="button"
-          class="inline-flex items-center gap-2 rounded-lg border border-[#e5e7eb] bg-white px-4 py-2.5 text-sm font-medium text-[#374151] transition hover:bg-[#f9fafb]"
-          @click="exportUsersToExcel"
-        >
-          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-          </svg>
-          Exportar Excel
-        </button>
-        <button
-          type="button"
-          class="inline-flex items-center gap-2 rounded-lg bg-brasper-indigoStrong px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brasper-indigoDark disabled:opacity-50 disabled:cursor-not-allowed"
-          @click.stop="openCreateModal"
-        >
-          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-          </svg>
-          Crear
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Search + Rol + Total -->
-  <div class="mb-6 flex flex-wrap items-center gap-6">
-    <div class="relative min-w-[220px] flex-1 max-w-sm">
-      <svg
-        class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-      >
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-      </svg>
-      <input
-        v-model="searchQuery"
-        type="text"
-        placeholder="Buscar"
-        class="h-10 w-full rounded-lg border border-[#e5e7eb] bg-white py-2.5 pl-10 pr-4 text-sm text-[#374151] placeholder-[#9ca3af] focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
-      />
-    </div>
-    <div class="flex items-center gap-2">
-      <label class="text-sm font-medium text-[#6b7280]">Rol</label>
-      <AppDropdown
-        v-model="roleSelectFilter"
-        :options="roleOptions"
-        placeholder="Todos"
-        :searchable="false"
-        min-width="140px"
-      />
-    </div>
-    <div class="flex items-center gap-2">
-      <label class="text-sm font-medium text-[#6b7280]">Total</label>
-      <div class="flex h-10 min-w-[4rem] items-center justify-center rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 text-sm font-medium text-[#374151]">
-        {{ searchedUsers.length }}
-      </div>
-    </div>
-  </div>
+  <UserManagementHeader :can-create="canCreateUsers" :can-export="canViewUsers" @create="openCreateModal" @import="showImportModal = true" @export="exportUsersToExcel" />
+  <UserFiltersBar v-model:search="searchQuery" v-model:role="roleSelectFilter" :role-options="roleOptions" :total="searchedUsers.length" />
 
   <!-- Content -->
   <p v-if="error" class="mb-4 rounded-lg bg-[#dc3545]/10 px-4 py-3 text-sm text-[#dc3545]">
@@ -456,172 +374,51 @@ onMounted(() => {
     {{ successMessage }}
   </p>
 
-  <div class="relative overflow-x-auto rounded-xl border border-[#e5e7eb] bg-white">
-    <div
-      v-if="loading"
-      class="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/80"
-    >
-      <span class="text-sm text-[#6b7280]">Cargando...</span>
-    </div>
-    <table class="w-full text-left text-sm">
-      <thead>
-        <tr class="bg-[#dbeafe]">
-          <th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">Nombres</th>
-          <th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">Email</th>
-          <th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">Tipo documento</th>
-          <th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">N. documento</th>
-          <th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">Rol</th>
-          <th class="w-12 px-2 py-3"></th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr
-          v-for="u in paginatedUsers"
-          :key="u.id"
-          class="border-t border-[#e5e7eb] bg-white transition hover:bg-[#f9fafb]"
-        >
-          <td class="px-4 py-3 text-[#374151]">{{ u.name ?? '-' }}</td>
-          <td class="px-4 py-3 text-[#374151]">{{ u.email ?? '-' }}</td>
-          <td class="px-4 py-3 text-[#374151]">{{ getDocumentType(u) }}</td>
-          <td class="px-4 py-3 text-[#374151]">{{ getDocumentNumber(u) }}</td>
-          <td class="px-4 py-3">
-            <span
-              class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium"
-              :class="
-                (u.role ?? '').toLowerCase() === 'admin'
-                  ? 'bg-brasper-cyanLight/30 text-brasper-indigoDark'
-                  : 'bg-[#dbeafe] text-brasper-indigoDark'
-              "
-            >
-              {{ USER_ROLE_LABELS[u.role as keyof typeof USER_ROLE_LABELS] ?? (u.role ?? '—').toUpperCase() }}
-            </span>
-          </td>
-          <td class="relative px-2 py-3">
-            <button
-              type="button"
-              class="rounded p-1.5 text-[#6b7280] hover:bg-[#f3f4f6]"
-              @click.stop="toggleMenu(u.id)"
-            >
-              <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
-              </svg>
-            </button>
-            <div
-              v-if="openMenuId === u.id"
-              class="absolute right-0 top-full z-10 mt-1 min-w-[160px] rounded-lg border border-[#e5e7eb] bg-white py-1 shadow-lg"
-              @click.stop
-            >
-              <button
-                v-if="canUpdateUsers"
-                type="button"
-                class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-[#374151] hover:bg-[#f9fafb]"
-                @click="openEditModal(u)"
-              >
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                </svg>
-                Editar
-              </button>
-              <button
-                v-if="canResetPasswords"
-                type="button"
-                class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-[#374151] hover:bg-[#f9fafb]"
-                @click="openResetPasswordModal(u)"
-              >
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586l5.257-5.257A6 6 0 1121 9z" />
-                </svg>
-                Resetear contraseña
-              </button>
-              <button
-                v-if="canViewBankAccounts"
-                type="button"
-                class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-[#374151] hover:bg-[#f9fafb]"
-                @click="goToUserBankAccounts(u)"
-              >
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 10l2-6h14l2 6M5 10v10h14V10M9 14h6" />
-                </svg>
-                Ver cuentas
-              </button>
-              <button
-                v-if="canDeleteUsers"
-                type="button"
-                class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-[#dc3545] hover:bg-[#fef2f2]"
-                :disabled="deletingId === u.id"
-                @click="handleDelete(u)"
-              >
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-                Borrar
-              </button>
-            </div>
-          </td>
-        </tr>
-        <tr v-if="!loading && paginatedUsers.length === 0">
-          <td colspan="6" class="px-4 py-12 text-center text-[#6b7280]">
-            {{
-              users.length === 0
-                ? 'No hay usuarios registrados.'
-                : 'No hay usuarios que coincidan con el filtro o búsqueda.'
-            }}
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
+  <p v-if="accountSuccessMessage" class="mb-4 rounded-lg bg-[#dcfce7] px-4 py-3 text-sm font-medium text-[#166534]">{{ accountSuccessMessage }}</p>
 
-  <!-- Pagination -->
-  <div class="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-[#e5e7eb] pt-4">
-    <div class="flex items-center gap-4 text-sm text-[#6b7280]">
-      <span>Página {{ currentPage }} de {{ totalPages }}</span>
-      <AppDropdown
-        v-model="perPageStr"
-        :options="perPageOptions"
-        placeholder="10"
-        :searchable="false"
-        size="sm"
-        min-width="3rem"
-      />
-    </div>
-    <div class="flex items-center gap-2 text-sm text-[#6b7280]">
-      <span>{{ searchedUsers.length }} resultados</span>
-      <div class="flex gap-1">
-        <button
-          type="button"
-          class="rounded p-2 text-[#6b7280] hover:bg-[#f3f4f6] disabled:opacity-40"
-          :disabled="currentPage <= 1"
-          @click="goToPage(1)"
-        >
-          &laquo;
-        </button>
-        <button
-          type="button"
-          class="rounded p-2 text-[#6b7280] hover:bg-[#f3f4f6] disabled:opacity-40"
-          :disabled="currentPage <= 1"
-          @click="goToPage(currentPage - 1)"
-        >
-          &lsaquo;
-        </button>
-        <button
-          type="button"
-          class="rounded p-2 text-[#6b7280] hover:bg-[#f3f4f6] disabled:opacity-40"
-          :disabled="currentPage >= totalPages"
-          @click="goToPage(currentPage + 1)"
-        >
-          &rsaquo;
-        </button>
-        <button
-          type="button"
-          class="rounded p-2 text-[#6b7280] hover:bg-[#f3f4f6] disabled:opacity-40"
-          :disabled="currentPage >= totalPages"
-          @click="goToPage(totalPages)"
-        >
-          &raquo;
-        </button>
-      </div>
-    </div>
+  <div class="grid items-start gap-5 xl:grid-cols-[minmax(0,3fr)_minmax(340px,2fr)]">
+    <UserDirectoryTable
+      v-model:per-page="perPageStr"
+      :users="paginatedUsers"
+      :total-results="searchedUsers.length"
+      :total-users="users.length"
+      :loading="loading"
+      :selected-user-id="workspace.selectedUserId.value"
+      :open-menu-id="openMenuId"
+      :deleting-id="deletingId"
+      :current-page="currentPage"
+      :total-pages="totalPages"
+      :can-update="canUpdateUsers"
+      :can-delete="canDeleteUsers"
+      :can-reset-password="canResetPasswords"
+      :can-view-accounts="canViewBankAccounts"
+      @select="(user) => workspace.selectUser(user.id, 'profile')"
+      @toggle-menu="toggleMenu"
+      @edit="openEditModal"
+      @reset-password="openResetPasswordModal"
+      @view-accounts="goToUserBankAccounts"
+      @delete="handleDelete"
+      @go-to-page="goToPage"
+    />
+
+    <UserWorkspacePanel
+      class="xl:sticky xl:top-20"
+      :user="workspaceUser"
+      :tab="workspace.activeTab.value"
+      :accounts="cuentasStore.bankAccounts"
+      :banks="cuentasStore.banks"
+      :accounts-loading="cuentasStore.isLoading"
+      :accounts-error="cuentasStore.error"
+      :can-view-accounts="canViewBankAccounts"
+      :can-create-account="canCreateBankAccounts"
+      :can-update-account="canUpdateBankAccounts"
+      :can-update-user="canUpdateUsers"
+      :highlighted-account-id="highlightedAccountId"
+      @update:tab="workspace.selectTab"
+      @edit-user="openEditModal"
+      @create-account="openCreateBankAccount"
+      @edit-account="openEditBankAccount"
+    />
   </div>
 
   <UsuarioCreateFormModal
@@ -632,119 +429,24 @@ onMounted(() => {
     @created="onUserSaved"
   />
 
-  <Teleport to="body">
-    <div
-      v-if="resetPasswordUser"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-    >
-      <div class="w-full max-w-md rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-xl">
-        <h2 class="text-lg font-semibold text-[#1f2937]">Resetear contraseña</h2>
-        <p class="mt-2 text-sm text-[#6b7280]">
-          Se asignará una contraseña temporal para {{ resetPasswordUser.name }}. El usuario deberá cambiarla al iniciar sesión.
-        </p>
-        <form class="mt-5 space-y-4" @submit.prevent="submitResetPassword">
-          <div>
-            <label class="mb-1 block text-sm font-medium text-[#374151]">Contraseña temporal</label>
-            <input
-              v-model="resetPasswordForm.new_password"
-              type="password"
-              minlength="8"
-              autocomplete="new-password"
-              class="w-full rounded-lg border border-[#e5e7eb] px-4 py-2.5 text-sm focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
-              required
-            />
-          </div>
-          <div>
-            <label class="mb-1 block text-sm font-medium text-[#374151]">Confirmar contraseña</label>
-            <input
-              v-model="resetPasswordForm.confirm_password"
-              type="password"
-              minlength="8"
-              autocomplete="new-password"
-              class="w-full rounded-lg border border-[#e5e7eb] px-4 py-2.5 text-sm focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
-              required
-            />
-          </div>
-          <p v-if="resetPasswordError" class="rounded-lg bg-[#dc3545]/10 px-4 py-3 text-sm text-[#dc3545]">
-            {{ resetPasswordError }}
-          </p>
-          <div class="flex justify-end gap-3 border-t border-[#e5e7eb] pt-4">
-            <button
-              type="button"
-              class="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2.5 text-sm font-medium text-[#6b7280] transition hover:bg-[#f9fafb]"
-              :disabled="resetPasswordLoading"
-              @click="closeResetPasswordModal"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              class="rounded-lg bg-brasper-indigoStrong px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brasper-indigoDark disabled:opacity-60"
-              :disabled="resetPasswordLoading"
-            >
-              {{ resetPasswordLoading ? 'Guardando...' : 'Guardar' }}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </Teleport>
+  <CuentaBancariaCreateFormModal
+    v-model="showBankAccountCreateModal"
+    variant="accounts"
+    account-flow="destination"
+    bank-country="pe"
+    holder-type="natural"
+    :locked-user-id="workspace.selectedUserId.value ?? undefined"
+    @created="onBankAccountCreated"
+  />
 
-  <!-- Modal Importar Excel -->
-  <Teleport to="body">
-    <div
-      v-if="showImportModal"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-    >
-      <div class="w-full max-w-md rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-xl">
-        <h2 class="mb-4 text-lg font-semibold text-[#1f2937]">Importar usuarios desde Excel</h2>
-        <div class="mb-4 rounded-lg bg-[#f9fafb] p-4 text-sm text-[#6b7280]">
-          <p class="mb-2 font-medium text-[#374151]">Formatos aceptados: .xlsx, .xls</p>
-          <p class="mb-2">La primera fila debe ser encabezados. Columnas soportadas:</p>
-          <ul class="list-inside list-disc space-y-1">
-            <li><strong>email</strong> / correo — Obligatorio</li>
-            <li><strong>nombres</strong> / names — Nombres</li>
-            <li><strong>apellidos</strong> / lastnames — Apellidos</li>
-            <li><strong>tipo_documento</strong> — DNI, CE, Pasaporte</li>
-            <li><strong>n_documento</strong> / documento — Número de documento</li>
-            <li><strong>rol</strong> / role — Admin, Cliente, etc.</li>
-          </ul>
-        </div>
-        <form class="space-y-4" @submit.prevent="submitImport">
-          <div>
-            <label class="mb-1 block text-sm font-medium text-[#374151]">Archivo (.xlsx, .xls)</label>
-            <input
-              ref="fileInput"
-              type="file"
-              accept=".xlsx,.xls"
-              required
-              class="w-full rounded-lg border border-[#e5e7eb] px-4 py-2.5 text-sm"
-              @change="importFile = ($event.target as HTMLInputElement).files?.[0] ?? null"
-            />
-          </div>
-          <p v-if="importError" class="rounded-lg bg-[#dc3545]/10 px-4 py-3 text-sm text-[#dc3545]">
-            {{ importError }}
-          </p>
-          <div class="flex gap-3 pt-2">
-            <button
-              type="submit"
-              class="rounded-lg bg-brasper-indigoStrong px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brasper-indigoDark disabled:opacity-60"
-              :disabled="importing || !importFile"
-            >
-              {{ importing ? 'Importando...' : 'Importar' }}
-            </button>
-            <button
-              type="button"
-              class="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2.5 text-sm font-medium text-[#6b7280] transition hover:bg-[#f9fafb]"
-              @click="showImportModal = false"
-            >
-              Cancelar
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </Teleport>
+  <CuentaBancariaEditFormModal
+    v-model="showBankAccountEditModal"
+    :account="editingBankAccount"
+    @saved="onBankAccountUpdated"
+  />
+
+  <UserResetPasswordModal :user="resetPasswordUser" @close="closeResetPasswordModal" @saved="successMessage = 'Contraseña temporal actualizada correctamente'" />
+  <UserImportExcelModal v-model="showImportModal" :default-role="createModalDefaultRole" @imported="onUsersImported" />
 
   <ConfirmDialog
     v-model="showDeleteConfirm"
@@ -755,12 +457,3 @@ onMounted(() => {
     @confirm="confirmDelete"
   />
 </template>
-
-<style scoped>
-.select-dropdown {
-  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
-  background-position: right 0.5rem center;
-  background-repeat: no-repeat;
-  background-size: 1rem;
-}
-</style>

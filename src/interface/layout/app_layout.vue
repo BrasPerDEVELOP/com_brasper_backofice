@@ -42,14 +42,14 @@ const showSidebar = computed(() => route.path.startsWith("/app"));
 const allNavItems = [
   { to: "/app/dashboard", label: "Panel", icon: "chart", permission: "dashboard.view" },
   { to: "/app/metricas", label: "Métricas", icon: "metrics", permission: "metrics.view" },
-  { to: "/app/usuarios", label: "Usuarios", icon: "users", permission: "users.view" },
+  { to: "/app/usuarios", label: "Usuarios y cuentas", icon: "users", permissions: ["users.view", "bank_accounts.view"] },
   { to: "/app/transacciones", label: "Transacciones", icon: "transactions", permission: "transactions.view" },
   { to: "/app/contabilidad", label: "Contabilidad", icon: "ledger", permission: "accounting.view" },
   { to: "/app/calculator", label: "Calculadora", icon: "calc", permission: "calculator.view" },
   { to: "/app/cupones", label: "Cupones", icon: "ticket", permission: "coupons.view" },
-  { to: "/app/cuentas", label: "Cuentas", icon: "bank", permission: "bank_accounts.view" },
   { to: "/app/comisiones", label: "Comisiones", icon: "folder", permission: "commissions.view" },
   { to: "/app/tasas", label: "Tasas", icon: "exchange", permission: "rates.view" },
+  { to: "/app/cuentas-brasper", label: "Cuentas Brasper", icon: "bank", permission: "company_bank_accounts.view" },
   { to: "/app/home-banner", label: "Banner Home", icon: "image", permission: "home_banner.view" },
   { to: "/app/blog", label: "Blog", icon: "ledger", permission: "blog.view" },
 ];
@@ -59,7 +59,14 @@ const allBottomNavItems = [
 ];
 
 const navItems = computed(() =>
-  allNavItems.filter((item) => authStore.hasPermission(item.permission))
+  allNavItems.filter((item) => {
+    if ('permissions' in item && item.permissions) {
+      return item.permissions.some((permission) => authStore.hasPermission(permission))
+    }
+    return 'permission' in item && typeof item.permission === 'string'
+      ? authStore.hasPermission(item.permission)
+      : false
+  })
 );
 
 const bottomNavItems = computed(() =>

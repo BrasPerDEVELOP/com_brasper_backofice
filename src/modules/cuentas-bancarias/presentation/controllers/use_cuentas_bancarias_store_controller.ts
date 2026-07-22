@@ -18,6 +18,8 @@ import { useAuthStore } from '@modules/auth/presentation/controllers/use_auth_st
 
 interface CuentasBancariasState {
   bankAccounts: BankAccount[]
+  /** Caché por usuario para el workspace unificado; evita recargar al volver a una ficha. */
+  bankAccountsByUser: Record<string, BankAccount[]>
   /** Cuentas del cliente seleccionado en el formulario de transacciones (no sustituye `bankAccounts`). */
   transactionFormBankAccounts: BankAccount[]
   /** `user_id` al que pertenecen `transactionFormBankAccounts` (evita mezclar clientes al cambiar). */
@@ -67,6 +69,7 @@ function mergeBankAccounts(base: BankAccount[], extra: BankAccount[]): BankAccou
 export const useCuentasBancariasStore = defineStore('cuentasBancarias', {
   state: (): CuentasBancariasState => ({
     bankAccounts: [],
+    bankAccountsByUser: {},
     transactionFormBankAccounts: [],
     transactionFormBankAccountsUserId: null,
     transactionFormBankAccountsLoading: false,
@@ -85,12 +88,24 @@ export const useCuentasBancariasStore = defineStore('cuentasBancarias', {
 
   actions: {
     async loadBankAccounts(params?: { userId?: string; bank_country?: 'pe' | 'br'; account_flow?: 'origin' | 'destination' }) {
+      const workspaceUserId = params?.userId?.trim()
+      if (workspaceUserId && !params?.bank_country && !params?.account_flow) {
+        const cached = this.bankAccountsByUser[workspaceUserId]
+        if (cached) {
+          this.bankAccounts = cached
+          this.error = null
+          return
+        }
+      }
       this.isLoading = true
       this.error = null
       try {
         const repo = getRepository()
         const useCase = new GetBankAccountsUseCase(repo)
         this.bankAccounts = await useCase.execute(params)
+        if (workspaceUserId && !params?.bank_country && !params?.account_flow) {
+          this.bankAccountsByUser[workspaceUserId] = this.bankAccounts
+        }
       } catch (e) {
         this.error = e instanceof Error ? e.message : 'Error al cargar cuentas bancarias'
       } finally {
@@ -230,6 +245,10 @@ export const useCuentasBancariasStore = defineStore('cuentasBancarias', {
           user_id: String(created.user_id || userId)
         }
         this.bankAccounts = upsertBankAccount(this.bankAccounts, createdForUser)
+        this.bankAccountsByUser[userId] = upsertBankAccount(
+          this.bankAccountsByUser[userId] ?? [],
+          createdForUser
+        )
         await this.loadBankAccountsForTransactionUser(userId)
         this.transactionFormBankAccounts = upsertBankAccount(
           this.transactionFormBankAccounts,
@@ -252,6 +271,13 @@ export const useCuentasBancariasStore = defineStore('cuentasBancarias', {
         const repo = getRepository()
         const updated = await repo.updateBankAccount(payload)
         this.bankAccounts = upsertBankAccount(this.bankAccounts, updated)
+        const updatedUserId = String(updated.user_id ?? '').trim()
+        if (updatedUserId) {
+          this.bankAccountsByUser[updatedUserId] = upsertBankAccount(
+            this.bankAccountsByUser[updatedUserId] ?? [],
+            updated
+          )
+        }
         if (
           this.transactionFormBankAccountsUserId &&
           String(updated.user_id) === this.transactionFormBankAccountsUserId

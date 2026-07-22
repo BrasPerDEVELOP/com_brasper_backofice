@@ -89,7 +89,9 @@ Active modules (fully implemented): `auth`, `transacciones`, `tasas`, `comisione
 
 The empty stub modules `transactions/`, `accounts/`, `user/` were removed in Fase B. Do not confuse them with the real modules `transacciones`, `cuentas-bancarias`, and `auth` (user management lives under `auth/usuarios`).
 
-The `auth` module is larger than typical — it handles login, user management (`usuarios`), profile, and role/permission management across four view files and two API adapters.
+The `auth` module is larger than typical — it handles login, the unified user/bank-account workspace (`/app/usuarios`), profile, and role/permission management. The old `/app/cuentas` route redirects to `/app/usuarios?tab=accounts`; bank-account forms and state remain owned by `cuentas-bancarias` and are composed from the auth route view.
+
+Corporate Brasper accounts are managed separately at `/app/cuentas-brasper`. This route exposes the existing `transactions/banks/` CRUD (reason social, bank, currency, country and account) under `company_bank_accounts.*` permissions. Do not merge these records with client `transactions/bank-accounts/` records.
 
 The `calculator` module exports two Pinia stores from the same factory: `useCalculatorStore` (id: `calculator`) and `useCalculatorDemoStore` (id: `calculator-demo`). The demo store renders the public-facing embed without backend calls. The `calculationMode` field (`'normal'` | `'special'`) controls whether `localTaxRateOverrides` are applied to `effectiveTaxRates`.
 

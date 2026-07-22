@@ -31,11 +31,11 @@ Vue View (*_view.vue)
 | calculator | `/app/calculator` | `calculator.view` | `useCalculatorStore` | `calculator_api_adapter` | `coin/{path}` | Completo |
 | cupones | `/app/cupones` | `coupons.view` | `use_cupones_store` | `cupones_api_adapter` | `transactions/coupons/` | Completo |
 | comisiones | `/app/comisiones` | `commissions.view` | `use_comisiones_store` | `comisiones_api_adapter` | `coin/` | Completo |
-| cuentas-bancarias | `/app/cuentas` | `bank_accounts.view` | `use_cuentas_bancarias_store` | `cuentas_bancarias_api_adapter` | `transactions/bank-accounts/` | Completo — usuarios y cuentas master-detail |
+| auth / usuarios + cuentas | `/app/usuarios` | `users.view` o `bank_accounts.view` | auth store + `use_cuentas_bancarias_store` | `users_management_api_adapter` + `cuentas_bancarias_api_adapter` | `user/` + `transactions/bank-accounts/` | Completo — workspace unificado; `/app/cuentas` redirige aquí |
+| cuentas Brasper | `/app/cuentas-brasper` | `company_bank_accounts.view` | `use_cuentas_bancarias_store` (catálogo) | `banks_api_adapter` | `transactions/banks/` | Completo — CRUD corporativo de razón social, banco, moneda, país y cuenta |
 | tasas | `/app/tasas` | `rates.view` | `use_tasas_store` | `tasas_api_adapter` | `coin/` | Completo |
 | home-banner | `/app/home-banner` | `home_banner.view` | — | `home_banner_api_adapter` | (ver adapter) | Sin application ⚠️ |
 | blog | `/app/blog` | `blog.view` | — | `blog_api_adapter` | `blog/` | Sin application ⚠️ |
-| auth / usuarios | `/app/usuarios` | `users.view` | auth store | `users_management_api_adapter` | `user/` | Completo |
 | auth / roles | `/app/roles-permisos` | `roles.permissions.view` | auth store | `role_permissions_api_adapter` | `roles/permissions/` | Completo |
 | auth / perfil | `/app/perfil` | `profile.view` | auth store | `auth_api_adapter` | `env.authProfilePath` | Completo |
 
@@ -55,6 +55,7 @@ No confundir con los reales `transacciones`, `cuentas-bancarias`, `auth/usuarios
 | commissions | `.create` | `.update` | `.delete` | |
 | rates | `.create` | `.update` | `.delete` | |
 | bank_accounts | `.create` | `.update` | `.delete` | |
+| company_bank_accounts | `.create` | `.update` | `.delete` | cuentas operativas Brasper |
 | blog | `.create` | `.update` | `.delete` | |
 | users | `.create` | `.update` | `.delete` | `.reset_password` |
 | home_banner | — | `.update` | — | |

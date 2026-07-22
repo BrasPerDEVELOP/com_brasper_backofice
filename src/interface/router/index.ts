@@ -6,20 +6,27 @@ function firstPermittedAppPath(authStore: ReturnType<typeof useAuthStore>): stri
   const candidates = [
     { path: '/app/dashboard', permission: 'dashboard.view' },
     { path: '/app/metricas', permission: 'metrics.view' },
-    { path: '/app/usuarios', permission: 'users.view' },
+    { path: '/app/usuarios', permissions: ['users.view', 'bank_accounts.view'] },
     { path: '/app/transacciones', permission: 'transactions.view' },
     { path: '/app/contabilidad', permission: 'accounting.view' },
     { path: '/app/calculator', permission: 'calculator.view' },
     { path: '/app/cupones', permission: 'coupons.view' },
-    { path: '/app/cuentas', permission: 'bank_accounts.view' },
     { path: '/app/comisiones', permission: 'commissions.view' },
     { path: '/app/tasas', permission: 'rates.view' },
+    { path: '/app/cuentas-brasper', permission: 'company_bank_accounts.view' },
     { path: '/app/home-banner', permission: 'home_banner.view' },
     { path: '/app/blog', permission: 'blog.view' },
     { path: '/app/roles-permisos', permission: 'roles.permissions.view' },
     { path: '/app/perfil', permission: 'profile.view' }
   ]
-  return candidates.find((item) => authStore.hasPermission(item.permission))?.path ?? '/app/perfil'
+  return candidates.find((item) => {
+    if ('permissions' in item && item.permissions) {
+      return item.permissions.some((permission) => authStore.hasPermission(permission))
+    }
+    return 'permission' in item && typeof item.permission === 'string'
+      ? authStore.hasPermission(item.permission)
+      : false
+  })?.path ?? '/app/perfil'
 }
 
 const routes: RouteRecordRaw[] = [
@@ -84,14 +91,26 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'cuentas',
         name: 'cuentas',
-        component: () => import('@modules/cuentas-bancarias/presentation/bodies/cuentas_bancarias_view.vue'),
-        meta: { permission: 'bank_accounts.view' }
+        redirect: (to) => ({
+          path: '/app/usuarios',
+          query: { ...to.query, tab: 'accounts' },
+          replace: true
+        })
       },
       {
         path: 'tasas',
         name: 'tasas',
         component: () => import('@modules/tasas/presentation/bodies/tasas_view.vue'),
         meta: { permission: 'rates.view' }
+      },
+      {
+        path: 'cuentas-brasper',
+        name: 'cuentas-brasper',
+        component: () => import('@modules/cuentas-bancarias/presentation/bodies/cuentas_brasper_view.vue'),
+        meta: {
+          breadcrumb: 'Configuración > Cuentas Brasper',
+          permission: 'company_bank_accounts.view'
+        }
       },
       {
         path: 'home-banner',
@@ -121,7 +140,10 @@ const routes: RouteRecordRaw[] = [
         path: 'usuarios',
         name: 'usuarios',
         component: () => import('@modules/auth/presentation/bodies/usuarios_view.vue'),
-        meta: { breadcrumb: 'Cuenta > Usuarios', permission: 'users.view' }
+        meta: {
+          breadcrumb: 'Cuenta > Usuarios y cuentas',
+          permissionAny: ['users.view', 'bank_accounts.view']
+        }
       }
     ]
   },
@@ -129,8 +151,9 @@ const routes: RouteRecordRaw[] = [
   { path: '/perfil', redirect: '/app/perfil' },
   { path: '/usuarios', redirect: '/app/usuarios' },
   { path: '/comisiones', redirect: '/app/comisiones' },
-  { path: '/cuentas', redirect: '/app/cuentas' },
+  { path: '/cuentas', redirect: (to) => ({ path: '/app/usuarios', query: { ...to.query, tab: 'accounts' } }) },
   { path: '/tasas', redirect: '/app/tasas' },
+  { path: '/cuentas-brasper', redirect: '/app/cuentas-brasper' },
   { path: '/home-banner', redirect: '/app/home-banner' },
   { path: '/blog', redirect: '/app/blog' },
   { path: '/roles-permisos', redirect: '/app/roles-permisos' },
@@ -182,6 +205,13 @@ router.beforeEach(async (to) => {
 
     const permission = to.meta.permission
     if (typeof permission === 'string' && !authStore.hasPermission(permission)) {
+      return { path: firstPermittedAppPath(authStore), replace: true }
+    }
+    const permissionAny = to.meta.permissionAny
+    if (
+      Array.isArray(permissionAny) &&
+      !permissionAny.some((item) => typeof item === 'string' && authStore.hasPermission(item))
+    ) {
       return { path: firstPermittedAppPath(authStore), replace: true }
     }
   }

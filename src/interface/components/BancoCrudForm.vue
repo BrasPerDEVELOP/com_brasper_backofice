@@ -13,12 +13,21 @@ import { useCuentasBancariasStore } from '@/modules/cuentas-bancarias/presentati
 import { formatApiErrorBody } from '@/interface/api/format_api_error'
 import axios from 'axios'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   /** Muestra el estado de carga del catálogo mientras el shell hidrata la lista. */
   loading: boolean
   /** País del flujo de cuenta (prefijo al crear un banco nuevo). */
   hintCountry?: 'pe' | 'br'
-}>()
+  canCreate?: boolean
+  canUpdate?: boolean
+  canDelete?: boolean
+  showClose?: boolean
+}>(), {
+  canCreate: true,
+  canUpdate: true,
+  canDelete: true,
+  showClose: true
+})
 
 const emit = defineEmits<{
   saved: [payload?: { selectBankId?: string; deletedBankId?: string }]
@@ -118,6 +127,7 @@ function errMessage(e: unknown, fallback: string): string {
 }
 
 function addNewRow() {
+  if (!props.canCreate) return
   error.value = ''
   tableRows.value.push(createEmptyRow())
 }
@@ -154,6 +164,7 @@ function isRowEmpty(row: BankTableRow): boolean {
 }
 
 async function saveRow(row: BankTableRow, index: number) {
+  if ((row.isNew && !props.canCreate) || (!row.isNew && !props.canUpdate)) return
   if (row.isNew && isRowEmpty(row)) {
     removeNewRow(row.key)
     return
@@ -192,6 +203,7 @@ async function saveRow(row: BankTableRow, index: number) {
 }
 
 function requestDeleteRow(row: BankTableRow) {
+  if ((row.isNew && !props.canCreate) || (!row.isNew && !props.canDelete)) return
   error.value = ''
   if (row.isNew) {
     removeNewRow(row.key)
@@ -205,6 +217,7 @@ function cancelDeleteRow() {
 }
 
 async function confirmDeleteRow(row: BankTableRow) {
+  if (!props.canDelete) return
   const bankId = row.id?.trim()
   if (!bankId) {
     error.value = 'No se puede eliminar: el banco no tiene identificador'
@@ -230,6 +243,7 @@ async function confirmDeleteRow(row: BankTableRow) {
 }
 
 async function submitAllNew() {
+  if (!props.canCreate) return
   const rowsToCreate = newRows.value.filter((r) => !isRowEmpty(r))
   if (!rowsToCreate.length) {
     error.value = 'Agrega al menos una fila con datos o usa + para crear otra'
@@ -315,6 +329,7 @@ defineExpose({ initFromCatalog })
                   class="form-input w-full min-w-[10rem] rounded-lg border border-[#e5e7eb] px-2.5 py-2 text-sm focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
                   placeholder="Ej. Brasper 21 SAC"
                   autocomplete="off"
+                  :disabled="row.isNew ? !canCreate : !canUpdate"
                 />
               </td>
               <td class="px-2 py-2 align-top">
@@ -324,12 +339,14 @@ defineExpose({ initFromCatalog })
                   class="form-input w-full min-w-[8rem] rounded-lg border border-[#e5e7eb] px-2.5 py-2 text-sm focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
                   placeholder="Ej. BCP"
                   autocomplete="off"
+                  :disabled="row.isNew ? !canCreate : !canUpdate"
                 />
               </td>
               <td class="px-2 py-2 align-top">
                 <select
                   v-model="row.currency"
                   class="form-select w-full min-w-[5.5rem] rounded-lg border border-[#e5e7eb] px-2 py-2 text-sm uppercase focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
+                  :disabled="row.isNew ? !canCreate : !canUpdate"
                 >
                   <option value="" disabled>—</option>
                   <option v-for="c in CURRENCY_CODES" :key="c" :value="c.toUpperCase()">
@@ -341,6 +358,7 @@ defineExpose({ initFromCatalog })
                 <select
                   v-model="row.country"
                   class="form-select w-full min-w-[5.5rem] rounded-lg border border-[#e5e7eb] px-2 py-2 text-sm lowercase focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
+                  :disabled="row.isNew ? !canCreate : !canUpdate"
                 >
                   <option value="" disabled>—</option>
                   <option value="pe">pe</option>
@@ -353,6 +371,7 @@ defineExpose({ initFromCatalog })
                   type="text"
                   class="form-input w-full min-w-[7rem] rounded-lg border border-[#e5e7eb] px-2.5 py-2 text-sm focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
                   autocomplete="off"
+                  :disabled="row.isNew ? !canCreate : !canUpdate"
                 />
               </td>
               <td class="px-2 py-2 align-top">
@@ -383,6 +402,7 @@ defineExpose({ initFromCatalog })
                 </div>
                 <div v-else class="flex items-center justify-end gap-1.5" @click.stop>
                   <button
+                    v-if="row.isNew ? canCreate : canUpdate"
                     type="button"
                     class="flex h-9 w-9 items-center justify-center rounded-full border border-[#c7d2fe] bg-white text-brasper-indigoStrong shadow-sm transition hover:bg-[#eef2ff] disabled:opacity-50"
                     :disabled="rowSavingKey === row.key || batchSaving"
@@ -427,6 +447,7 @@ defineExpose({ initFromCatalog })
                     </svg>
                   </button>
                   <button
+                    v-if="row.isNew ? canCreate : canDelete"
                     type="button"
                     class="flex h-9 w-9 items-center justify-center rounded-full border border-[#fecaca] bg-white text-[#dc2626] shadow-sm transition hover:bg-[#fef2f2] disabled:opacity-50"
                     :disabled="rowSavingKey === row.key || batchSaving"
@@ -451,6 +472,7 @@ defineExpose({ initFromCatalog })
 
       <div class="mt-4 flex items-center gap-3">
         <button
+          v-if="canCreate"
           type="button"
           class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brasper-indigoStrong text-white shadow-md transition hover:bg-brasper-indigoDark disabled:opacity-60"
           title="Agregar fila"
@@ -461,7 +483,7 @@ defineExpose({ initFromCatalog })
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14m7-7H5" />
           </svg>
         </button>
-        <span class="text-sm text-[#64748b]">Agregar otra fila de banco</span>
+        <span v-if="canCreate" class="text-sm text-[#64748b]">Agregar otra cuenta operativa</span>
       </div>
 
       <p v-if="!tableRows.length" class="py-6 text-center text-sm text-[#6b7280]">
@@ -483,6 +505,7 @@ defineExpose({ initFromCatalog })
 
     <div class="flex gap-3">
       <button
+        v-if="showClose"
         type="button"
         class="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2.5 text-sm font-medium text-[#6b7280] hover:bg-[#f9fafb]"
         @click="close"
@@ -490,7 +513,7 @@ defineExpose({ initFromCatalog })
         Cerrar
       </button>
       <button
-        v-if="pendingNewCount > 0"
+        v-if="canCreate && pendingNewCount > 0"
         type="button"
         class="rounded-lg bg-brasper-indigoStrong px-5 py-2.5 text-sm font-semibold text-white hover:bg-brasper-indigoDark disabled:opacity-60"
         :disabled="batchSaving || !!rowSavingKey"

@@ -71,6 +71,16 @@ export const PERMISSION_MODULES = [
     ]
   },
   {
+    key: 'company_bank_accounts',
+    label: 'Cuentas Brasper',
+    permissions: [
+      { key: 'company_bank_accounts.view', label: 'Ver' },
+      { key: 'company_bank_accounts.create', label: 'Crear' },
+      { key: 'company_bank_accounts.update', label: 'Editar' },
+      { key: 'company_bank_accounts.delete', label: 'Eliminar' }
+    ]
+  },
+  {
     key: 'commissions',
     label: 'Comisiones',
     permissions: [
@@ -141,6 +151,9 @@ const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
     'users.view',
     'users.create',
     'users.update',
+    'bank_accounts.view',
+    'bank_accounts.create',
+    'bank_accounts.update',
     'transactions.view',
     'transactions.create',
     'transactions.update',

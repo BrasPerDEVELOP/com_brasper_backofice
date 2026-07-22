@@ -583,7 +583,7 @@ onMounted(async () => {
       </div>
       <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <RouterLink
-          to="/app/cuentas"
+          :to="{ path: '/app/usuarios', query: { tab: 'accounts' } }"
           class="group relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-6 shadow-md transition duration-300 hover:-translate-y-0.5 hover:border-brasper-cyan/50 hover:shadow-lg"
         >
           <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-brasper-indigoStrong transition group-hover:bg-brasper-cyanLight/40">
