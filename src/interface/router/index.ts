@@ -15,7 +15,6 @@ function firstPermittedAppPath(authStore: ReturnType<typeof useAuthStore>): stri
     { path: '/app/comisiones', permission: 'commissions.view' },
     { path: '/app/tasas', permission: 'rates.view' },
     { path: '/app/home-banner', permission: 'home_banner.view' },
-    { path: '/app/mundial-2026', permission: 'world_cup.view' },
     { path: '/app/blog', permission: 'blog.view' },
     { path: '/app/roles-permisos', permission: 'roles.permissions.view' },
     { path: '/app/perfil', permission: 'profile.view' }
@@ -36,12 +35,6 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/interface/layout/app_layout.vue'),
     meta: { requiresAuth: true },
     children: [
-      {
-        path: 'mundial-2026',
-        name: 'mundial-2026',
-        component: () => import('@modules/world-cup/presentation/bodies/world_cup_view.vue'),
-        meta: { breadcrumb: 'Marketing > Mundial 2026', permission: 'world_cup.view' }
-      },
       {
         path: '',
         redirect: '/app/dashboard'
@@ -139,7 +132,6 @@ const routes: RouteRecordRaw[] = [
   { path: '/cuentas', redirect: '/app/cuentas' },
   { path: '/tasas', redirect: '/app/tasas' },
   { path: '/home-banner', redirect: '/app/home-banner' },
-  { path: '/mundial-2026', redirect: '/app/mundial-2026' },
   { path: '/blog', redirect: '/app/blog' },
   { path: '/roles-permisos', redirect: '/app/roles-permisos' },
   { path: '/calculator', redirect: '/app/calculator' },

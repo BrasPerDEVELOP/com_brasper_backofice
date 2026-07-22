@@ -164,7 +164,7 @@ CuentaBancariaCreateForm.vue      → campos
 
 ## B9 — Documentación
 
-- [ ] Actualizar `CLAUDE.md` — excepciones de capas (dashboard, contabilidad, world-cup)
+- [ ] Actualizar `CLAUDE.md` — excepciones de capas (dashboard, contabilidad)
 - [ ] Marcar Fase B completada en `00-ROADMAP.md`
 
 ---

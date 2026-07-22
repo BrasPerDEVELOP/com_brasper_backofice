@@ -1,5 +1,7 @@
 # Auditoría Brasper Backoffice — 2026-07-09
 
+> Nota histórica: el módulo `world-cup` fue retirado del frontend el 2026-07-21. Las menciones siguientes describen el estado auditado el 2026-07-09.
+
 **Proyecto:** `com_brasper_backofice`  
 **Skills aplicadas:** `brasper-backoffice-audit`, `thermo-nuclear-code-quality-review`  
 **Alcance:** Fase 1 — solo auditoría (sin implementación)  
