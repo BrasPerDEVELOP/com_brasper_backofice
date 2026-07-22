@@ -30,20 +30,32 @@ const bankOptions = computed(() =>
   }))
 )
 
+function primaryDocLabel(user: { identifications: { document_type: string; document_number: string; is_primary: boolean }[] }): string {
+  const primary = user.identifications.find((item) => item.is_primary) ?? user.identifications[0]
+  return primary ? `${primary.document_type.toUpperCase()} ${primary.document_number}` : ''
+}
+
 const clientOptions = computed(() =>
-  cuentasStore.clientUsers.map((u) => ({ value: u.id, label: u.name }))
+  cuentasStore.clientUsers.map((u) => ({
+    value: u.id,
+    label: u.name,
+    email: u.email,
+    doc: primaryDocLabel(u)
+  }))
 )
 
 const banksLoading = computed(() => cuentasStore.banks.length === 0)
 
 const clientsLoading = computed(() => cuentasStore.clientUsers.length === 0)
 
-const lockedUserName = computed(
-  () =>
-    cuentasStore.clientUsers.find((u) => u.id === props.lockedUserId)?.name ??
-    props.lockedUserId ??
-    ''
+const lockedUser = computed(() =>
+  cuentasStore.clientUsers.find((u) => u.id === props.lockedUserId)
 )
+const lockedUserName = computed(
+  () => lockedUser.value?.name ?? props.lockedUserId ?? ''
+)
+const lockedUserEmail = computed(() => lockedUser.value?.email ?? '')
+const lockedUserDoc = computed(() => (lockedUser.value ? primaryDocLabel(lockedUser.value) : ''))
 
 async function onSubmit(payload: CreateBankAccountPayload) {
   try {
@@ -86,13 +98,6 @@ watch(
       >
         <div class="sticky top-0 z-10 border-b border-[#e5e7eb] bg-white px-6 py-5">
           <h2 class="text-lg font-semibold text-[#1f2937]">Nueva cuenta bancaria</h2>
-          <div
-            class="mt-3 inline-flex rounded-lg bg-[#f0f9ff] px-3 py-1.5 text-sm font-medium text-[#0369a1]"
-          >
-            {{ holderType === 'natural' ? 'Persona natural' : 'Persona jurídica' }} ·
-            {{ bankCountry.toUpperCase() }} ·
-            {{ accountFlow === 'destination' ? 'Destino' : 'Origen' }}
-          </div>
         </div>
 
         <CuentaBancariaCreateForm
@@ -105,6 +110,8 @@ watch(
           :banks-loading="banksLoading"
           :clients-loading="clientsLoading"
           :locked-user-name="lockedUserName"
+          :locked-user-email="lockedUserEmail"
+          :locked-user-doc="lockedUserDoc"
           :error="cuentasStore.error"
           :is-creating="cuentasStore.isCreating"
           :variant="variant ?? 'transaction'"
