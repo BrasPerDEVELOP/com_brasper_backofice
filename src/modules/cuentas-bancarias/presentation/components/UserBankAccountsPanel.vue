@@ -7,9 +7,13 @@ const props = defineProps<{
   group: UserBankAccountGroup | null
   banks: BankOption[]
   canCreate: boolean
+  canUpdate?: boolean
   highlightedAccountId?: string | null
 }>()
-const emit = defineEmits<{ create: [userId: string] }>()
+const emit = defineEmits<{
+  create: [userId: string]
+  edit: [account: UserBankAccountGroup['accounts'][number]]
+}>()
 const copiedValue = shallowRef('')
 
 const bankById = computed(() => new Map(props.banks.map((bank) => [bank.id, bank])))
@@ -41,7 +45,7 @@ function formattedDate(value?: string) {
       </header>
       <div v-if="group.accounts.length" class="space-y-3">
         <article v-for="account in group.accounts" :key="account.id" class="rounded-xl border p-4 transition" :class="highlightedAccountId === account.id ? 'border-brasper-indigoStrong bg-[#eef2ff] ring-2 ring-brasper-indigoStrong/20' : 'border-[#e5e7eb]'">
-          <div class="flex items-start justify-between gap-3"><div><p class="text-xs font-semibold uppercase text-brasper-indigoStrong">{{ account.bank_country === 'br' ? 'Brasil' : 'Perú' }} · {{ account.account_flow === 'origin' ? 'Origen' : 'Destino' }}</p><h3 class="mt-1 font-semibold text-[#1f2937]">{{ bankLabel(account.bank_id) }}</h3></div><span class="rounded bg-[#f3f4f6] px-2 py-1 text-xs text-[#4b5563]">{{ account.account_holder_type.toLowerCase().includes('legal') ? 'Jurídica' : 'Natural' }}</span></div>
+          <div class="flex items-start justify-between gap-3"><div><p class="text-xs font-semibold uppercase text-brasper-indigoStrong">{{ account.bank_country === 'br' ? 'Brasil' : 'Perú' }} · {{ account.account_flow === 'origin' ? 'Origen' : 'Destino' }}</p><h3 class="mt-1 font-semibold text-[#1f2937]">{{ bankLabel(account.bank_id) }}</h3></div><div class="flex items-center gap-2"><span class="rounded bg-[#f3f4f6] px-2 py-1 text-xs text-[#4b5563]">{{ account.account_holder_type.toLowerCase().includes('legal') ? 'Jurídica' : 'Natural' }}</span><button v-if="canUpdate" type="button" class="rounded-lg border border-[#e5e7eb] px-2.5 py-1 text-xs font-semibold text-[#4b5563] transition hover:bg-[#f9fafb]" @click="emit('edit', account)">Editar</button></div></div>
           <dl class="mt-3 space-y-2 text-sm">
             <div v-if="account.account_number" class="flex items-center justify-between gap-2"><dt class="text-[#6b7280]">N.º cuenta</dt><dd><span class="font-mono">{{ account.account_number }}</span> <button class="ml-1 text-xs text-brasper-indigoStrong" type="button" @click="copy(account.account_number)">{{ copiedValue === account.account_number ? 'Copiado' : 'Copiar' }}</button></dd></div>
             <div v-if="account.cci_number" class="flex items-center justify-between gap-2"><dt class="text-[#6b7280]">CCI</dt><dd><span class="font-mono">{{ account.cci_number }}</span> <button class="ml-1 text-xs text-brasper-indigoStrong" type="button" @click="copy(account.cci_number)">Copiar</button></dd></div>

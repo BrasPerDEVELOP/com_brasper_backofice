@@ -1,6 +1,11 @@
 import { apiClient } from '@/interface/api/client'
 import { Domain } from '@/interface/infrastructure/services'
-import type { CuentasBancariasRepository, CreateBankAccountPayload, GetBankAccountsParams } from './cuentas_bancarias_repository'
+import type {
+  CuentasBancariasRepository,
+  CreateBankAccountPayload,
+  GetBankAccountsParams,
+  UpdateBankAccountPayload
+} from './cuentas_bancarias_repository'
 import type { BankAccount } from '../../domain/models'
 
 function parseBankAccount(item: Record<string, unknown>): BankAccount {
@@ -112,6 +117,16 @@ export class CuentasBancariasApiAdapter implements CuentasBancariasRepository {
   async createBankAccount(payload: CreateBankAccountPayload): Promise<BankAccount> {
     const url = this.endpoint('')
     const response = await apiClient.post<unknown>(url, payload)
+    const raw = response.data
+    const obj = raw != null && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+    const item = (obj.data ?? obj) as Record<string, unknown>
+    return parseBankAccount(item)
+  }
+
+  /** El backend espera el `id` en el body, no en la URL. */
+  async updateBankAccount(payload: UpdateBankAccountPayload): Promise<BankAccount> {
+    const url = this.endpoint('')
+    const response = await apiClient.put<unknown>(url, payload)
     const raw = response.data
     const obj = raw != null && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
     const item = (obj.data ?? obj) as Record<string, unknown>

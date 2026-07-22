@@ -23,6 +23,11 @@ export interface CreateBankAccountPayload {
   cpf?: number | null
 }
 
+/** El backend recibe el `id` en el body (PUT transactions/bank-accounts/). */
+export interface UpdateBankAccountPayload extends Partial<CreateBankAccountPayload> {
+  id: string
+}
+
 export interface GetBankAccountsParams {
   userId?: string
   bank_country?: 'pe' | 'br'
@@ -32,4 +37,5 @@ export interface GetBankAccountsParams {
 export interface CuentasBancariasRepository {
   getBankAccounts(params?: GetBankAccountsParams): Promise<BankAccount[]>
   createBankAccount(payload: CreateBankAccountPayload): Promise<BankAccount>
+  updateBankAccount(payload: UpdateBankAccountPayload): Promise<BankAccount>
 }

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, shallowRef, toRef } from 'vue'
+import { useRoute } from 'vue-router'
 import CuentaBancariaCreateFormModal from '@/interface/components/CuentaBancariaCreateFormModal.vue'
+import CuentaBancariaEditFormModal from '@/interface/components/CuentaBancariaEditFormModal.vue'
 import { useAuthStore } from '@modules/auth/presentation/controllers/use_auth_store_controller'
 import BankAccountUsersFilters from '../components/BankAccountUsersFilters.vue'
 import BankAccountUsersTable from '../components/BankAccountUsersTable.vue'
@@ -10,13 +12,17 @@ import { useCuentasBancariasStore } from '../controllers/use_cuentas_bancarias_s
 import type { BankAccount } from '../../domain/models'
 
 const authStore = useAuthStore()
+const route = useRoute()
 const cuentasStore = useCuentasBancariasStore()
 const showCreateModal = shallowRef(false)
 const createForUserId = shallowRef<string | null>(null)
+const showEditModal = shallowRef(false)
+const editingAccount = shallowRef<BankAccount | null>(null)
 const highlightedAccountId = shallowRef<string | null>(null)
 const successMessage = shallowRef('')
 
 const canCreate = computed(() => authStore.hasPermission('bank_accounts.create'))
+const canUpdate = computed(() => authStore.hasPermission('bank_accounts.update'))
 const browser = useUserBankAccounts({
   users: toRef(cuentasStore, 'clientUsers'),
   accounts: toRef(cuentasStore, 'bankAccounts')
@@ -48,7 +54,28 @@ function createAnotherForLastUser() {
   openCreate(lastCreatedUserId.value)
 }
 
+function openEdit(account: BankAccount) {
+  if (!canUpdate.value) return
+  cuentasStore.error = null
+  editingAccount.value = account
+  showEditModal.value = true
+}
+
+function onUpdated(account: BankAccount) {
+  highlightedAccountId.value = account.id
+  lastCreatedUserId.value = null
+  browser.selectUser(account.user_id)
+  successMessage.value = 'Cuenta bancaria actualizada correctamente.'
+  window.setTimeout(() => {
+    if (highlightedAccountId.value === account.id) highlightedAccountId.value = null
+    successMessage.value = ''
+  }, 8000)
+}
+
 onMounted(async () => {
+  // Llegada desde /app/usuarios ("Ver cuentas"): preselecciona al usuario.
+  const requestedUserId = typeof route.query.user === 'string' ? route.query.user.trim() : ''
+  if (requestedUserId) browser.selectUser(requestedUserId)
   await Promise.all([
     cuentasStore.loadClientUsers(true),
     cuentasStore.loadBankAccounts(),
@@ -77,9 +104,10 @@ onMounted(async () => {
         <BankAccountUsersTable :groups="browser.paginatedGroups.value" :selected-user-id="browser.selectedUserId.value" :can-create="canCreate" :loading="cuentasStore.isLoading" @select="browser.selectUser" @create="openCreate" />
         <div class="flex items-center justify-between text-sm text-[#6b7280]"><span>{{ browser.filteredGroups.value.length }} usuarios · Página {{ browser.currentPage.value }} de {{ browser.totalPages.value }}</span><div class="flex gap-2"><button type="button" class="rounded border border-[#e5e7eb] px-3 py-2 disabled:opacity-40" :disabled="browser.currentPage.value <= 1" @click="browser.goToPage(browser.currentPage.value - 1)">Anterior</button><button type="button" class="rounded border border-[#e5e7eb] px-3 py-2 disabled:opacity-40" :disabled="browser.currentPage.value >= browser.totalPages.value" @click="browser.goToPage(browser.currentPage.value + 1)">Siguiente</button></div></div>
       </div>
-      <UserBankAccountsPanel class="xl:sticky xl:top-20 xl:self-start" :group="browser.selectedGroup.value" :banks="cuentasStore.banks" :can-create="canCreate" :highlighted-account-id="highlightedAccountId" @create="openCreate" />
+      <UserBankAccountsPanel class="xl:sticky xl:top-20 xl:self-start" :group="browser.selectedGroup.value" :banks="cuentasStore.banks" :can-create="canCreate" :can-update="canUpdate" :highlighted-account-id="highlightedAccountId" @create="openCreate" @edit="openEdit" />
     </div>
   </section>
 
   <CuentaBancariaCreateFormModal v-model="showCreateModal" variant="accounts" account-flow="destination" bank-country="pe" holder-type="natural" :locked-user-id="createForUserId ?? undefined" @created="onCreated" />
+  <CuentaBancariaEditFormModal v-model="showEditModal" :account="editingAccount" @saved="onUpdated" />
 </template>

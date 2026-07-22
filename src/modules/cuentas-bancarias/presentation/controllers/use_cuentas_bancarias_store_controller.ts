@@ -1,6 +1,9 @@
 import { defineStore } from 'pinia'
 import type { BankAccount } from '../../domain/models'
-import type { CreateBankAccountPayload } from '../../infrastructure/adapters/cuentas_bancarias_repository'
+import type {
+  CreateBankAccountPayload,
+  UpdateBankAccountPayload
+} from '../../infrastructure/adapters/cuentas_bancarias_repository'
 import type { BankOption } from '../../infrastructure/adapters/banks_api_adapter'
 import { GetBankAccountsUseCase } from '../../application/use_cases'
 import { CuentasBancariasApiAdapter } from '../../infrastructure/adapters'
@@ -28,6 +31,7 @@ interface CuentasBancariasState {
   isLoading: boolean
   error: string | null
   isCreating: boolean
+  isUpdating: boolean
   _clientUsersLoaded: boolean
   _transactionFormUsersLoaded: boolean
   _banksLoaded: boolean
@@ -73,6 +77,7 @@ export const useCuentasBancariasStore = defineStore('cuentasBancarias', {
     isLoading: false,
     error: null,
     isCreating: false,
+    isUpdating: false,
     _clientUsersLoaded: false,
     _transactionFormUsersLoaded: false,
     _banksLoaded: false
@@ -237,6 +242,31 @@ export const useCuentasBancariasStore = defineStore('cuentasBancarias', {
         throw e
       } finally {
         this.isCreating = false
+      }
+    },
+
+    async updateBankAccount(payload: UpdateBankAccountPayload): Promise<BankAccount> {
+      this.isUpdating = true
+      this.error = null
+      try {
+        const repo = getRepository()
+        const updated = await repo.updateBankAccount(payload)
+        this.bankAccounts = upsertBankAccount(this.bankAccounts, updated)
+        if (
+          this.transactionFormBankAccountsUserId &&
+          String(updated.user_id) === this.transactionFormBankAccountsUserId
+        ) {
+          this.transactionFormBankAccounts = upsertBankAccount(
+            this.transactionFormBankAccounts,
+            updated
+          )
+        }
+        return updated
+      } catch (e) {
+        this.error = e instanceof Error ? e.message : 'Error al actualizar cuenta bancaria'
+        throw e
+      } finally {
+        this.isUpdating = false
       }
     }
   }
