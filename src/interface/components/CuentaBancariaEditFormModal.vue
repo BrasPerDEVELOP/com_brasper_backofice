@@ -211,7 +211,7 @@ async function submitUpdate() {
               <span v-if="fieldErrors.account_number" class="mt-1 block text-xs text-[#dc2626]">{{ fieldErrors.account_number }}</span>
             </label>
             <label class="text-sm">Confirmar número
-              <input :value="form.account_number_confirmation" inputmode="numeric" :aria-invalid="!!fieldErrors.account_number_confirmation" class="mt-1 w-full rounded-lg border px-3 py-2.5" :class="fieldErrors.account_number_confirmation ? 'border-[#dc2626]' : 'border-[#e5e7eb]'" @paste.prevent @input="onNumericInput($event, 'account_number_confirmation')"/>
+              <input :value="form.account_number_confirmation" inputmode="numeric" :aria-invalid="!!fieldErrors.account_number_confirmation" class="mt-1 w-full rounded-lg border px-3 py-2.5" :class="fieldErrors.account_number_confirmation ? 'border-[#dc2626]' : 'border-[#e5e7eb]'" @input="onNumericInput($event, 'account_number_confirmation')"/>
               <span v-if="fieldErrors.account_number_confirmation" class="mt-1 block text-xs text-[#dc2626]">{{ fieldErrors.account_number_confirmation }}</span>
             </label>
             <label class="text-sm">CCI (20 dígitos)
@@ -219,7 +219,7 @@ async function submitUpdate() {
               <span v-if="fieldErrors.cci_number" class="text-xs text-[#dc2626]">{{ fieldErrors.cci_number }}</span>
             </label>
             <label class="text-sm">Confirmar CCI
-              <input :value="form.cci_number_confirmation" maxlength="20" inputmode="numeric" :aria-invalid="!!fieldErrors.cci_number_confirmation" class="mt-1 w-full rounded-lg border px-3 py-2.5" :class="fieldErrors.cci_number_confirmation ? 'border-[#dc2626]' : 'border-[#e5e7eb]'" @paste.prevent @input="onNumericInput($event, 'cci_number_confirmation')"/>
+              <input :value="form.cci_number_confirmation" maxlength="20" inputmode="numeric" :aria-invalid="!!fieldErrors.cci_number_confirmation" class="mt-1 w-full rounded-lg border px-3 py-2.5" :class="fieldErrors.cci_number_confirmation ? 'border-[#dc2626]' : 'border-[#e5e7eb]'" @input="onNumericInput($event, 'cci_number_confirmation')"/>
               <span v-if="fieldErrors.cci_number_confirmation" class="text-xs text-[#dc2626]">{{ fieldErrors.cci_number_confirmation }}</span>
             </label>
           </div>
@@ -233,7 +233,7 @@ async function submitUpdate() {
               <span v-if="fieldErrors.pix_key" class="text-xs text-[#dc2626]">{{ fieldErrors.pix_key }}</span>
             </label>
             <label class="text-sm">Confirmar clave PIX
-              <input v-model.trim="form.pix_key_confirmation" :aria-invalid="!!fieldErrors.pix_key_confirmation" class="mt-1 w-full rounded-lg border px-3 py-2.5" :class="fieldErrors.pix_key_confirmation ? 'border-[#dc2626]' : 'border-[#e5e7eb]'" @paste.prevent/>
+              <input v-model.trim="form.pix_key_confirmation" :aria-invalid="!!fieldErrors.pix_key_confirmation" class="mt-1 w-full rounded-lg border px-3 py-2.5" :class="fieldErrors.pix_key_confirmation ? 'border-[#dc2626]' : 'border-[#e5e7eb]'"/>
               <span v-if="fieldErrors.pix_key_confirmation" class="text-xs text-[#dc2626]">{{ fieldErrors.pix_key_confirmation }}</span>
             </label>
           </div>
