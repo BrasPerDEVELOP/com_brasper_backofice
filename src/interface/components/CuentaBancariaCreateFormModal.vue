@@ -12,6 +12,7 @@ const props = defineProps<{
   holderType: 'natural' | 'juridica'
   /** Si se define, la cuenta se asigna a este usuario (sin selector de cliente). */
   lockedUserId?: string
+  variant?: 'accounts' | 'transaction'
 }>()
 
 const emit = defineEmits<{
@@ -24,7 +25,8 @@ const cuentasStore = useCuentasBancariasStore()
 const bankOptions = computed(() =>
   cuentasStore.banks.map((b) => ({
     value: b.id,
-    label: `${b.bank}${b.currency ? ` (${b.currency})` : ''}`
+    label: `${b.bank}${b.currency ? ` (${b.currency})` : ''}`,
+    country: b.country
   }))
 )
 
@@ -105,6 +107,7 @@ watch(
           :locked-user-name="lockedUserName"
           :error="cuentasStore.error"
           :is-creating="cuentasStore.isCreating"
+          :variant="variant ?? 'transaction'"
           @submit="onSubmit"
           @close="close"
           @validation-error="onValidationError"

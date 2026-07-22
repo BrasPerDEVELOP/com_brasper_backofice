@@ -5838,6 +5838,7 @@ onActivated(() => {
       :bank-country="transactionBankModalCountry"
       :holder-type="transactionBankModalHolder"
       :locked-user-id="form.user_id?.trim() || undefined"
+      variant="transaction"
       @created="onTransactionBankAccountCreated"
     />
     <BancoCrudModal

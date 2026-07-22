@@ -1,12 +1,13 @@
 import { apiClient } from '@/interface/api/client'
 import { Domain } from '@/interface/infrastructure/services'
-import { parseUserListItem } from '@modules/auth/infrastructure/parse_user'
+import { parseUserListItem, type UserIdentification } from '@modules/auth/infrastructure/parse_user'
 
 export interface UserOption {
   id: string
   name: string
   email: string
   role?: string
+  identifications: UserIdentification[]
 }
 
 const CLIENT_ROLE_ALIASES = ['client', 'cliente'] as const
@@ -15,7 +16,13 @@ const CLIENT_ROLE_ALIASES = ['client', 'cliente'] as const
 function parseUser(item: unknown): UserOption | null {
   const u = parseUserListItem(item)
   if (!u) return null
-  return { id: u.id, name: u.name, email: u.email, role: u.role }
+  return {
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    role: u.role,
+    identifications: u.identifications
+  }
 }
 
 /** Usuarios con rol cliente, ordenados por nombre completo. */

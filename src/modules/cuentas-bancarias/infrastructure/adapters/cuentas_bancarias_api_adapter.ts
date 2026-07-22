@@ -68,6 +68,19 @@ function extractBankAccountsArray(raw: unknown): unknown[] {
   return []
 }
 
+function extractNextPage(raw: unknown): string | null {
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const obj = raw as Record<string, unknown>
+  const direct = obj.next ?? obj.next_page ?? obj.nextPage
+  if (typeof direct === 'string' && direct.trim()) return direct
+  const pagination = obj.pagination
+  if (pagination != null && typeof pagination === 'object' && !Array.isArray(pagination)) {
+    const nested = (pagination as Record<string, unknown>).next
+    if (typeof nested === 'string' && nested.trim()) return nested
+  }
+  return null
+}
+
 export class CuentasBancariasApiAdapter implements CuentasBancariasRepository {
   private endpoint(path: string): string {
     const p = path.replace(/^\/+/, '')
@@ -84,9 +97,16 @@ export class CuentasBancariasApiAdapter implements CuentasBancariasRepository {
     if (params?.account_flow) search.set('account_flow', params.account_flow)
     const qs = search.toString()
     if (qs) url += (url.includes('?') ? '&' : '?') + qs
-    const response = await apiClient.get<unknown>(url)
-    const data = extractBankAccountsArray(response.data)
-    return parseBankAccounts(data)
+    const accounts: BankAccount[] = []
+    const seenPages = new Set<string>()
+    let nextUrl: string | null = url
+    while (nextUrl && !seenPages.has(nextUrl)) {
+      seenPages.add(nextUrl)
+      const response = await apiClient.get<unknown>(nextUrl)
+      accounts.push(...parseBankAccounts(extractBankAccountsArray(response.data)))
+      nextUrl = extractNextPage(response.data)
+    }
+    return accounts
   }
 
   async createBankAccount(payload: CreateBankAccountPayload): Promise<BankAccount> {

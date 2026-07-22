@@ -192,7 +192,8 @@ export const useCuentasBancariasStore = defineStore('cuentasBancarias', {
           id: user.id,
           name: user.name,
           email: user.email,
-          role: user.role
+          role: user.role,
+          identifications: user.identifications
         }
 
         this.transactionFormUsers = mergeUserOption(this.transactionFormUsers, option)
@@ -213,9 +214,8 @@ export const useCuentasBancariasStore = defineStore('cuentasBancarias', {
         const authStore = useAuthStore()
         const userId = payload.user_id ?? authStore.user?.id
         if (!userId) throw new Error('Usuario no autenticado')
-        const { user_id: _omit, ...rest } = payload
         const fullPayload: CreateBankAccountPayload = {
-          ...rest,
+          ...payload,
           user_id: userId
         }
         const repo = getRepository()
@@ -224,7 +224,6 @@ export const useCuentasBancariasStore = defineStore('cuentasBancarias', {
           ...created,
           user_id: String(created.user_id || userId)
         }
-        await this.loadBankAccounts()
         this.bankAccounts = upsertBankAccount(this.bankAccounts, createdForUser)
         await this.loadBankAccountsForTransactionUser(userId)
         this.transactionFormBankAccounts = upsertBankAccount(
