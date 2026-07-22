@@ -76,8 +76,11 @@ export async function fetchUserById(id: string): Promise<UserListItem | null> {
   } catch {
     // El endpoint de detalle puede no existir aún: caemos al listado filtrado por id.
   }
+  // Solo el usuario con el id exacto: si el backend ignora el filtro user_id,
+  // devolver filtered[0] hidrataría identificaciones de OTRO usuario y al
+  // guardar se sobrescribirían las del usuario editado.
   const filtered = await fetchUsers({ user_id: trimmed })
-  return filtered.find((u) => u.id === trimmed) ?? filtered[0] ?? null
+  return filtered.find((u) => u.id === trimmed) ?? null
 }
 
 export interface CreateUserPayload {
@@ -211,19 +214,32 @@ export async function updateUser(payload: UpdateUserPayload): Promise<UserListIt
   form.append('id', payload.id)
   appendUserFormFields(form, payload)
 
-  const response = await apiClient.put<unknown>(url, form, {
-    skipAuthRedirect: true
-  })
-  const raw = response.data
-  const user = parseUser(
-    raw != null && typeof raw === 'object'
-      ? ((raw as Record<string, unknown>).user ?? (raw as Record<string, unknown>).data ?? raw)
-      : raw
-  )
-  if (!user) {
-    throw new Error('Respuesta de actualización de usuario inválida')
+  try {
+    const response = await apiClient.put<unknown>(url, form, {
+      skipAuthRedirect: true
+    })
+    const raw = response.data
+    const user = parseUser(
+      raw != null && typeof raw === 'object'
+        ? ((raw as Record<string, unknown>).user ?? (raw as Record<string, unknown>).data ?? raw)
+        : raw
+    )
+    if (!user) {
+      throw new Error('Respuesta de actualización de usuario inválida')
+    }
+    return user
+  } catch (e) {
+    if (axios.isAxiosError(e)) {
+      const apiMessage = formatApiErrorBody(e.response?.data)
+      if (apiMessage) throw new Error(apiMessage)
+      if (!e.response) {
+        throw new Error(
+          'El servidor no respondió (posible error interno del API). Intenta de nuevo o revisa el backend.'
+        )
+      }
+    }
+    throw e instanceof Error ? e : new Error('Error al actualizar usuario')
   }
-  return user
 }
 
 /** Elimina un usuario por ID. Intenta el endpoint REST y cae al contrato con id en body. */

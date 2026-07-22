@@ -19,6 +19,36 @@ const documentTypeOptions = [
   { value: 'other', label: 'Otro' }
 ]
 
+/** Longitud exacta de los tipos de documento puramente numéricos. */
+const NUMERIC_TYPE_LENGTHS: Record<string, number> = {
+  dni: 8,
+  ruc: 11,
+  cpf: 11,
+  cnpj: 14
+}
+
+/** Solo dígitos para tipos numéricos; sin espacios para el resto (CE, pasaporte). */
+function cleanDocumentNumber(type: string, value: string): string {
+  const maxLength = NUMERIC_TYPE_LENGTHS[type]
+  if (maxLength) return value.replace(/\D/g, '').slice(0, maxLength)
+  return value.replace(/\s+/g, '')
+}
+
+function onNumberInput(index: number, event: Event) {
+  const target = event.target as HTMLInputElement
+  const item = identifications.value[index]
+  if (!item) return
+  const cleaned = cleanDocumentNumber(item.document_type, target.value)
+  item.document_number = cleaned
+  target.value = cleaned
+}
+
+function onTypeChange(index: number) {
+  const item = identifications.value[index]
+  if (!item) return
+  item.document_number = cleanDocumentNumber(item.document_type, item.document_number)
+}
+
 function addIdentification() {
   identifications.value = [
     ...identifications.value,
@@ -69,12 +99,16 @@ function setPrimary(index: number) {
         :options="documentTypeOptions"
         placeholder="Tipo de documento"
         :searchable="false"
+        @update:model-value="onTypeChange(index)"
       />
       <input
-        v-model="identification.document_number"
+        :value="identification.document_number"
         type="text"
+        :inputmode="NUMERIC_TYPE_LENGTHS[identification.document_type] ? 'numeric' : 'text'"
+        :maxlength="NUMERIC_TYPE_LENGTHS[identification.document_type] ?? 40"
         class="form-input w-full rounded-lg border border-[#e5e7eb] bg-white px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
         placeholder="Número de documento"
+        @input="onNumberInput(index, $event)"
       />
       <button
         type="button"

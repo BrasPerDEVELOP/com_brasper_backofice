@@ -126,9 +126,10 @@ async function handleSubmit() {
   creating.value = true
   error.value = ''
   try {
+    // Sin espacios internos: "130 028 633 43" y "13002863343" son el mismo documento.
     const normalizedIdentifications = identifications.value.map((item) => ({
       document_type: item.document_type.trim(),
-      document_number: item.document_number.trim(),
+      document_number: item.document_number.replace(/\s+/g, ''),
       is_primary: item.is_primary
     }))
     if (normalizedIdentifications.some((item) => !item.document_type || !item.document_number)) {

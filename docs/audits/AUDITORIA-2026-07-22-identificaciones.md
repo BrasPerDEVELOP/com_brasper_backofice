@@ -1,5 +1,12 @@
 # Auditoría 2026-07-22 — Guardado de identificaciones múltiples ("Network Error")
 
+> **Estado: CERRADA (2026-07-22).** Los 5 fixes de la tabla de prioridades fueron aplicados:
+> backend — `_apply_identifications` sincroniza en sitio (sin INSERT-antes-de-DELETE) y
+> `main.py` registra handlers de `IntegrityError` (409) y `ValueError` (422) que sí pasan
+> por CORS; frontend — `updateUser` traduce errores del API, el editor normaliza números
+> por tipo de documento y `fetchUserById` ya no cae a `filtered[0]`. Con tests de regresión
+> en ambos repos. **Pendiente: deploy de `com_brasper_api`** para que el fix llegue a producción.
+
 ## Síntoma reportado
 
 En `/app/usuarios`, al editar un usuario que ya tiene documento (p. ej. DNI 71389479) y agregarle una segunda identificación (CPF), el botón Guardar falla con **"Network Error"**. El mensaje no viene de la red: es un **500 del backend sin cabeceras CORS**, que el navegador bloquea y axios reporta como error de red.
