@@ -10,7 +10,8 @@ export interface ImportTransactionItem {
       bank_country?: string
       holder_names?: string
       holder_surnames?: string
-      document_number?: number
+      /** Identificador, no cantidad: texto para conservar ceros iniciales. */
+      document_number?: string
       pix_key?: string
       pix_key_type?: string
     }
@@ -24,7 +25,8 @@ export interface ImportTransactionItem {
       bank_country?: string
       holder_names?: string
       holder_surnames?: string
-      document_number?: number
+      /** Identificador, no cantidad: texto para conservar ceros iniciales. */
+      document_number?: string
       pix_key?: string
       pix_key_type?: string
     }
@@ -58,8 +60,14 @@ function num(v: unknown): number {
   return Number.isFinite(n) ? n : 0
 }
 
+/** Documentos e identificadores viajan como texto de dígitos (el API los espera `str`). */
+function digits(v: unknown): string | undefined {
+  const cleaned = str(v).replace(/\D/g, '')
+  return cleaned || undefined
+}
+
 /** Mapea una fila del Excel al formato de item esperado por el API. */
-function rowToItem(row: Record<string, unknown>): ImportTransactionItem {
+export function rowToImportItem(row: Record<string, unknown>): ImportTransactionItem {
   const get = (key: string, alt?: string) => str(row[key] ?? row[alt ?? ''])
 
   return {
@@ -77,7 +85,7 @@ function rowToItem(row: Record<string, unknown>): ImportTransactionItem {
         bank_country: get('origin_bank_country', 'bank_country_origin') || 'pe',
         holder_names: get('origin_holder_names', 'origin_names'),
         holder_surnames: get('origin_holder_surnames', 'origin_lastnames'),
-        document_number: num(row['origin_document_number'] ?? row['document_number_origin'])
+        document_number: digits(row['origin_document_number'] ?? row['document_number_origin'])
       }
     },
     user_destination: {
@@ -130,7 +138,7 @@ export function excelToImportJson(file: File): Promise<ImportPayload> {
           return
         }
         const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet)
-        const items = rows.map(rowToItem)
+        const items = rows.map(rowToImportItem)
         resolve({ items })
       } catch (err) {
         reject(err instanceof Error ? err : new Error('Error al parsear Excel'))

@@ -16,6 +16,11 @@ function num(v: unknown): number {
   return Number.isFinite(n) ? n : 0
 }
 
+/** Documentos e identificadores viajan como texto de dígitos (el API los espera `str`). */
+function digits(v: unknown): string {
+  return str(v).replace(/\D/g, '')
+}
+
 /** Convierte fecha Excel (número) a YYYY-MM-DD */
 function excelDateToIso(v: unknown): string {
   if (v == null) return ''
@@ -45,14 +50,14 @@ export function isBrasperFormat(rows: Record<string, unknown>[]): boolean {
 }
 
 /** Mapea una fila del Excel Brasper al ImportTransactionItem. */
-function rowToItem(row: Record<string, unknown>): ImportTransactionItem {
+export function brasperRowToImportItem(row: Record<string, unknown>): ImportTransactionItem {
   const nombre = get(row, 'Nombre', 'nombre')
   const parts = nombre ? nombre.split(/\s+/).filter(Boolean) : []
   const names = parts[0] ?? ''
   const lastnames = parts.slice(1).join(' ') ?? ''
 
   const email = get(row, 'Correo', 'correo') || `import.${timestamp()}@brasper.local`
-  const documentNumber = num(row['DNI/CE'] ?? row['DNI'] ?? row['documento'])
+  const documentNumber = digits(row['DNI/CE'] ?? row['DNI'] ?? row['documento'])
   const banco = get(row, 'Banco', 'banco')
   const cuenta = get(row, 'Cuenta', 'cuenta')
 
@@ -138,7 +143,7 @@ export function excelBrasperToImportPayload(file: File): Promise<{ items: Import
           reject(new Error('El archivo no tiene el formato Brasper esperado (columnas: Nombre, Correo, ENVÍA, RECIBE)'))
           return
         }
-        const items = rows.map(rowToItem)
+        const items = rows.map(brasperRowToImportItem)
         resolve({ items })
       } catch (err) {
         reject(err instanceof Error ? err : new Error('Error al parsear Excel'))

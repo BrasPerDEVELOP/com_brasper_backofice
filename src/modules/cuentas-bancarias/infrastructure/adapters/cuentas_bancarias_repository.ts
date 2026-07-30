@@ -8,19 +8,19 @@ export interface CreateBankAccountPayload {
   bank_country: 'pe' | 'br'
   holder_names?: string | null
   holder_surnames?: string | null
-  document_number?: number | null
+  document_number?: string | null
   business_name?: string | null
-  ruc_number?: number | null
+  ruc_number?: string | null
   legal_representative_name?: string | null
-  legal_representative_document?: number | null
-  account_number?: number | null
-  account_number_confirmation?: number | null
-  cci_number?: number | null
-  cci_number_confirmation?: number | null
+  legal_representative_document?: string | null
+  account_number?: string | null
+  account_number_confirmation?: string | null
+  cci_number?: string | null
+  cci_number_confirmation?: string | null
   pix_key?: string | null
   pix_key_confirmation?: string | null
   pix_key_type?: string | null
-  cpf?: number | null
+  cpf?: string | null
 }
 
 /** El backend recibe el `id` en el body (PUT transactions/bank-accounts/). */
@@ -38,4 +38,5 @@ export interface CuentasBancariasRepository {
   getBankAccounts(params?: GetBankAccountsParams): Promise<BankAccount[]>
   createBankAccount(payload: CreateBankAccountPayload): Promise<BankAccount>
   updateBankAccount(payload: UpdateBankAccountPayload): Promise<BankAccount>
+  deleteBankAccount(id: string): Promise<void>
 }

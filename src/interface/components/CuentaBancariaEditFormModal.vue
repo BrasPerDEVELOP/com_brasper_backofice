@@ -121,9 +121,9 @@ function close() {
   emit('update:modelValue', false)
 }
 
-const toIntOrNull = (value: string): number | null => {
+const toDigitsOrNull = (value: string): string | null => {
   const cleaned = digitsOnly(value)
-  return cleaned ? Number(cleaned) : null
+  return cleaned || null
 }
 
 async function submitUpdate() {
@@ -142,19 +142,19 @@ async function submitUpdate() {
       bank_id: form.bank_id,
       holder_names: form.holder_names || null,
       holder_surnames: form.holder_surnames || null,
-      document_number: toIntOrNull(form.document_number),
+      document_number: toDigitsOrNull(form.document_number),
       business_name: form.business_name || null,
-      ruc_number: toIntOrNull(form.ruc_number),
+      ruc_number: toDigitsOrNull(form.ruc_number),
       legal_representative_name: form.legal_representative_name || null,
-      legal_representative_document: toIntOrNull(form.legal_representative_document),
-      account_number: toIntOrNull(form.account_number),
-      account_number_confirmation: toIntOrNull(form.account_number_confirmation),
-      cci_number: toIntOrNull(form.cci_number),
-      cci_number_confirmation: toIntOrNull(form.cci_number_confirmation),
+      legal_representative_document: toDigitsOrNull(form.legal_representative_document),
+      account_number: toDigitsOrNull(form.account_number),
+      account_number_confirmation: toDigitsOrNull(form.account_number_confirmation),
+      cci_number: toDigitsOrNull(form.cci_number),
+      cci_number_confirmation: toDigitsOrNull(form.cci_number_confirmation),
       pix_key: form.pix_key || null,
       pix_key_confirmation: form.pix_key_confirmation || null,
       pix_key_type: form.pix_key_type || null,
-      cpf: toIntOrNull(form.cpf)
+      cpf: toDigitsOrNull(form.cpf)
     })
     emit('update:modelValue', false)
     emit('saved', updated)

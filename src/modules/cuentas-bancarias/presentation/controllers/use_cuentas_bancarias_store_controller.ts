@@ -34,6 +34,7 @@ interface CuentasBancariasState {
   error: string | null
   isCreating: boolean
   isUpdating: boolean
+  isDeleting: boolean
   _clientUsersLoaded: boolean
   _transactionFormUsersLoaded: boolean
   _banksLoaded: boolean
@@ -81,6 +82,7 @@ export const useCuentasBancariasStore = defineStore('cuentasBancarias', {
     error: null,
     isCreating: false,
     isUpdating: false,
+    isDeleting: false,
     _clientUsersLoaded: false,
     _transactionFormUsersLoaded: false,
     _banksLoaded: false
@@ -293,6 +295,28 @@ export const useCuentasBancariasStore = defineStore('cuentasBancarias', {
         throw e
       } finally {
         this.isUpdating = false
+      }
+    },
+
+    async deleteBankAccount(id: string): Promise<void> {
+      this.isDeleting = true
+      this.error = null
+      try {
+        const repo = getRepository()
+        await repo.deleteBankAccount(id)
+        this.bankAccounts = this.bankAccounts.filter((account) => account.id !== id)
+        Object.entries(this.bankAccountsByUser).forEach(([userId, accounts]) => {
+          if (!accounts?.some((account) => account.id === id)) return
+          this.bankAccountsByUser[userId] = accounts.filter((account) => account.id !== id)
+        })
+        this.transactionFormBankAccounts = this.transactionFormBankAccounts.filter(
+          (account) => account.id !== id
+        )
+      } catch (e) {
+        this.error = e instanceof Error ? e.message : 'Error al eliminar cuenta bancaria'
+        throw e
+      } finally {
+        this.isDeleting = false
       }
     }
   }

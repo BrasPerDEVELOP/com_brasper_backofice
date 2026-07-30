@@ -132,4 +132,8 @@ export class CuentasBancariasApiAdapter implements CuentasBancariasRepository {
     const item = (obj.data ?? obj) as Record<string, unknown>
     return parseBankAccount(item)
   }
+
+  async deleteBankAccount(id: string): Promise<void> {
+    await apiClient.delete(this.endpoint(id))
+  }
 }

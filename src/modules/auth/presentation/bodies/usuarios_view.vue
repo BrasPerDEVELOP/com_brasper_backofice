@@ -33,6 +33,7 @@ const canViewUsers = computed(() => authStore.hasPermission('users.view'))
 const canViewBankAccounts = computed(() => authStore.hasPermission('bank_accounts.view'))
 const canCreateBankAccounts = computed(() => authStore.hasPermission('bank_accounts.create'))
 const canUpdateBankAccounts = computed(() => authStore.hasPermission('bank_accounts.update'))
+const canDeleteBankAccounts = computed(() => authStore.hasPermission('bank_accounts.delete'))
 
 function goToUserBankAccounts(user: UserListItem) {
   openMenuId.value = null
@@ -49,6 +50,9 @@ const selectedUser = ref<UserListItem | null>(null)
 const showBankAccountCreateModal = ref(false)
 const showBankAccountEditModal = ref(false)
 const editingBankAccount = ref<BankAccount | null>(null)
+const deletingBankAccount = ref<BankAccount | null>(null)
+const showBankAccountDeleteConfirm = ref(false)
+const bankAccountDeleteError = ref('')
 const highlightedAccountId = ref<string | null>(null)
 const accountSuccessMessage = ref('')
 const searchQuery = ref(queryString(route.query.search) ?? '')
@@ -192,6 +196,39 @@ function openEditBankAccount(account: BankAccount) {
   editingBankAccount.value = account
   accountSuccessMessage.value = ''
   showBankAccountEditModal.value = true
+}
+
+function openDeleteBankAccount(account: BankAccount) {
+  if (!canDeleteBankAccounts.value) return
+  deletingBankAccount.value = account
+  // El error del store se pinta dentro del diálogo; limpiarlo evita arrastrar
+  // el de una operación anterior.
+  cuentasStore.error = null
+  bankAccountDeleteError.value = ''
+  accountSuccessMessage.value = ''
+  showBankAccountDeleteConfirm.value = true
+}
+
+function cancelDeleteBankAccount() {
+  deletingBankAccount.value = null
+  bankAccountDeleteError.value = ''
+}
+
+async function confirmDeleteBankAccount() {
+  const account = deletingBankAccount.value
+  if (!account) return
+  bankAccountDeleteError.value = ''
+  try {
+    await cuentasStore.deleteBankAccount(account.id)
+    showBankAccountDeleteConfirm.value = false
+    deletingBankAccount.value = null
+    if (highlightedAccountId.value === account.id) highlightedAccountId.value = null
+    accountSuccessMessage.value = 'Cuenta bancaria eliminada correctamente.'
+  } catch (e) {
+    // El diálogo sigue abierto: el error va dentro, no detrás del overlay.
+    bankAccountDeleteError.value =
+      cuentasStore.error || (e instanceof Error ? e.message : 'No se pudo eliminar la cuenta.')
+  }
 }
 
 function highlightAccount(account: BankAccount, message: string) {
@@ -412,12 +449,14 @@ onMounted(async () => {
       :can-view-accounts="canViewBankAccounts"
       :can-create-account="canCreateBankAccounts"
       :can-update-account="canUpdateBankAccounts"
+      :can-delete-account="canDeleteBankAccounts"
       :can-update-user="canUpdateUsers"
       :highlighted-account-id="highlightedAccountId"
       @update:tab="workspace.selectTab"
       @edit-user="openEditModal"
       @create-account="openCreateBankAccount"
       @edit-account="openEditBankAccount"
+      @delete-account="openDeleteBankAccount"
     />
   </div>
 
@@ -456,4 +495,17 @@ onMounted(async () => {
     :loading="deletingId !== null"
     @confirm="confirmDelete"
   />
+  <ConfirmDialog
+    v-model="showBankAccountDeleteConfirm"
+    title="Eliminar cuenta bancaria"
+    message="La cuenta dejará de estar disponible para este cliente y para nuevas transacciones. Esta acción no se puede deshacer."
+    confirm-text="Eliminar cuenta"
+    :loading="cuentasStore.isDeleting"
+    @confirm="confirmDeleteBankAccount"
+    @cancel="cancelDeleteBankAccount"
+  >
+    <p v-if="bankAccountDeleteError" class="mt-4 rounded-lg bg-[#fee2e2] px-4 py-3 text-sm text-[#991b1b]">
+      {{ bankAccountDeleteError }}
+    </p>
+  </ConfirmDialog>
 </template>

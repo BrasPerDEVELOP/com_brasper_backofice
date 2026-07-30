@@ -18,6 +18,7 @@ const props = defineProps<{
   canViewAccounts: boolean
   canCreateAccount: boolean
   canUpdateAccount: boolean
+  canDeleteAccount: boolean
   canUpdateUser: boolean
   highlightedAccountId?: string | null
 }>()
@@ -27,6 +28,7 @@ const emit = defineEmits<{
   editUser: [user: UserListItem]
   createAccount: [userId: string]
   editAccount: [account: BankAccount]
+  deleteAccount: [account: BankAccount]
 }>()
 
 const isClient = computed(() => ['client', 'cliente'].includes((props.user?.role ?? '').toLowerCase()))
@@ -84,7 +86,7 @@ const primaryIdentification = computed(
       <div v-else class="p-3">
         <p v-if="accountsError" class="mb-3 rounded-lg bg-[#fee2e2] px-4 py-3 text-sm text-[#991b1b]">{{ accountsError }}</p>
         <div v-if="accountsLoading" class="py-16 text-center text-sm text-[#6b7280]">Cargando cuentas…</div>
-        <UserBankAccountsPanel v-else :group="accountGroup" :banks="banks" :can-create="canCreateAccount" :can-update="canUpdateAccount" :highlighted-account-id="highlightedAccountId" class="border-0 p-2 shadow-none" @create="emit('createAccount', $event)" @edit="emit('editAccount', $event)" />
+        <UserBankAccountsPanel v-else :group="accountGroup" :banks="banks" :can-create="canCreateAccount" :can-update="canUpdateAccount" :can-delete="canDeleteAccount" :highlighted-account-id="highlightedAccountId" class="border-0 p-2 shadow-none" @create="emit('createAccount', $event)" @edit="emit('editAccount', $event)" @delete="emit('deleteAccount', $event)" />
       </div>
     </div>
     <div v-else class="px-6 py-20 text-center"><p class="font-medium text-[#374151]">Selecciona un usuario</p><p class="mt-1 text-sm text-[#6b7280]">Consulta sus datos y administra sus cuentas sin salir de esta pantalla.</p></div>
