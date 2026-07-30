@@ -108,6 +108,54 @@ describe('result.rate usa effectiveTaxRates', () => {
   })
 })
 
+describe('selección de tramo de comisión fuera de los límites configurados', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  const lowerBracket: CommissionRange = {
+    ...COMMISSION_PEN_BRL,
+    id: 'cm-low',
+    percentage: 1,
+    min_amount: 100,
+    max_amount: 1_000
+  }
+  const higherBracket: CommissionRange = {
+    ...COMMISSION_PEN_BRL,
+    id: 'cm-high',
+    percentage: 2.5,
+    min_amount: 1_001,
+    max_amount: 10_000
+  }
+
+  function seededStore() {
+    const store = useCalculatorStore()
+    // El API no garantiza el orden: el rango superior llega primero.
+    seed(store, { commissions: [higherBracket, lowerBracket] })
+    return store
+  }
+
+  it('usa el tramo inferior cuando el monto está debajo del mínimo', () => {
+    const store = seededStore()
+    store.setAmountSend(50)
+    expect(store.currentCommission?.id).toBe('cm-low')
+    expect(store.result?.commissionRate).toBe(1)
+  })
+
+  it('usa el tramo que contiene el monto', () => {
+    const store = seededStore()
+    store.setAmountSend(5_000)
+    expect(store.currentCommission?.id).toBe('cm-high')
+    expect(store.result?.commissionRate).toBe(2.5)
+  })
+
+  it('usa el tramo superior cuando el monto supera el máximo configurado', () => {
+    const store = seededStore()
+    store.setAmountSend(25_000)
+    expect(store.currentCommission?.id).toBe('cm-high')
+    expect(store.selectedCommissionId).toBe('cm-high')
+    expect(store.result?.commissionRate).toBe(2.5)
+  })
+})
+
 describe('setCalculationMode conserva overrides especiales sin afectar normal', () => {
   beforeEach(() => setActivePinia(createPinia()))
 

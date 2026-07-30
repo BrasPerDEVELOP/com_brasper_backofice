@@ -7,15 +7,24 @@ import { LoadCalculatorDataUseCase } from '../../application/use_cases'
 import { CalculatorApiAdapter } from '../../infrastructure/adapters'
 
 /** Tramo de comisión según monto bruto enviado (origen). */
+function sortCommissionBrackets(commissions: CommissionRange[]): CommissionRange[] {
+  return [...commissions].sort(
+    (a, b) => a.min_amount - b.min_amount || a.max_amount - b.max_amount
+  )
+}
+
 function pickCommissionBracket(
   grossSend: number,
   pairCommissions: CommissionRange[]
 ): CommissionRange | null {
   if (pairCommissions.length === 0) return null
-  const match = pairCommissions.find(
+  const sorted = sortCommissionBrackets(pairCommissions)
+  const match = sorted.find(
     (c) => grossSend >= c.min_amount && grossSend <= c.max_amount
   )
-  return match ?? pairCommissions[pairCommissions.length - 1]!
+  if (match) return match
+  if (grossSend < sorted[0]!.min_amount) return sorted[0]!
+  return sorted[sorted.length - 1]!
 }
 
 /**
@@ -57,7 +66,8 @@ function resolveGrossFromReceive(
     return best
   }
 
-  const p0 = pairCommissions[pairCommissions.length - 1]!.percentage / 100
+  const highestBracket = sortCommissionBrackets(pairCommissions).at(-1)!
+  const p0 = highestBracket.percentage / 100
   let gross = net / (1 - Math.min(Math.max(p0, 0), 0.999999))
   for (let i = 0; i < 25; i++) {
     const def = pickCommissionBracket(gross, pairCommissions)
@@ -422,7 +432,7 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
       } else if (receive > 0 && rate > 0) {
         gross = resolveGrossFromReceive(receive, rate, pairCommissions)
       } else {
-        return pairCommissions[0] ?? null
+        return pickCommissionBracket(0, pairCommissions)
       }
 
       return pickCommissionBracket(gross, pairCommissions)
