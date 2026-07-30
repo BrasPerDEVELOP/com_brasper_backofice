@@ -3288,6 +3288,12 @@ onActivated(() => {
       <table class="w-full min-w-[1180px] text-left text-sm">
         <thead>
           <tr class="bg-[#dbeafe]">
+            <th
+              class="w-12 px-3 py-3 text-right font-semibold text-brasper-indigoDark"
+              title="Número de fila"
+            >
+              #
+            </th>
             <th class="w-10 px-2 py-3" title="Verificada">
               <span class="sr-only">Verificada</span>
             </th>
@@ -3364,7 +3370,7 @@ onActivated(() => {
             class="border-t border-[#e5e7eb]"
           >
             <td
-              colspan="14"
+              colspan="15"
               class="rounded-xl border border-[#dbe7fb] bg-[#fbfdff] px-6 py-12 text-center text-[#666]"
             >
               <template
@@ -3391,10 +3397,15 @@ onActivated(() => {
             </td>
           </tr>
           <tr
-            v-for="t in paginatedTransactions"
+            v-for="(t, rowIndex) in paginatedTransactions"
             :key="t.id ?? ''"
             class="border-t border-[#e5e7eb] bg-white transition hover:bg-[#f9fafb]"
           >
+            <td
+              class="whitespace-nowrap px-3 py-3 text-right text-xs font-medium tabular-nums text-[#9ca3af]"
+            >
+              {{ (currentPage - 1) * perPage + rowIndex + 1 }}
+            </td>
             <td class="px-2 py-3">
               <button
                 type="button"
