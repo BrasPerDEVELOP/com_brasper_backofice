@@ -33,7 +33,7 @@ export type PreviewDestinationRow = {
   position: number;
   bankLabel: string;
   identifiers: Array<{
-    label: "Cuenta" | "CCI" | "PIX";
+    label: "Cuenta" | "CCI" | "PIX" | "DNI" | "RUC" | "CPF" | "CNPJ";
     value: string;
   }>;
   /** Titular de la cuenta (usuario o razón social según el tipo). */
@@ -121,6 +121,38 @@ export function useTransactionPreviewController() {
     if (a.cci_number?.trim()) nums.push(`CCI: ${a.cci_number.trim()}`);
     if (a.pix_key?.trim()) nums.push(`PIX: ${a.pix_key.trim()}`);
     return nums.length > 0 ? nums.join(" / ") : "—";
+  }
+
+  function bankAccountDocumentIdentifier(
+    a: BankAccount,
+  ): PreviewDestinationRow["identifiers"][number] | null {
+    const holderType = (a.account_holder_type ?? "").toLowerCase();
+    const isLegal =
+      holderType.includes("juridica") ||
+      holderType.includes("jurídica") ||
+      holderType.includes("legal");
+    const isBrazil = (a.bank_country ?? "").trim().toLowerCase() === "br";
+
+    if (isLegal && a.ruc_number?.trim()) {
+      return {
+        label: isBrazil ? "CNPJ" : "RUC",
+        value: a.ruc_number.trim(),
+      };
+    }
+    if (isBrazil && a.cpf?.trim()) {
+      return { label: "CPF", value: a.cpf.trim() };
+    }
+    if (a.document_number?.trim()) {
+      return { label: "DNI", value: a.document_number.trim() };
+    }
+    if (a.cpf?.trim()) return { label: "CPF", value: a.cpf.trim() };
+    if (a.ruc_number?.trim()) {
+      return {
+        label: isBrazil ? "CNPJ" : "RUC",
+        value: a.ruc_number.trim(),
+      };
+    }
+    return null;
   }
 
   function bankAccountToLabel(a: BankAccount): string {
@@ -259,6 +291,9 @@ export function useTransactionPreviewController() {
         (candidate) => candidate.id === item.accountId,
       );
       const amountValid = Number.isFinite(item.amount);
+      const documentIdentifier = acc
+        ? bankAccountDocumentIdentifier(acc)
+        : null;
       const share =
         items.length > 1 && total > 0 && amountValid
           ? Math.round((item.amount / total) * 100)
@@ -277,6 +312,7 @@ export function useTransactionPreviewController() {
               ...(acc.pix_key?.trim()
                 ? [{ label: "PIX" as const, value: acc.pix_key.trim() }]
                 : []),
+              ...(documentIdentifier ? [documentIdentifier] : []),
             ]
           : [],
         holderLabel: acc ? bankAccountHolderLabel(acc) : "—",

@@ -85,6 +85,9 @@ describe("useTransactionPreviewController.buildPreviewSections", () => {
       account_number: "001108310200148558",
       cci_number: "01183100020014855899",
       pix_key: "10066160987",
+      document_number: "75425055",
+      account_holder_type: "natural",
+      bank_country: "pe",
       holder_names: "Washington",
       holder_surnames: "Luiz",
     } as never];
@@ -97,6 +100,50 @@ describe("useTransactionPreviewController.buildPreviewSections", () => {
       { label: "Cuenta", value: "001108310200148558" },
       { label: "CCI", value: "01183100020014855899" },
       { label: "PIX", value: "10066160987" },
+      { label: "DNI", value: "75425055" },
+    ]);
+  });
+
+  it("identifica RUC, CPF y CNPJ según el tipo y país de la cuenta", () => {
+    const cuentasStore = useCuentasBancariasStore();
+    cuentasStore.bankAccounts = [
+      {
+        id: "ruc",
+        bank_id: "bank-1",
+        account_holder_type: "juridica",
+        bank_country: "pe",
+        ruc_number: "20123456789",
+      },
+      {
+        id: "cpf",
+        bank_id: "bank-1",
+        account_holder_type: "natural",
+        bank_country: "br",
+        cpf: "12345678901",
+      },
+      {
+        id: "cnpj",
+        bank_id: "bank-1",
+        account_holder_type: "legal",
+        bank_country: "br",
+        ruc_number: "12345678000199",
+      },
+    ] as never;
+
+    const { buildPreviewDestinations } = useTransactionPreviewController();
+    const summary = buildPreviewDestinations({
+      ...(baseTransaction as Record<string, unknown>),
+      destination_amount: 30,
+      destinations: ["ruc", "cpf", "cnpj"].map((bank_account_id) => ({
+        bank_account_id,
+        amount: 10,
+      })),
+    } as unknown as Transaction);
+
+    expect(summary.rows.map((row) => row.identifiers.at(-1))).toEqual([
+      { label: "RUC", value: "20123456789" },
+      { label: "CPF", value: "12345678901" },
+      { label: "CNPJ", value: "12345678000199" },
     ]);
   });
 
