@@ -32,7 +32,10 @@ export type PreviewSection = {
 export type PreviewDestinationRow = {
   position: number;
   bankLabel: string;
-  accountLabel: string;
+  identifiers: Array<{
+    label: "Cuenta" | "CCI" | "PIX";
+    value: string;
+  }>;
   /** Titular de la cuenta (usuario o razón social según el tipo). */
   holderLabel: string;
   amountLabel: string;
@@ -263,7 +266,19 @@ export function useTransactionPreviewController() {
       return {
         position: index + 1,
         bankLabel: acc ? bankAccountBankLabel(acc) : item.accountId || "—",
-        accountLabel: acc ? bankAccountNumbersLabel(acc) : "—",
+        identifiers: acc
+          ? [
+              ...(acc.account_number?.trim()
+                ? [{ label: "Cuenta" as const, value: acc.account_number.trim() }]
+                : []),
+              ...(acc.cci_number?.trim()
+                ? [{ label: "CCI" as const, value: acc.cci_number.trim() }]
+                : []),
+              ...(acc.pix_key?.trim()
+                ? [{ label: "PIX" as const, value: acc.pix_key.trim() }]
+                : []),
+            ]
+          : [],
         holderLabel: acc ? bankAccountHolderLabel(acc) : "—",
         amountLabel: amountValid
           ? formatMoneyWithCurrency(item.amount, currencies.destination)

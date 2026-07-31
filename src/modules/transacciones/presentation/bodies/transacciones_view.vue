@@ -2153,6 +2153,19 @@ const previewDestinations = computed(() => {
   return buildPreviewDestinations(t);
 });
 
+const copiedPreviewAccountIdentifier = ref("");
+
+async function copyPreviewAccountIdentifier(value: string) {
+  if (!value) return;
+  await navigator.clipboard.writeText(value);
+  copiedPreviewAccountIdentifier.value = value;
+  window.setTimeout(() => {
+    if (copiedPreviewAccountIdentifier.value === value) {
+      copiedPreviewAccountIdentifier.value = "";
+    }
+  }, 1500);
+}
+
 const previewSectionGroups = computed(() => {
   const s = previewSections.value;
   return {
@@ -3841,12 +3854,25 @@ onActivated(() => {
                             >
                               {{ row.bankLabel }}
                             </p>
-                            <p
-                              class="mt-0.5 truncate text-xs tabular-nums text-[#6b7280]"
-                              :title="row.accountLabel"
+                            <div
+                              v-if="row.identifiers.length"
+                              class="mt-1 space-y-1"
                             >
-                              {{ row.accountLabel }}
-                            </p>
+                              <button
+                                v-for="identifier in row.identifiers"
+                                :key="`${row.position}-${identifier.label}-${identifier.value}`"
+                                type="button"
+                                class="group flex max-w-full items-start gap-1.5 text-left text-xs tabular-nums text-[#6b7280] transition hover:text-brasper-indigoStrong"
+                                :title="`Copiar ${identifier.label}: ${identifier.value}`"
+                                @click="copyPreviewAccountIdentifier(identifier.value)"
+                              >
+                                <span class="shrink-0 font-medium">{{ identifier.label }}:</span>
+                                <span class="break-all font-mono">{{ identifier.value }}</span>
+                                <span class="shrink-0 font-sans text-[10px] font-semibold text-brasper-indigoStrong">
+                                  {{ copiedPreviewAccountIdentifier === identifier.value ? "Copiado" : "Copiar" }}
+                                </span>
+                              </button>
+                            </div>
                             <p
                               class="mt-1 flex min-w-0 items-center gap-1.5 text-xs font-medium text-[#374151]"
                               :title="row.holderLabel"

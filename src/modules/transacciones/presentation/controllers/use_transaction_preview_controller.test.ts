@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { useTransactionPreviewController } from "./use_transaction_preview_controller";
 import type { Transaction } from "../../domain/models";
+import { useCuentasBancariasStore } from "@modules/cuentas-bancarias/presentation/controllers/use_cuentas_bancarias_store_controller";
 
 describe("useTransactionPreviewController.buildPreviewSections", () => {
   beforeEach(() => {
@@ -74,6 +75,29 @@ describe("useTransactionPreviewController.buildPreviewSections", () => {
     expect(summary.rows).toHaveLength(1);
     expect(summary.rows[0]?.shareLabel).toBeNull();
     expect(summary.rows[0]?.bankLabel).toBe("acc-legacy");
+  });
+
+  it("expone cuenta, CCI y PIX completos como identificadores separados", () => {
+    const cuentasStore = useCuentasBancariasStore();
+    cuentasStore.bankAccounts = [{
+      id: "acc-1",
+      bank_id: "bank-1",
+      account_number: "001108310200148558",
+      cci_number: "01183100020014855899",
+      pix_key: "10066160987",
+      holder_names: "Washington",
+      holder_surnames: "Luiz",
+    } as never];
+    cuentasStore.banks = [{ id: "bank-1", bank: "BBVA", currency: "PEN" } as never];
+
+    const { buildPreviewDestinations } = useTransactionPreviewController();
+    const summary = buildPreviewDestinations(baseTransaction);
+
+    expect(summary.rows[0]?.identifiers).toEqual([
+      { label: "Cuenta", value: "001108310200148558" },
+      { label: "CCI", value: "01183100020014855899" },
+      { label: "PIX", value: "10066160987" },
+    ]);
   });
 
   it("conserva Otros campos para claves realmente desconocidas", () => {
