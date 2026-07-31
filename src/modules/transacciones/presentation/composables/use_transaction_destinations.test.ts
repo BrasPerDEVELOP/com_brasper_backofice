@@ -1,5 +1,35 @@
 import { describe, expect, it } from 'vitest'
-import { validateTransactionDestinations } from './use_transaction_destinations'
+import {
+  formatDestinationAccountOptionLabel,
+  validateTransactionDestinations
+} from './use_transaction_destinations'
+
+describe('formatDestinationAccountOptionLabel', () => {
+  it('muestra la cuenta antes del nombre completo para una cuenta natural', () => {
+    expect(formatDestinationAccountOptionLabel({
+      account_holder_type: 'Natural',
+      holder_names: ' Eurico ',
+      holder_surnames: 'Teles da Silva',
+      account_number: '51391181477098'
+    }, 'BCP')).toBe('BCP · 51391181477098 - Eurico Teles da Silva')
+  })
+
+  it('muestra la razón social para una cuenta jurídica', () => {
+    expect(formatDestinationAccountOptionLabel({
+      account_holder_type: 'Jurídica',
+      business_name: 'Brasper S.A.C.',
+      account_number: '1234',
+      cci_number: '00212345678901234567'
+    }, 'BCP')).toBe('BCP · 1234 / CCI: 00212345678901234567 - Brasper S.A.C.')
+  })
+
+  it('conserva banco e identificador cuando el API no devuelve titular', () => {
+    expect(formatDestinationAccountOptionLabel({
+      account_holder_type: 'Natural',
+      pix_key: 'cliente@example.com'
+    }, 'Banco do Brasil')).toBe('Banco do Brasil · PIX: cliente@example.com')
+  })
+})
 
 describe('validateTransactionDestinations', () => {
   it('acepta montos manuales cuya suma coincide', () => {

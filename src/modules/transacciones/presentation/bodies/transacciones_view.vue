@@ -61,6 +61,7 @@ import TransactionDestinationsEditor from "../components/TransactionDestinations
 import TransactionVoucherFileList from "../components/TransactionVoucherFileList.vue";
 import {
   emptyTransactionDestination,
+  formatDestinationAccountOptionLabel,
   validateTransactionDestinations,
   type TransactionDestinationDraft,
 } from "../composables/use_transaction_destinations";
@@ -600,12 +601,10 @@ function destinationBankAccountToOption(a: BankAccount): {
 } {
   const bank = cuentasStore.banks.find((b) => b.id === a.bank_id);
   const bankName = (bank?.bank ?? "—").trim();
-  const nums = [];
-  if (a.account_number?.trim()) nums.push(a.account_number.trim());
-  if (a.cci_number?.trim()) nums.push(`CCI: ${a.cci_number.trim()}`);
-  if (a.pix_key?.trim()) nums.push(`PIX: ${a.pix_key.trim()}`);
-  const accNum = nums.length > 0 ? nums.join(" / ") : "—";
-  return { value: String(a.id).trim(), label: `${bankName} · ${accNum}` };
+  return {
+    value: String(a.id).trim(),
+    label: formatDestinationAccountOptionLabel(a, bankName),
+  };
 }
 
 function findBankAccountById(accountId: string): BankAccount | undefined {

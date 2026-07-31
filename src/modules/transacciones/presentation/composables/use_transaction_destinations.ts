@@ -11,6 +11,46 @@ export interface TransactionDestinationsValidation {
   error: string | null
 }
 
+export interface DestinationAccountLabelData {
+  account_holder_type?: string | null
+  holder_names?: string | null
+  holder_surnames?: string | null
+  business_name?: string | null
+  account_number?: string | null
+  cci_number?: string | null
+  pix_key?: string | null
+}
+
+function destinationAccountHolder(account: DestinationAccountLabelData): string {
+  const holderType = (account.account_holder_type ?? '')
+    .trim()
+    .toLocaleLowerCase('es')
+  const isBusiness = holderType.includes('juridica') ||
+    holderType.includes('jurídica') ||
+    holderType.includes('legal')
+
+  if (isBusiness) return account.business_name?.trim() ?? ''
+
+  return [account.holder_names, account.holder_surnames]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(' ')
+}
+
+export function formatDestinationAccountOptionLabel(
+  account: DestinationAccountLabelData,
+  bankName: string
+): string {
+  const holder = destinationAccountHolder(account)
+  const identifiers: string[] = []
+  if (account.account_number?.trim()) identifiers.push(account.account_number.trim())
+  if (account.cci_number?.trim()) identifiers.push(`CCI: ${account.cci_number.trim()}`)
+  if (account.pix_key?.trim()) identifiers.push(`PIX: ${account.pix_key.trim()}`)
+
+  const accountLabel = [bankName.trim() || '—', identifiers.join(' / ') || '—'].join(' · ')
+  return holder ? `${accountLabel} - ${holder}` : accountLabel
+}
+
 export function emptyTransactionDestination(): TransactionDestinationDraft {
   return { bank_account_id: '', amount: null }
 }
