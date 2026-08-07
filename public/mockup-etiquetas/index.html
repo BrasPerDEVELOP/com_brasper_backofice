@@ -1,0 +1,1301 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mockup — Numeración diaria, etiquetas y alta rápida · Brasper</title>
+<style>
+  :root{
+    --indigoDark:#232b4d; --indigoStrong:#3730a3; --head:#dbeafe;
+    --border:#e5e7eb; --soft:#eef2f7; --text:#374151; --muted:#6b7280;
+    --faint:#9ca3af; --bg:#f6f8fb; --white:#fff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1320px;margin:0 auto;padding:24px 20px 64px}
+  h1{font-size:24px;font-weight:600;color:var(--indigoDark);margin:0 0 4px}
+  h2{font-size:16px;color:var(--indigoDark);margin:0 0 10px}
+  .sub{color:var(--muted);font-size:13px;margin:0 0 20px}
+  .hint{font-size:12px;color:var(--muted);margin:0}
+  code{background:#f1f5f9;padding:1px 5px;border-radius:4px;font-size:12px}
+  .ok{color:#16a34a;font-size:12px}
+
+  .banner{background:#fffbeb;border:1px solid #fde68a;border-radius:10px;
+    padding:12px 14px;margin-bottom:22px;font-size:13px;color:#78350f}
+  .banner b{color:#7c2d12}
+  .where{background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;
+    padding:11px 13px;font-size:12.5px;color:#312e81;margin:0 0 16px}
+  .where b{color:#1e1b4b}
+
+  .card{background:var(--white);border:1px solid var(--border);border-radius:12px;margin-bottom:20px}
+  .card-h{padding:14px 16px;border-bottom:1px solid var(--soft);
+    display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .card-b{padding:16px}
+
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .seg{display:inline-flex;border:1px solid var(--border);border-radius:9px;overflow:hidden}
+  .seg button{border:0;background:var(--white);padding:8px 14px;font-size:13px;
+    color:var(--text);cursor:pointer;font-family:inherit}
+  .seg button+button{border-left:1px solid var(--border)}
+  .seg button[aria-pressed="true"]{background:var(--indigoDark);color:#fff;font-weight:500}
+  .btn{border:1px solid var(--border);background:var(--white);border-radius:9px;
+    padding:8px 14px;font-size:13px;color:var(--text);cursor:pointer;font-family:inherit}
+  .btn:hover{background:#f9fafb}
+  .btn.pri{background:var(--indigoDark);border-color:var(--indigoDark);color:#fff}
+  .btn.pri:hover{background:#1b2240}
+  .btn.sm{padding:5px 10px;font-size:12px}
+  .btn.danger{color:#b91c1c}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .iconbtn{border:1px solid var(--border);background:#fff;border-radius:9px;width:38px;height:38px;
+    flex:none;cursor:pointer;color:var(--muted);font-size:18px;line-height:1;font-family:inherit}
+  .iconbtn:hover{border-color:#d1d5db;background:#f9fafb;color:var(--text)}
+  .check{display:inline-flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;user-select:none}
+  select,input[type=text],input[type=datetime-local],textarea{font-family:inherit;font-size:13px;
+    color:var(--text);border:1px solid var(--border);border-radius:9px;padding:8px 10px;background:var(--white)}
+  textarea{width:100%;resize:vertical;min-height:96px}
+
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:12px}
+  .kpi{border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+  .kpi .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  .kpi .val{font-size:30px;font-weight:600;color:var(--indigoDark);line-height:1.1;
+    margin-top:4px;font-variant-numeric:tabular-nums}
+  .kpi .foot{font-size:11px;color:var(--faint);margin-top:2px}
+  .kpi.hl{background:#fffbeb;border-color:#fde68a}
+  .kpi.hl .val{color:#b45309}
+
+  /* tabla — mismas columnas que /app/transacciones */
+  .scroll{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;text-align:left;font-size:13px}
+  table.tx{min-width:1180px}
+  thead tr{background:var(--head)}
+  th{padding:11px 14px;font-weight:600;color:var(--indigoDark);white-space:nowrap;font-size:12.5px}
+  th.num{width:52px;text-align:right;padding-right:12px}
+  th.tick{width:38px;padding:11px 8px}
+  th.c{text-align:center}
+  td{padding:10px 14px;border-top:1px solid var(--border);vertical-align:middle}
+  tbody tr{background:var(--white)}
+  tbody tr:hover{background:#f9fafb}
+  tbody tr.isnew{background:#fffdf5}
+  tbody tr.isnew:hover{background:#fffbeb}
+  td.num{text-align:right;padding-right:12px;font-variant-numeric:tabular-nums;
+    color:var(--faint);font-size:12px;font-weight:500}
+  td.num.daily{color:var(--indigoDark);font-size:14px;font-weight:600}
+  td.mono{font-variant-numeric:tabular-nums;white-space:nowrap}
+  td.c{text-align:center}
+  td.trunc{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .daysep td{background:#eef2ff;color:var(--indigoStrong);font-weight:600;font-size:12px;
+    text-transform:uppercase;letter-spacing:.05em;padding:7px 14px}
+  .flag{display:inline-block;width:18px;height:18px;border-radius:50%;margin-right:7px;
+    vertical-align:-4px;font-size:11px;line-height:18px;text-align:center;
+    background:#f1f5f9;box-shadow:0 0 0 1px var(--border) inset}
+  .tick{display:inline-flex;width:22px;height:22px;border-radius:5px;border:1px solid #d1d5db;
+    align-items:center;justify-content:center;font-size:12px;color:transparent;background:#fff}
+  .tick.on{background:#16a34a;border-color:#16a34a;color:#fff}
+  .vch{display:inline-flex;width:22px;height:22px;border-radius:5px;align-items:center;
+    justify-content:center;font-size:12px;background:#f1f5f9;color:var(--faint)}
+  .vch.on{background:#dcfce7;color:#15803d}
+  .subline{display:block;font-size:11px;color:var(--faint);margin-top:1px}
+  .incomp{display:inline-flex;align-items:center;gap:4px;background:#fff7ed;color:#9a3412;
+    border:1px solid #fed7aa;border-radius:999px;padding:0 7px;font-size:10px;
+    font-weight:600;margin-left:6px;vertical-align:1px;white-space:nowrap}
+
+  .st{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;
+    font-weight:500;white-space:nowrap}
+  .st-verification{background:#dbeafe;color:#1d4ed8}
+  .st-verified{background:#e0e7ff;color:#4338ca}
+  .st-completed{background:#dcfce7;color:#15803d}
+  .st-failed{background:#fee2e2;color:#b91c1c}
+  .st-cancelled{background:#f1f5f9;color:#475569}
+
+  /* etiquetas — color por estilo inline, viene de la configuración */
+  .tags{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+  .tags.inline{margin-top:4px}
+  .tag{display:inline-flex;align-items:center;gap:4px;padding:1px 8px;border-radius:999px;
+    font-size:10.5px;font-weight:600;white-space:nowrap;border:1px solid transparent}
+  .tag .x{cursor:pointer;opacity:.5;font-weight:700;font-size:12px;line-height:1}
+  .tag .x:hover{opacity:1}
+  .addtag{border:1px dashed var(--border);background:transparent;color:var(--faint);
+    border-radius:999px;width:19px;height:19px;line-height:1;cursor:pointer;
+    font-size:12px;padding:0;font-family:inherit;flex:none}
+  .addtag:hover{border-color:var(--indigoStrong);color:var(--indigoStrong)}
+  .star{color:#b45309;font-size:10px}
+
+  .pop{position:fixed;z-index:160;background:#fff;border:1px solid var(--border);
+    border-radius:11px;box-shadow:0 12px 32px rgba(15,23,42,.16);padding:8px;min-width:200px}
+  .pop .ttl{font-size:11px;color:var(--muted);padding:2px 6px 6px;
+    text-transform:uppercase;letter-spacing:.05em}
+  .pop button{display:flex;width:100%;align-items:center;gap:8px;border:0;background:none;
+    padding:7px 8px;border-radius:7px;cursor:pointer;font:inherit;font-size:13px;
+    color:var(--text);text-align:left}
+  .pop button:hover{background:#f3f4f6}
+  .pop .dot{width:11px;height:11px;border-radius:3px;flex:none;border:1px solid rgba(0,0,0,.08)}
+  .pop .on{margin-left:auto;color:#16a34a;font-weight:700}
+  .pop .none{padding:6px 8px;font-size:12px;color:var(--faint)}
+
+  /* modales */
+  .ov{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:100;
+    display:flex;align-items:flex-start;justify-content:center;padding:28px 16px;overflow:auto}
+  .ov.top{z-index:140;background:rgba(15,23,42,.35);align-items:center}
+  .ov[hidden]{display:none}
+  .modal{background:var(--white);border-radius:14px;width:100%;max-width:920px;
+    box-shadow:0 24px 60px rgba(15,23,42,.28)}
+  .modal.sm{max-width:480px}
+  .m-h{padding:18px 22px 0}
+  .m-h .eyebrow{font-size:11px;font-weight:600;text-transform:uppercase;
+    letter-spacing:.14em;color:var(--indigoStrong)}
+  .m-h h3{margin:4px 0 0;font-size:19px;font-weight:600;color:var(--indigoDark)}
+  .m-h p.lead{margin:6px 0 0;font-size:12.5px;color:var(--muted)}
+  .steps{display:flex;padding:18px 22px 0}
+  .step{flex:1;display:flex;align-items:center;gap:10px;background:none;border:0;
+    padding:0 0 16px;font-family:inherit;text-align:left;cursor:pointer}
+  .step:disabled{cursor:not-allowed}
+  .step .bul{width:26px;height:26px;border-radius:50%;flex:none;display:flex;
+    align-items:center;justify-content:center;font-size:12px;font-weight:600;
+    border:1px solid var(--border);background:#fff;color:var(--faint)}
+  .step[data-state=current] .bul{background:var(--indigoDark);border-color:var(--indigoDark);color:#fff}
+  .step[data-state=done] .bul{background:#dcfce7;border-color:#86efac;color:#15803d}
+  .step .tt{font-size:13px;font-weight:600;color:var(--faint)}
+  .step[data-state=current] .tt{color:var(--indigoDark)}
+  .step[data-state=done] .tt{color:var(--text)}
+  .step .ss{display:block;font-size:11px;font-weight:400;color:var(--faint)}
+  .m-b{padding:6px 22px 4px;border-top:1px solid var(--soft)}
+  .m-b.plain{padding:18px 22px;border-top:0}
+  .m-f{padding:16px 22px 20px;border-top:1px solid var(--soft);
+    display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+
+  section.blk{border:1px solid var(--border);border-radius:12px;padding:18px;margin:16px 0}
+  section.blk.amber{border-color:#fde68a;background:#fffbeb80}
+  section.blk h4{margin:0;font-size:11px;font-weight:600;text-transform:uppercase;
+    letter-spacing:.16em;color:var(--indigoStrong)}
+  section.blk.amber h4{color:#78350f}
+  section.blk .desc{font-size:12px;color:var(--muted);margin:2px 0 16px}
+  .grid2{display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+  .f label{display:block;font-size:13px;font-weight:500;color:var(--text);margin-bottom:6px}
+  .f label .req{color:#dc2626}
+  .f input,.f select{width:100%}
+  .f .note{font-size:11px;color:var(--muted);margin:5px 0 0}
+  .withbtn{display:flex;gap:8px}
+  .withbtn select,.withbtn input{min-width:0;flex:1}
+  .pill{display:inline-block;background:#eef2ff;color:var(--indigoStrong);border-radius:6px;
+    padding:1px 7px;font-size:10.5px;font-weight:600;margin-left:6px}
+  .pill.warn{background:#fff7ed;color:#9a3412}
+  .tagpicker{display:flex;gap:6px;flex-wrap:wrap}
+  .tagpicker button{border:1px solid var(--border);border-radius:999px;
+    padding:4px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit}
+  .tagpicker button[aria-pressed="false"]{background:#fff;color:var(--muted)}
+  .drop{border:1px dashed var(--border);border-radius:10px;padding:26px;text-align:center;
+    color:var(--faint);font-size:13px;background:#fcfdff}
+  .newbadge{display:inline-flex;align-items:center;gap:6px;background:#fef3c7;color:#92400e;
+    border:1px solid #fcd34d;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600}
+  .warnbox{background:#fff7ed;border:1px solid #fed7aa;border-radius:9px;padding:10px 12px;
+    font-size:12px;color:#9a3412;margin:12px 0 0}
+
+  /* paleta de colores del configurador */
+  .swatches{display:flex;gap:7px;flex-wrap:wrap}
+  .sw{width:28px;height:28px;border-radius:8px;cursor:pointer;border:2px solid transparent;padding:0}
+  .sw[aria-pressed="true"]{border-color:var(--indigoDark)}
+
+  .empty{padding:36px;text-align:center;color:var(--faint)}
+  ul.q{margin:0;padding-left:20px;font-size:13px}
+  ul.q li{margin-bottom:6px}
+  @media (max-width:700px){
+    .wrap{padding:16px 12px 48px}
+    .kpi .val{font-size:24px}
+    .steps{flex-direction:column;gap:12px}
+    .step{padding-bottom:0}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Mockup — Numeración diaria, etiquetas y alta rápida de cliente</h1>
+  <p class="sub">
+    Réplica de la pantalla <b>Transacciones</b> con las mejoras encima.
+    Mismas 14 columnas y mismo wizard de 3 pasos que el sistema real. Datos inventados.
+  </p>
+
+  <div class="banner">
+    <b>Esto es una maqueta, no el sistema.</b> No hay conexión con la API y ninguna transacción real
+    se toca. Prueben todo: cambien la numeración, pongan y quiten etiquetas, creen un cliente con
+    solo el nombre, inventen etiquetas nuevas en la configuración. Lo que hagan se guarda solo en
+    este navegador. Al final hay un espacio para escribir qué les falta.
+  </div>
+
+  <!-- 1 · numeración -->
+  <div class="card">
+    <div class="card-h">
+      <div>
+        <h2>1 · Numeración de envíos</h2>
+        <p class="hint">Cambien el interruptor y miren la primera columna <code>#</code> de la tabla.</p>
+      </div>
+      <div class="seg" role="group" aria-label="Modo de numeración">
+        <button id="modeGlobal" aria-pressed="false">Como está hoy</button>
+        <button id="modeDaily" aria-pressed="true">Propuesta: reinicia cada día</button>
+      </div>
+    </div>
+    <div class="card-b"><p class="hint" id="modeExpl"></p></div>
+  </div>
+
+  <!-- 2 · KPIs -->
+  <div class="card">
+    <div class="card-h">
+      <div>
+        <h2>2 · Clientes nuevos del día</h2>
+        <p class="hint">Se recalculan solos según las etiquetas de la tabla.</p>
+      </div>
+      <select id="dayPick" aria-label="Día"></select>
+    </div>
+    <div class="card-b">
+      <div class="kpis">
+        <div class="kpi hl">
+          <div class="lbl">Clientes nuevos</div>
+          <div class="val" id="kNew">0</div>
+          <div class="foot" id="kNewFoot">—</div>
+        </div>
+        <div class="kpi">
+          <div class="lbl">Nuevos que finalizaron</div>
+          <div class="val" id="kDone">0</div>
+          <div class="foot">estado «Finalizada»</div>
+        </div>
+        <div class="kpi">
+          <div class="lbl">Conversión de nuevos</div>
+          <div class="val" id="kConv">—</div>
+          <div class="foot">finalizaron / nuevos</div>
+        </div>
+        <div class="kpi">
+          <div class="lbl">Envíos del día</div>
+          <div class="val" id="kTotal">0</div>
+          <div class="foot">todos los clientes</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3 · tabla -->
+  <div class="card">
+    <div class="card-h">
+      <div>
+        <h2>3 · Transacciones</h2>
+        <p class="hint">Las mismas 14 columnas de <code>/app/transacciones</code>, más las etiquetas.</p>
+      </div>
+      <button class="btn pri" id="btnNew">+ Nueva transacción</button>
+    </div>
+    <div class="card-b" style="padding-bottom:0">
+      <div class="row" style="justify-content:space-between">
+        <div class="row">
+          <label class="check"><input type="checkbox" id="onlyNew" /> Solo clientes nuevos</label>
+          <label class="check"><input type="checkbox" id="onlyDay" checked /> Solo el día seleccionado</label>
+        </div>
+        <div class="row">
+          <span class="hint">Etiquetas:</span>
+          <div class="seg" role="group" aria-label="Ubicación de etiquetas">
+            <button id="tagInline" aria-pressed="true">Bajo el cliente</button>
+            <button id="tagCol" aria-pressed="false">Columna propia</button>
+          </div>
+          <button class="btn" id="btnCsv">Exportar CSV</button>
+          <button class="btn" id="btnReset">Reiniciar</button>
+        </div>
+      </div>
+      <p class="hint" style="margin:10px 0 14px">
+        La opción <b>Bajo el cliente</b> no ensancha la tabla (ya son 14 columnas);
+        <b>Columna propia</b> agrega una columna más. Díganme cuál prefieren.
+      </p>
+    </div>
+    <div class="scroll">
+      <table class="tx">
+        <thead><tr id="thead"></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="card-b" style="border-top:1px solid var(--soft)">
+      <p class="hint">
+        Toquen el <b>+</b> de cualquier fila para poner o quitar etiquetas. La etiqueta marcada con
+        <span class="star">★</span> en la configuración es la que alimenta los números de arriba.
+      </p>
+    </div>
+  </div>
+
+  <!-- 4 · alta rápida / perfiles incompletos -->
+  <div class="card">
+    <div class="card-h">
+      <div>
+        <h2>4 · Clientes creados a la rápida</h2>
+        <p class="hint">Los que se dieron de alta con solo el nombre, sin terminar el perfil.</p>
+      </div>
+      <span class="pill warn" id="incompCount">0 pendientes</span>
+    </div>
+    <div class="card-b">
+      <div class="where">
+        <b>¿Dónde se vería esto en el sistema?</b> En <code>/app/usuarios</code>, con un filtro
+        «Perfil incompleto» y el mismo chip naranja al lado del nombre. La transacción se puede
+        registrar igual; el perfil se completa después sin bloquear la operación del día.
+      </div>
+      <div class="scroll">
+        <table>
+          <thead><tr>
+            <th>Cliente</th><th>Teléfono</th><th>Creado en</th><th>Falta</th><th></th>
+          </tr></thead>
+          <tbody id="incompBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5 · configuración de etiquetas -->
+  <div class="card">
+    <div class="card-h">
+      <div>
+        <h2>5 · Configuración de etiquetas</h2>
+        <p class="hint">Crear, renombrar, recolorear, activar o borrar. Los cambios se aplican arriba al instante.</p>
+      </div>
+      <button class="btn pri" id="btnTagNew">+ Nueva etiqueta</button>
+    </div>
+    <div class="card-b">
+      <div class="where">
+        <b>¿Dónde viviría esta pantalla?</b> Como una entrada más del grupo <b>Configuración</b> del
+        menú — al lado de «Banner Home», «Blog» y «Permisos de roles» — en la ruta
+        <code>/app/etiquetas</code>, breadcrumb <code>Configuración &gt; Etiquetas</code>, detrás de
+        los permisos <code>tags.view</code> / <code>tags.create</code> /
+        <code>tags.update</code> / <code>tags.delete</code>.
+        Así ventas usa las etiquetas y solo quien administra puede cambiar el catálogo.
+      </div>
+      <div class="scroll">
+        <table>
+          <thead><tr>
+            <th style="width:34px"></th><th>Etiqueta</th><th>Color</th>
+            <th class="c">Cuenta como cliente nuevo</th><th class="c">Activa</th>
+            <th class="c">En uso</th><th></th>
+          </tr></thead>
+          <tbody id="tagCfgBody"></tbody>
+        </table>
+      </div>
+      <p class="hint" style="margin-top:14px">
+        La columna <b>Cuenta como cliente nuevo</b> es la que conecta la etiqueta con los KPIs del
+        día y con el CSV. Solo una etiqueta puede tenerla. Una etiqueta <b>inactiva</b> deja de
+        ofrecerse al registrar, pero no se borra de las transacciones que ya la tenían.
+      </p>
+    </div>
+  </div>
+
+  <!-- 6 · comentarios -->
+  <div class="card">
+    <div class="card-h"><div><h2>6 · Sus comentarios</h2>
+      <p class="hint">Lo más útil es que respondan estas siete, y agreguen lo que falte.</p></div></div>
+    <div class="card-b">
+      <ul class="q">
+        <li>¿Con la numeración que reinicia cada día les basta, o necesitan otra cosa?</li>
+        <li>¿Prefieren marcar «cliente nuevo» a mano, o que el sistema lo detecte solo
+            (cuando es el primer envío de esa persona)?</li>
+        <li>Las etiquetas: ¿bajo el nombre del cliente o en columna propia?</li>
+        <li>El alta rápida: ¿con nombre solo basta, o necesitan también el teléfono obligatorio?</li>
+        <li>¿Quién debería poder crear y borrar etiquetas — solo admin, o ventas también?</li>
+        <li>¿Qué etiquetas usarían de verdad? Créenlas en la configuración y déjenlas ahí.</li>
+        <li>¿El CSV del día les resuelve el pase al Drive de ventas/marketing?</li>
+      </ul>
+      <div style="margin-top:14px" class="f">
+        <label>Su nombre</label>
+        <input type="text" id="fbWho" placeholder="Nombre" style="max-width:280px" />
+      </div>
+      <div style="margin-top:12px" class="f">
+        <label>Comentarios</label>
+        <textarea id="fbText" placeholder="Qué falta, qué cambiarían, qué no se entiende…"></textarea>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn pri" id="fbCopy">Copiar comentarios</button>
+        <button class="btn" id="fbDl">Descargar como .txt</button>
+        <span class="ok" id="fbMsg"></span>
+      </div>
+      <p class="hint" style="margin-top:10px">Se guarda mientras escriben.</p>
+    </div>
+  </div>
+</div>
+
+<!-- wizard 3 pasos -->
+<div class="ov" id="ov" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <div class="m-h">
+      <div class="eyebrow" id="mEyebrow">Paso 1 de 3 · Cotización</div>
+      <h3 id="mTitle">Nueva transacción</h3>
+    </div>
+    <div class="steps" id="mSteps"></div>
+    <div class="m-b" id="mBody"></div>
+    <div class="m-f">
+      <button class="btn" id="mBack">Atrás</button>
+      <div class="row">
+        <button class="btn" id="mCancel">Cancelar</button>
+        <button class="btn pri" id="mNext">Continuar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- alta rápida de cliente -->
+<div class="ov top" id="ovQa" hidden>
+  <div class="modal sm" role="dialog" aria-modal="true" aria-labelledby="qaTitle">
+    <div class="m-h">
+      <div class="eyebrow">Alta rápida</div>
+      <h3 id="qaTitle">Cliente nuevo</h3>
+      <p class="lead">
+        Solo el nombre es obligatorio. Queda como <b>perfil incompleto</b> y se puede usar en la
+        transacción de inmediato.
+      </p>
+    </div>
+    <div class="m-b plain">
+      <div class="f" style="margin-bottom:14px">
+        <label>Nombre o razón social <span class="req">*</span></label>
+        <input type="text" id="qaName" placeholder="Esperanza Tello" />
+        <p class="note">Como lo escriben en el grupo de WhatsApp. Se corrige después.</p>
+      </div>
+      <div class="f">
+        <label>Teléfono <span class="pill">opcional</span></label>
+        <input type="text" id="qaPhone" placeholder="987654321" />
+      </div>
+      <div class="warnbox">
+        Email, apellidos, documento y cuenta bancaria quedan pendientes. El cliente aparece en
+        «Clientes creados a la rápida» hasta que alguien los complete.
+      </div>
+    </div>
+    <div class="m-f" style="justify-content:flex-end">
+      <button class="btn" id="qaCancel">Cancelar</button>
+      <button class="btn pri" id="qaSave">Crear y usar</button>
+    </div>
+  </div>
+</div>
+
+<!-- editor de etiqueta -->
+<div class="ov top" id="ovTag" hidden>
+  <div class="modal sm" role="dialog" aria-modal="true" aria-labelledby="tgTitle">
+    <div class="m-h">
+      <div class="eyebrow" id="tgEyebrow">Configuración</div>
+      <h3 id="tgTitle">Nueva etiqueta</h3>
+    </div>
+    <div class="m-b plain">
+      <div class="f" style="margin-bottom:16px">
+        <label>Nombre <span class="req">*</span></label>
+        <input type="text" id="tgName" placeholder="Cliente nuevo" />
+      </div>
+      <div class="f" style="margin-bottom:16px">
+        <label>Color</label>
+        <div class="swatches" id="tgSwatches"></div>
+      </div>
+      <div class="f" style="margin-bottom:10px">
+        <label class="check"><input type="checkbox" id="tgCounts" />
+          Esta etiqueta cuenta como «cliente nuevo» en los KPIs del día</label>
+      </div>
+      <div class="f">
+        <label class="check"><input type="checkbox" id="tgActive" checked />
+          Activa (se ofrece al registrar transacciones)</label>
+      </div>
+      <div style="margin-top:16px">
+        <span class="hint">Se verá así: </span>
+        <span id="tgPreview"></span>
+      </div>
+    </div>
+    <div class="m-f" style="justify-content:flex-end">
+      <button class="btn" id="tgCancel">Cancelar</button>
+      <button class="btn pri" id="tgSave">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  var KEY = 'brasper_mockup_etiquetas_v3';
+  function $(id){ return document.getElementById(id); }
+  function esc(s){
+    return String(s==null?'':s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+
+  // paleta del configurador
+  var PALETTE = [
+    { key:'amber',  bg:'#fef3c7', fg:'#92400e', bd:'#fcd34d' },
+    { key:'blue',   bg:'#dbeafe', fg:'#1e40af', bd:'#93c5fd' },
+    { key:'purple', bg:'#f3e8ff', fg:'#6b21a8', bd:'#d8b4fe' },
+    { key:'rose',   bg:'#ffe4e6', fg:'#9f1239', bd:'#fda4af' },
+    { key:'green',  bg:'#d1fae5', fg:'#065f46', bd:'#6ee7b7' },
+    { key:'cyan',   bg:'#cffafe', fg:'#155e75', bd:'#67e8f9' },
+    { key:'orange', bg:'#ffedd5', fg:'#9a3412', bd:'#fdba74' },
+    { key:'slate',  bg:'#f1f5f9', fg:'#334155', bd:'#cbd5e1' }
+  ];
+  function pal(k){ for(var i=0;i<PALETTE.length;i++) if(PALETTE[i].key===k) return PALETTE[i]; return PALETTE[0]; }
+
+  var STATUS = {
+    verification:'En verificación', verified:'Verificado', completed:'Finalizada',
+    failed:'Fallida', cancelled:'Cancelado'
+  };
+  var STATUS_ORDER = ['verification','verified','completed','failed','cancelled'];
+
+  var STEPS = [
+    { key:'calculadora', title:'Cotización',   sub:'Montos y tipo de cambio' },
+    { key:'datos',       title:'Datos',        sub:'Cliente y cuentas' },
+    { key:'vouchers',    title:'Comprobantes', sub:'Vouchers opcionales' }
+  ];
+
+  var ADVISORS = ['Karen Salazar','Luis Bermúdez','Paola Ríos'];
+  var RATES = [
+    { id:'pen-usd', label:'PEN → USD', rate:3.752, oc:'PEN', dc:'USD' },
+    { id:'pen-brl', label:'PEN → BRL', rate:1.470, oc:'PEN', dc:'BRL' },
+    { id:'usd-pen', label:'USD → PEN', rate:0.267, oc:'USD', dc:'PEN' }
+  ];
+  var COMMISSIONS = ['Estándar 0.9%','Preferente 0.6%','Corporativa 0.45%'];
+
+  // ---------- semillas ----------
+  function seedTags(){
+    return [
+      { id:'g1', label:'Cliente nuevo', color:'amber',  counts:true,  active:true },
+      { id:'g2', label:'Recurrente',    color:'blue',   counts:false, active:true },
+      { id:'g3', label:'Campaña',       color:'purple', counts:false, active:true },
+      { id:'g4', label:'Seguimiento',   color:'rose',   counts:false, active:true },
+      { id:'g5', label:'VIP',           color:'green',  counts:false, active:true }
+    ];
+  }
+  function seedClients(){
+    return [
+      { id:'c1', name:'Marisol Quispe',       company:'—',                    acct:'BCP ***4471 · PEN',       phone:'987112233', incomplete:false },
+      { id:'c2', name:'Esperanza Tello',      company:'—',                    acct:'Interbank ***9013 · PEN', phone:'987445566', incomplete:false },
+      { id:'c3', name:'Comercial Andina SAC', company:'Comercial Andina SAC', acct:'BBVA ***2288 · USD',      phone:'941200300', incomplete:false },
+      { id:'c4', name:'Ana Lucía Fernández',  company:'—',                    acct:'BCP ***7734 · PEN',       phone:'955778899', incomplete:false },
+      { id:'c5', name:'Inversiones Lima SRL', company:'Inversiones Lima SRL', acct:'Scotiabank ***1190 · USD',phone:'933100200', incomplete:false },
+      { id:'c6', name:'Textiles Norte EIRL',  company:'Textiles Norte EIRL',  acct:'BBVA ***6602 · USD',      phone:'944300400', incomplete:false },
+      { id:'c7', name:'Miguel Ángel Soto',    company:'—',                    acct:'BCP ***1132 · PEN',       phone:'', incomplete:true, createdIn:'BRP-00857' }
+    ];
+  }
+  function seedRows(){
+    var d1='2026-08-04', d2='2026-08-05';
+    var raw = [
+      [d1,'07:34','BRP-00841','OP-77120','Marisol Quispe','—',1200,'BCP ***4471 · PEN',319.83,'completed',1,1,1,['g2']],
+      [d1,'08:02','BRP-00842','OP-77121','Esperanza Tello','—',950,'Interbank ***9013 · PEN',253.20,'completed',1,1,1,['g1','g3']],
+      [d1,'09:15','BRP-00843','OP-77122','Comercial Andina SAC','Comercial Andina SAC',4800,'BBVA ***2288 · USD',1279.32,'completed',1,1,1,['g2','g5']],
+      [d1,'10:40','BRP-00844','—','Julio Paredes','—',600,'BCP ***3390 · PEN',159.91,'failed',1,0,0,['g1']],
+      [d1,'11:58','BRP-00845','OP-77124','Rocío Ventura','—',1500,'Interbank ***5521 · PEN',399.78,'completed',1,1,1,['g1']],
+      [d1,'14:20','BRP-00846','OP-77125','Textiles Norte EIRL','Textiles Norte EIRL',3200,'BBVA ***6602 · USD',852.88,'completed',1,1,1,['g2']],
+      [d1,'16:05','BRP-00847','OP-77126','Diego Ramos','—',780,'BCP ***8845 · PEN',207.89,'verification',1,0,0,['g1','g4']],
+
+      [d2,'07:31','BRP-00848','OP-77130','Marisol Quispe','—',1100,'BCP ***4471 · PEN',293.18,'completed',1,1,1,['g2']],
+      [d2,'08:04','BRP-00849','OP-77131','Ana Lucía Fernández','—',900,'BCP ***7734 · PEN',239.87,'completed',1,1,1,['g1','g3']],
+      [d2,'08:47','BRP-00850','OP-77132','Inversiones Lima SRL','Inversiones Lima SRL',5600,'Scotiabank ***1190 · USD',1492.54,'completed',1,1,1,['g2','g5']],
+      [d2,'09:52','BRP-00851','OP-77133','Carlos Mendoza','—',450,'Interbank ***2207 · PEN',119.94,'verification',1,0,0,['g1']],
+      [d2,'10:33','BRP-00852','OP-77134','Sandra Loayza','—',1750,'BCP ***6618 · PEN',466.42,'completed',1,1,1,['g1','g3']],
+      [d2,'11:10','BRP-00853','—','Comercial Andina SAC','Comercial Andina SAC',2900,'BBVA ***2288 · USD',772.92,'verification',0,0,0,['g2']],
+      [d2,'12:25','BRP-00854','—','Pedro Huamán','—',320,'BCP ***9975 · PEN',85.29,'failed',1,0,0,['g1']],
+      [d2,'13:48','BRP-00855','OP-77136','Gabriela Ríos','—',1050,'Interbank ***4408 · PEN',279.85,'completed',1,1,1,[]],
+      [d2,'15:02','BRP-00856','OP-77137','Textiles Norte EIRL','Textiles Norte EIRL',4100,'BBVA ***6602 · USD',1092.75,'verified',1,1,0,['g2']],
+      [d2,'16:11','BRP-00857','—','Miguel Ángel Soto','—',680,'BCP ***1132 · PEN',181.24,'verification',0,0,0,['g1','g4']]
+    ];
+    return raw.map(function(r,i){
+      return { id:'t'+(i+1), day:r[0], time:r[1], code:r[2], op:r[3], client:r[4], company:r[5],
+               origin:r[6], oc:'PEN', acct:r[7], dest:r[8], dc:'USD', rate:3.752, status:r[9],
+               vSend:!!r[10], vPay:!!r[11], checked:!!r[12], tags:r[13].slice() };
+    });
+  }
+
+  // ---------- estado ----------
+  var p; try { p = JSON.parse(localStorage.getItem(KEY)||'{}')||{}; } catch(e){ p = {}; }
+  var rows     = (p.rows && p.rows.length) ? p.rows : seedRows();
+  var tags     = (p.tags && p.tags.length) ? p.tags : seedTags();
+  var clients  = (p.clients && p.clients.length) ? p.clients : seedClients();
+  var mode     = p.mode === 'global' ? 'global' : 'daily';
+  var day      = p.day || '2026-08-05';
+  var tagPlace = p.tagPlace === 'col' ? 'col' : 'inline';
+
+  function save(){
+    try {
+      localStorage.setItem(KEY, JSON.stringify({
+        rows:rows, tags:tags, clients:clients, mode:mode, day:day, tagPlace:tagPlace,
+        fbWho:$('fbWho').value, fbText:$('fbText').value
+      }));
+    } catch(e){}
+  }
+
+  // ---------- helpers de dominio ----------
+  function tagById(id){ for(var i=0;i<tags.length;i++) if(tags[i].id===id) return tags[i]; return null; }
+  function newTagId(){ return tags.filter(function(t){ return t.counts; })[0] || null; }
+  function clientByName(n){ for(var i=0;i<clients.length;i++) if(clients[i].name===n) return clients[i]; return null; }
+  function isNew(r){ var t = newTagId(); return !!t && r.tags.indexOf(t.id)!==-1; }
+  function tagUsage(id){
+    var n=0; rows.forEach(function(r){ if(r.tags.indexOf(id)!==-1) n++; }); return n;
+  }
+
+  function days(){
+    var seen={}, out=[];
+    rows.forEach(function(r){ if(!seen[r.day]){ seen[r.day]=1; out.push(r.day); } });
+    return out.sort();
+  }
+  /** Correlativo dentro del día por orden de ingreso — la lógica que iría a transaction_domain.ts */
+  function dailySeq(){
+    var byDay={}, map={};
+    rows.forEach(function(r){ (byDay[r.day]=byDay[r.day]||[]).push(r); });
+    Object.keys(byDay).forEach(function(d){
+      byDay[d].slice().sort(function(a,b){
+        return a.time<b.time?-1 : a.time>b.time?1 : (a.id<b.id?-1:1);
+      }).forEach(function(r,i){ map[r.id]=i+1; });
+    });
+    return map;
+  }
+  /** Como está hoy: número de fila sobre el histórico. Base 200 simula los envíos previos. */
+  function globalSeq(){
+    var map={};
+    rows.slice().sort(function(a,b){
+      var ka=a.day+a.time, kb=b.day+b.time; return ka<kb?-1:ka>kb?1:0;
+    }).forEach(function(r,i){ map[r.id]=200+i+1; });
+    return map;
+  }
+  function visible(){
+    var out = rows.slice().sort(function(a,b){
+      var ka=a.day+a.time, kb=b.day+b.time; return ka<kb?-1:ka>kb?1:0;
+    });
+    if ($('onlyDay').checked) out = out.filter(function(r){ return r.day===day; });
+    if ($('onlyNew').checked) out = out.filter(isNew);
+    return out;
+  }
+
+  var MONTHS=['','enero','febrero','marzo','abril','mayo','junio','julio',
+              'agosto','setiembre','octubre','noviembre','diciembre'];
+  function fmtDay(d){ var z=d.split('-'); return Number(z[2])+' de '+MONTHS[Number(z[1])]+' de '+z[0]; }
+  function shortDay(d){ var z=d.split('-'); return z[2]+'/'+z[1]+'/'+z[0].slice(2); }
+  function money(n){ return Number(n||0).toLocaleString('es-PE',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  var SYM={PEN:'S/',USD:'$',BRL:'R$'};
+  function cur(n,c){ return (SYM[c]||c)+' '+money(n); }
+  function tagStyle(t){
+    var c = pal(t.color);
+    return 'background:'+c.bg+';color:'+c.fg+';border-color:'+c.bd;
+  }
+
+  // ---------- render ----------
+  function renderMode(){
+    $('modeGlobal').setAttribute('aria-pressed', mode==='global');
+    $('modeDaily').setAttribute('aria-pressed',  mode==='daily');
+    $('modeExpl').innerHTML = mode==='daily'
+      ? 'La columna <code>#</code> cuenta los envíos <b>de ese día</b>: el primero de la mañana es el 1, '
+      + 'el siguiente el 2, y el último ingresado es el número más alto. Al cambiar de día vuelve a 1. '
+      + 'El número no se mueve si filtran u ordenan — pertenece al envío, no a la pantalla.'
+      : 'Así funciona hoy: <code>#</code> es solo el número de fila sobre el histórico completo '
+      + '(arranca en 201 porque ya hay ~200 envíos anteriores). No dice nada del día y se mueve al filtrar.';
+  }
+
+  function renderKpis(){
+    var nt = newTagId();
+    var ofDay = rows.filter(function(r){ return r.day===day; });
+    var news  = ofDay.filter(isNew);
+    var done  = news.filter(function(r){ return r.status==='completed'; });
+    $('kNew').textContent   = news.length;
+    $('kDone').textContent  = done.length;
+    $('kConv').textContent  = news.length ? Math.round(done.length/news.length*100)+'%' : '—';
+    $('kTotal').textContent = ofDay.length;
+    $('kNewFoot').textContent = nt ? 'etiquetados «'+nt.label+'»'
+                                   : 'ninguna etiqueta marcada como «cuenta como nuevo»';
+  }
+
+  function renderHead(){
+    var cols = ''
+      + '<th class="num" title="'+(mode==='daily'?'Envío del día':'Número de fila')+'">#</th>'
+      + '<th class="tick" title="Verificada"></th>'
+      + '<th>Código</th><th>N° operación</th><th>Cliente</th>';
+    if (tagPlace==='col') cols += '<th>Etiquetas</th>';
+    cols += '<th>Razón social</th>'
+      + '<th class="c">Monto de envío</th><th>Cuenta destino</th><th class="c">Monto a recibir</th>'
+      + '<th class="c">Tipo cambio</th><th>Estado</th><th>Envío (fecha/hora)</th>'
+      + '<th class="c">Comp.<br />envío</th><th class="c">Comp.<br />pago</th>';
+    $('thead').innerHTML = cols;
+  }
+
+  function chipsOf(r, extraClass){
+    var html = r.tags.map(function(id){
+      var t = tagById(id); if (!t) return '';
+      return '<span class="tag" style="'+tagStyle(t)+'">'+esc(t.label)
+           + '<span class="x" data-del="'+id+'" data-row="'+r.id+'" title="Quitar">×</span></span>';
+    }).join('');
+    return '<div class="tags '+(extraClass||'')+'">'+html
+         + '<button class="addtag" data-add="'+r.id+'" title="Agregar etiqueta">+</button></div>';
+  }
+
+  function renderTable(){
+    var seq  = mode==='daily' ? dailySeq() : globalSeq();
+    var list = visible();
+    var span = tagPlace==='col' ? 15 : 14;
+    var tb   = $('tbody');
+
+    if (!list.length){
+      tb.innerHTML = '<tr><td colspan="'+span+'" class="empty">No hay transacciones que cumplan el filtro.</td></tr>';
+      return;
+    }
+    var html='', lastDay=null;
+    list.forEach(function(r){
+      if (r.day!==lastDay && !$('onlyDay').checked){
+        html += '<tr class="daysep"><td colspan="'+span+'">'+fmtDay(r.day)+'</td></tr>';
+        lastDay = r.day;
+      }
+      var c = clientByName(r.client);
+      var badge = (c && c.incomplete)
+        ? '<span class="incomp" title="Creado con alta rápida; falta completar el perfil">⚠ perfil incompleto</span>'
+        : '';
+      html += '<tr class="'+(isNew(r)?'isnew':'')+'">'
+        + '<td class="num '+(mode==='daily'?'daily':'')+'">'+(seq[r.id]||'—')+'</td>'
+        + '<td class="c"><span class="tick '+(r.checked?'on':'')+'">✓</span></td>'
+        + '<td class="mono"><span class="flag" title="'+r.oc+'">'+(r.oc==='PEN'?'PE':'US')+'</span>'+esc(r.code)+'</td>'
+        + '<td class="mono">'+esc(r.op||'—')+'</td>'
+        + '<td class="trunc" style="max-width:230px">'+esc(r.client)+badge
+        +   (tagPlace==='inline' ? chipsOf(r,'inline') : '')
+        + '</td>'
+        + (tagPlace==='col' ? '<td>'+chipsOf(r)+'</td>' : '')
+        + '<td class="trunc">'+esc(r.company)+'</td>'
+        + '<td class="mono c">'+cur(r.origin,r.oc)+'</td>'
+        + '<td class="trunc">'+esc(r.acct)+'</td>'
+        + '<td class="mono c">'+cur(r.dest,r.dc)+'</td>'
+        + '<td class="mono c">'+Number(r.rate).toFixed(3)+'</td>'
+        + '<td><span class="st st-'+r.status+'">'+STATUS[r.status]+'</span></td>'
+        + '<td class="mono">'+shortDay(r.day)+'<span class="subline">'+r.time+'</span></td>'
+        + '<td class="c"><span class="vch '+(r.vSend?'on':'')+'">'+(r.vSend?'✓':'—')+'</span></td>'
+        + '<td class="c"><span class="vch '+(r.vPay?'on':'')+'">'+(r.vPay?'✓':'—')+'</span></td>'
+        + '</tr>';
+    });
+    tb.innerHTML = html;
+  }
+
+  function renderIncomplete(){
+    var list = clients.filter(function(c){ return c.incomplete; });
+    $('incompCount').textContent = list.length + (list.length===1?' pendiente':' pendientes');
+    if (!list.length){
+      $('incompBody').innerHTML =
+        '<tr><td colspan="5" class="empty">Ningún cliente pendiente. '
+        + 'Creen uno desde «Nueva transacción» → paso Datos → botón + junto a Cliente.</td></tr>';
+      return;
+    }
+    $('incompBody').innerHTML = list.map(function(c){
+      var falta = [];
+      if (!c.phone) falta.push('teléfono');
+      falta.push('email','apellidos','documento');
+      if (!c.acct) falta.push('cuenta bancaria');
+      return '<tr>'
+        + '<td>'+esc(c.name)+'<span class="incomp">⚠ perfil incompleto</span></td>'
+        + '<td class="mono">'+esc(c.phone||'—')+'</td>'
+        + '<td class="mono">'+esc(c.createdIn||'—')+'</td>'
+        + '<td class="hint">'+falta.join(', ')+'</td>'
+        + '<td style="text-align:right"><button class="btn sm" data-complete="'+c.id+'">'
+        +   'Marcar como completo</button></td>'
+        + '</tr>';
+    }).join('');
+  }
+
+  function renderTagCfg(){
+    $('tagCfgBody').innerHTML = tags.map(function(t){
+      var used = tagUsage(t.id);
+      return '<tr>'
+        + '<td><span class="pop-dot" style="display:inline-block;width:14px;height:14px;'
+        +   'border-radius:4px;background:'+pal(t.color).bg+';border:1px solid '+pal(t.color).bd+'"></span></td>'
+        + '<td><span class="tag" style="'+tagStyle(t)+'">'+esc(t.label)+'</span>'
+        +   (t.active?'':' <span class="hint">(inactiva)</span>')+'</td>'
+        + '<td class="hint">'+pal(t.color).key+'</td>'
+        + '<td class="c">'+(t.counts?'<span class="star">★</span> sí':'<span class="hint">—</span>')+'</td>'
+        + '<td class="c">'+(t.active?'Sí':'<span class="hint">No</span>')+'</td>'
+        + '<td class="c mono">'+used+'</td>'
+        + '<td style="text-align:right;white-space:nowrap">'
+        +   '<button class="btn sm" data-tedit="'+t.id+'">Editar</button> '
+        +   '<button class="btn sm danger" data-tdel="'+t.id+'">Borrar</button></td>'
+        + '</tr>';
+    }).join('');
+  }
+
+  function renderDays(){
+    $('dayPick').innerHTML = days().map(function(d){
+      return '<option value="'+d+'"'+(d===day?' selected':'')+'>'+fmtDay(d)+'</option>';
+    }).join('');
+  }
+  function renderTagPlace(){
+    $('tagInline').setAttribute('aria-pressed', tagPlace==='inline');
+    $('tagCol').setAttribute('aria-pressed',    tagPlace==='col');
+  }
+
+  function renderAll(){
+    renderMode(); renderTagPlace(); renderKpis(); renderHead(); renderTable();
+    renderIncomplete(); renderTagCfg(); save();
+    if (!$('ov').hidden) renderWiz();
+  }
+
+  // ---------- popover de etiquetas en la fila ----------
+  var pop=null, popRowId=null;
+  function closePop(){ if (pop){ pop.remove(); pop=null; popRowId=null; } }
+  function popRow(){ var f=null; rows.forEach(function(r){ if(r.id===popRowId) f=r; }); return f; }
+  function fillPop(){
+    var row=popRow(); if(!row||!pop) return;
+    var avail = tags.filter(function(t){ return t.active || row.tags.indexOf(t.id)!==-1; });
+    pop.innerHTML = '<div class="ttl">Etiquetas</div>' + (avail.length
+      ? avail.map(function(t){
+          var on = row.tags.indexOf(t.id)!==-1;
+          return '<button data-tid="'+t.id+'">'
+               + '<span class="dot" style="background:'+pal(t.color).bg+';border-color:'+pal(t.color).bd+'"></span>'
+               + '<span>'+esc(t.label)+(t.counts?' <span class="star">★</span>':'')+'</span>'
+               + (on?'<span class="on">✓</span>':'')+'</button>';
+        }).join('')
+      : '<div class="none">No hay etiquetas activas. Créenlas en la sección 5.</div>');
+  }
+  function openPop(rid, anchor){
+    closePop(); popRowId=rid;
+    if (!popRow()){ popRowId=null; return; }
+    pop=document.createElement('div'); pop.className='pop';
+    document.body.appendChild(pop); fillPop();
+    var b=anchor.getBoundingClientRect();
+    var top=b.bottom+6, left=Math.min(b.left, window.innerWidth-pop.offsetWidth-12);
+    if (top+pop.offsetHeight > window.innerHeight-8) top = b.top-pop.offsetHeight-6;
+    pop.style.top=Math.max(8,top)+'px'; pop.style.left=Math.max(8,left)+'px';
+    pop.addEventListener('click', function(ev){
+      var btn=ev.target.closest('button[data-tid]'); if(!btn) return;
+      // Sin stopPropagation el listener de cierre del documento vería un target ya
+      // desmontado por el re-render de la tabla y cerraría el popover en cada clic.
+      ev.stopPropagation();
+      var row=popRow(); if(!row) return;
+      var id=btn.getAttribute('data-tid'), at=row.tags.indexOf(id);
+      if (at===-1) row.tags.push(id); else row.tags.splice(at,1);
+      renderAll(); fillPop();
+    });
+  }
+  document.addEventListener('click', function(ev){
+    if (pop && !pop.contains(ev.target) && !ev.target.closest('[data-add]')) closePop();
+  });
+  window.addEventListener('resize', closePop);
+  window.addEventListener('scroll', closePop, true);
+
+  $('tbody').addEventListener('click', function(ev){
+    var add=ev.target.closest('[data-add]');
+    if (add){ ev.stopPropagation(); openPop(add.getAttribute('data-add'), add); return; }
+    var del=ev.target.closest('[data-del]');
+    if (del){
+      var id=del.getAttribute('data-del'), rid=del.getAttribute('data-row');
+      rows.forEach(function(r){
+        if (r.id===rid){ var at=r.tags.indexOf(id); if(at!==-1) r.tags.splice(at,1); }
+      });
+      renderAll();
+    }
+  });
+
+  // ---------- controles de lista ----------
+  $('modeGlobal').addEventListener('click', function(){ mode='global'; renderAll(); });
+  $('modeDaily').addEventListener('click',  function(){ mode='daily';  renderAll(); });
+  $('tagInline').addEventListener('click',  function(){ tagPlace='inline'; renderAll(); });
+  $('tagCol').addEventListener('click',     function(){ tagPlace='col';    renderAll(); });
+  $('onlyNew').addEventListener('change', renderAll);
+  $('onlyDay').addEventListener('change', renderAll);
+  $('dayPick').addEventListener('change', function(){ day=this.value; renderAll(); });
+
+  $('incompBody').addEventListener('click', function(ev){
+    var b=ev.target.closest('[data-complete]'); if(!b) return;
+    var id=b.getAttribute('data-complete');
+    clients.forEach(function(c){ if(c.id===id) c.incomplete=false; });
+    renderAll();
+  });
+
+  // =========================================================
+  //  WIZARD
+  // =========================================================
+  var wz = null;
+  function rateOf(id){ for(var i=0;i<RATES.length;i++) if(RATES[i].id===id) return RATES[i]; return RATES[0]; }
+
+  function blankDraft(){
+    var now = new Date();
+    return {
+      step:0, rateId:'pen-usd', commission:COMMISSIONS[0],
+      origin:1000, dest:null, commissionAmount:0,
+      client:'', company:'—', advisor:ADVISORS[0], acct:'',
+      sendAt: day+'T'+String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0'),
+      payAt:'', status:'verification', vSend:false, vPay:false, tags:[]
+    };
+  }
+  function recalc(){
+    var r = rateOf(wz.rateId);
+    var gross = Number(wz.origin)||0;
+    var pct = parseFloat((wz.commission.match(/([\d.]+)%/)||[0,'0'])[1])/100;
+    wz.commissionAmount = Math.round(gross*pct*100)/100;
+    wz.dest = Math.round((gross-wz.commissionAmount)/r.rate*100)/100;
+  }
+
+  function stepsHtml(){
+    return STEPS.map(function(s,i){
+      var state = i<wz.step ? 'done' : i===wz.step ? 'current' : 'todo';
+      return '<button class="step" data-state="'+state+'" data-step="'+i+'"'
+           + (i>wz.step?' disabled':'')+'>'
+           + '<span class="bul">'+(i<wz.step?'✓':(i+1))+'</span>'
+           + '<span class="tt">'+s.title+'<span class="ss">'+s.sub+'</span></span></button>';
+    }).join('');
+  }
+
+  function bodyHtml(){
+    var r = rateOf(wz.rateId);
+    if (wz.step===0){
+      return '<section class="blk"><h4>Cotización</h4>'
+        + '<p class="desc">Tipo de cambio y comisión vigentes; el monto a recibir se calcula solo.</p>'
+        + '<div class="grid2 f">'
+        +   '<div><label>Tasa</label><select data-f="rateId">'
+        +     RATES.map(function(x){
+                return '<option value="'+x.id+'"'+(x.id===wz.rateId?' selected':'')+'>'
+                     + x.label+' · '+x.rate.toFixed(3)+'</option>';
+              }).join('')
+        +   '</select></div>'
+        +   '<div><label>Comisión</label><select data-f="commission">'
+        +     COMMISSIONS.map(function(x){
+                return '<option'+(x===wz.commission?' selected':'')+'>'+x+'</option>';
+              }).join('')
+        +   '</select></div>'
+        +   '<div><label>Monto de envío<span class="pill">'+r.oc+'</span></label>'
+        +     '<input type="text" data-f="origin" value="'+wz.origin+'" /></div>'
+        +   '<div><label>Monto a recibir<span class="pill">'+r.dc+'</span></label>'
+        +     '<input type="text" value="'+money(wz.dest)+'" readonly />'
+        +     '<p class="note">Comisión aplicada: '+cur(wz.commissionAmount,r.oc)+'</p></div>'
+        + '</div></section>';
+    }
+    if (wz.step===1){
+      var c = clientByName(wz.client);
+      var opts = '<option value="">Seleccionar cliente…</option>' + clients.map(function(x){
+        return '<option value="'+esc(x.name)+'"'+(x.name===wz.client?' selected':'')+'>'
+             + esc(x.name)+(x.incomplete?' · perfil incompleto':'')+'</option>';
+      }).join('');
+      var avail = tags.filter(function(t){ return t.active || wz.tags.indexOf(t.id)!==-1; });
+      var nt = newTagId();
+      return ''
+        + '<section class="blk"><h4>Cliente y cuentas</h4>'
+        + '<p class="desc">La cuenta destino se filtra por el cliente seleccionado.</p>'
+        + '<div class="grid2 f">'
+        +   '<div><label>Cliente <span class="req">*</span></label>'
+        +     '<div class="withbtn"><select data-f="client">'+opts+'</select>'
+        +       '<button type="button" class="iconbtn" id="wzQuickAdd" '
+        +         'title="Alta rápida: crear cliente con solo el nombre">+</button></div>'
+        +     '<p class="note">El <b>+</b> crea el cliente al vuelo con solo el nombre.</p></div>'
+        +   '<div><label>Ventas / asesor</label><select data-f="advisor">'
+        +     ADVISORS.map(function(a){ return '<option'+(a===wz.advisor?' selected':'')+'>'+a+'</option>'; }).join('')
+        +   '</select></div>'
+        +   '<div><label>Razón social</label>'
+        +     '<input type="text" data-f="company" value="'+esc(wz.company)+'" /></div>'
+        +   '<div><label>Cuentas destino <span class="req">*</span></label>'
+        +     '<input type="text" data-f="acct" value="'+esc(wz.acct)+'" '
+        +       'placeholder="Elegir cliente primero" /></div>'
+        + '</div>'
+        + (c && c.incomplete
+            ? '<div class="warnbox"><b>'+esc(c.name)+'</b> tiene el perfil incompleto: se creó con '
+              + 'alta rápida. La transacción se guarda igual; el perfil queda en la lista de '
+              + 'pendientes hasta que se complete.</div>'
+            : '')
+        + '<div style="margin-top:18px;padding-top:18px;border-top:1px dashed var(--border)">'
+        +   '<div class="f"><label style="margin-bottom:2px">Etiquetas</label>'
+        +     '<p class="note" style="margin:0 0 10px">Aquí es donde se marca «cliente nuevo», '
+        +       'en el mismo paso donde ya se elige el cliente. El catálogo se administra en la '
+        +       'sección 5 de esta página.</p></div>'
+        +   '<div class="tagpicker" id="wzTags">'
+        +     (avail.length ? '' : '<span class="hint">No hay etiquetas activas.</span>')
+        +   '</div>'
+        +   (nt && wz.tags.indexOf(nt.id)!==-1
+              ? '<p style="margin:12px 0 0"><span class="newbadge">★ Contará en «Clientes nuevos» del '
+                + fmtDay((wz.sendAt||'').split('T')[0] || day)+'</span></p>' : '')
+        + '</div></section>'
+
+        + '<section class="blk"><h4>Importes y condiciones</h4>'
+        + '<p class="desc">Heredados del paso de cotización; editables si es necesario.</p>'
+        + '<div class="grid2 f">'
+        +   '<div><label>Monto de envío<span class="pill">'+r.oc+'</span></label>'
+        +     '<input type="text" data-f="origin" value="'+wz.origin+'" /></div>'
+        +   '<div><label>Monto a recibir<span class="pill">'+r.dc+'</span></label>'
+        +     '<input type="text" value="'+money(wz.dest)+'" readonly /></div>'
+        + '</div></section>'
+
+        + '<section class="blk"><h4>Fechas</h4>'
+        + '<p class="desc">Fecha y hora locales; al guardar se envían al API en ISO (UTC).</p>'
+        + '<div class="grid2 f">'
+        +   '<div><label>Fecha y hora envío</label>'
+        +     '<input type="datetime-local" data-f="sendAt" value="'+wz.sendAt+'" /></div>'
+        +   '<div><label>Fecha y hora pago</label>'
+        +     '<input type="datetime-local" data-f="payAt" value="'+wz.payAt+'" /></div>'
+        + '</div></section>';
+    }
+    return '<section class="blk"><h4>Comprobantes</h4>'
+      + '<p class="desc">Vouchers opcionales. Se pueden agregar después desde la fila.</p>'
+      + '<div class="grid2">'
+      +   '<div><div class="drop">Comprobante de envío<br /><span style="font-size:11px">'
+      +     'arrastrar o hacer clic</span></div>'
+      +     '<label class="check" style="margin-top:10px"><input type="checkbox" data-f="vSend"'
+      +     (wz.vSend?' checked':'')+' /> Simular que ya se adjuntó</label></div>'
+      +   '<div><div class="drop">Comprobante de pago<br /><span style="font-size:11px">'
+      +     'arrastrar o hacer clic</span></div>'
+      +     '<label class="check" style="margin-top:10px"><input type="checkbox" data-f="vPay"'
+      +     (wz.vPay?' checked':'')+' /> Simular que ya se adjuntó</label></div>'
+      + '</div></section>'
+      + '<section class="blk amber"><h4>Estado en el sistema</h4>'
+      + '<div class="grid2 f"><div><label>Estado</label><select data-f="status">'
+      +   STATUS_ORDER.map(function(s){
+            return '<option value="'+s+'"'+(s===wz.status?' selected':'')+'>'+STATUS[s]+'</option>';
+          }).join('')
+      + '</select></div>'
+      + '<div><label class="check" style="margin-top:26px"><input type="checkbox" data-f="checked"'
+      +   (wz.checked?' checked':'')+' /> Verificada</label></div></div>'
+      + '<p class="note" style="color:#78350f">En el sistema real el servidor recalcula '
+      + '<b>verification</b> → <b>verified</b> → <b>completed</b> según el checklist y los comprobantes.</p>'
+      + '</section>';
+  }
+
+  function renderWizTags(){
+    var el = $('wzTags'); if (!el) return;
+    var avail = tags.filter(function(t){ return t.active || wz.tags.indexOf(t.id)!==-1; });
+    if (!avail.length) return;
+    el.innerHTML = avail.map(function(t){
+      var on = wz.tags.indexOf(t.id)!==-1;
+      return '<button type="button" data-tid="'+t.id+'" aria-pressed="'+on+'"'
+           + (on ? ' style="'+tagStyle(t)+'"' : '') + '>'
+           + esc(t.label)+(t.counts?' ★':'')+'</button>';
+    }).join('');
+  }
+
+  function renderWiz(){
+    if (!wz) return;
+    recalc();
+    $('mEyebrow').textContent = 'Paso '+(wz.step+1)+' de '+STEPS.length+' · '+STEPS[wz.step].title;
+    $('mSteps').innerHTML = stepsHtml();
+    $('mBody').innerHTML  = bodyHtml();
+    renderWizTags();
+    $('mBack').style.visibility = wz.step===0 ? 'hidden' : 'visible';
+    $('mNext').textContent = wz.step===STEPS.length-1 ? 'Guardar transacción' : 'Continuar';
+    $('mNext').disabled = wz.step===1 && !wz.client;
+  }
+
+  function openWiz(){ wz = blankDraft(); $('ov').hidden = false; renderWiz(); }
+  function closeWiz(){ $('ov').hidden = true; wz = null; }
+
+  $('btnNew').addEventListener('click', openWiz);
+  $('mCancel').addEventListener('click', closeWiz);
+  $('ov').addEventListener('click', function(ev){ if (ev.target === $('ov')) closeWiz(); });
+  $('mSteps').addEventListener('click', function(ev){
+    var b = ev.target.closest('.step'); if (!b || b.disabled) return;
+    wz.step = Number(b.getAttribute('data-step')); renderWiz();
+  });
+  $('mBack').addEventListener('click', function(){ if (wz.step>0){ wz.step--; renderWiz(); } });
+
+  $('mBody').addEventListener('click', function(ev){
+    if (ev.target.closest('#wzQuickAdd')){ openQa(); return; }
+    var t = ev.target.closest('#wzTags button[data-tid]'); if (!t) return;
+    var id = t.getAttribute('data-tid'), at = wz.tags.indexOf(id);
+    if (at===-1) wz.tags.push(id); else wz.tags.splice(at,1);
+    renderWiz();
+  });
+  $('mBody').addEventListener('change', function(ev){
+    var f = ev.target.getAttribute('data-f'); if (!f) return;
+    if (ev.target.type==='checkbox') wz[f] = ev.target.checked;
+    else if (f==='origin') wz[f] = parseFloat(String(ev.target.value).replace(/[^\d.]/g,''))||0;
+    else wz[f] = ev.target.value;
+    if (f==='client'){
+      var c = clientByName(wz.client);
+      wz.company = c ? c.company : '—';
+      wz.acct    = c ? c.acct    : '';
+    }
+    renderWiz();
+  });
+
+  $('mNext').addEventListener('click', function(){
+    if (wz.step < STEPS.length-1){ wz.step++; renderWiz(); return; }
+    var maxCode = 857;
+    rows.forEach(function(r){
+      var n = parseInt(String(r.code).replace(/\D/g,''),10);
+      if (n>maxCode) maxCode = n;
+    });
+    var r = rateOf(wz.rateId);
+    var parts = (wz.sendAt||'').split('T');
+    var code = 'BRP-'+String(maxCode+1).padStart(5,'0');
+    // si el cliente vino del alta rápida, dejamos rastro de en qué envío se creó
+    var c = clientByName(wz.client);
+    if (c && c.incomplete && !c.createdIn) c.createdIn = code;
+    if (c && !c.acct && wz.acct) c.acct = wz.acct;
+    rows.push({
+      id:'n'+(maxCode+1)+'_'+rows.length,
+      day: parts[0] || day,
+      time: (parts[1] || '00:00').slice(0,5),
+      code: code, op:'—', client:wz.client, company:wz.company||'—',
+      origin:Number(wz.origin)||0, oc:r.oc, acct:wz.acct||'—',
+      dest:wz.dest, dc:r.dc, rate:r.rate,
+      status:wz.status, vSend:!!wz.vSend, vPay:!!wz.vPay, checked:!!wz.checked,
+      tags:wz.tags.slice()
+    });
+    if (parts[0]) day = parts[0];
+    closeWiz(); renderDays(); renderAll();
+  });
+
+  // ---------- alta rápida ----------
+  function openQa(){
+    $('qaName').value = ''; $('qaPhone').value = '';
+    $('ovQa').hidden = false;
+    $('qaName').focus();
+  }
+  function closeQa(){ $('ovQa').hidden = true; }
+  $('qaCancel').addEventListener('click', closeQa);
+  $('ovQa').addEventListener('click', function(ev){ if (ev.target===$('ovQa')) closeQa(); });
+  $('qaSave').addEventListener('click', function(){
+    var name = ($('qaName').value||'').trim();
+    if (!name){ $('qaName').focus(); return; }
+    if (clientByName(name)){
+      // ya existe: solo lo seleccionamos, no duplicamos
+      if (wz){ wz.client = name; var e=clientByName(name); wz.company=e.company; wz.acct=e.acct; }
+      closeQa(); renderWiz(); return;
+    }
+    var c = {
+      id:'q'+clients.length+'_'+name.length, name:name, company:'—', acct:'',
+      phone:($('qaPhone').value||'').trim(), incomplete:true, createdIn:''
+    };
+    clients.push(c);
+    if (wz){
+      wz.client = name; wz.company = '—'; wz.acct = '';
+      var nt = newTagId();                       // el alta rápida es, por definición, un cliente nuevo
+      if (nt && wz.tags.indexOf(nt.id)===-1) wz.tags.push(nt.id);
+    }
+    closeQa(); renderAll(); renderWiz();
+  });
+  $('qaName').addEventListener('keydown', function(ev){ if (ev.key==='Enter') $('qaSave').click(); });
+
+  // ---------- editor de etiquetas ----------
+  var tgEditing = null, tgColor = 'amber';
+  function renderSwatches(){
+    $('tgSwatches').innerHTML = PALETTE.map(function(c){
+      return '<button type="button" class="sw" data-color="'+c.key+'" title="'+c.key+'"'
+           + ' aria-pressed="'+(c.key===tgColor)+'"'
+           + ' style="background:'+c.bg+';box-shadow:inset 0 0 0 1px '+c.bd+'"></button>';
+    }).join('');
+  }
+  function renderTgPreview(){
+    var c = pal(tgColor);
+    var label = ($('tgName').value||'').trim() || 'Etiqueta';
+    $('tgPreview').innerHTML = '<span class="tag" style="background:'+c.bg+';color:'+c.fg
+      + ';border-color:'+c.bd+'">'+esc(label)+($('tgCounts').checked?' ★':'')+'</span>';
+  }
+  function openTg(t){
+    tgEditing = t || null;
+    tgColor = t ? t.color : 'amber';
+    $('tgTitle').textContent = t ? 'Editar etiqueta' : 'Nueva etiqueta';
+    $('tgName').value = t ? t.label : '';
+    $('tgCounts').checked = t ? !!t.counts : false;
+    $('tgActive').checked = t ? !!t.active : true;
+    renderSwatches(); renderTgPreview();
+    $('ovTag').hidden = false;
+    $('tgName').focus();
+  }
+  function closeTg(){ $('ovTag').hidden = true; tgEditing = null; }
+  $('btnTagNew').addEventListener('click', function(){ openTg(null); });
+  $('tgCancel').addEventListener('click', closeTg);
+  $('ovTag').addEventListener('click', function(ev){ if (ev.target===$('ovTag')) closeTg(); });
+  $('tgSwatches').addEventListener('click', function(ev){
+    var b = ev.target.closest('[data-color]'); if (!b) return;
+    tgColor = b.getAttribute('data-color'); renderSwatches(); renderTgPreview();
+  });
+  $('tgName').addEventListener('input', renderTgPreview);
+  $('tgCounts').addEventListener('change', renderTgPreview);
+  $('tgSave').addEventListener('click', function(){
+    var label = ($('tgName').value||'').trim();
+    if (!label){ $('tgName').focus(); return; }
+    var counts = $('tgCounts').checked, active = $('tgActive').checked;
+    if (counts) tags.forEach(function(x){ x.counts = false; });   // solo una puede contar
+    if (tgEditing){
+      tgEditing.label = label; tgEditing.color = tgColor;
+      tgEditing.counts = counts; tgEditing.active = active;
+    } else {
+      tags.push({ id:'u'+tags.length+'_'+label.length, label:label,
+                  color:tgColor, counts:counts, active:active });
+    }
+    closeTg(); renderAll();
+  });
+  $('tagCfgBody').addEventListener('click', function(ev){
+    var e = ev.target.closest('[data-tedit]');
+    if (e){ openTg(tagById(e.getAttribute('data-tedit'))); return; }
+    var d = ev.target.closest('[data-tdel]');
+    if (d){
+      var id = d.getAttribute('data-tdel'), t = tagById(id), used = tagUsage(id);
+      var msg = '¿Borrar la etiqueta «'+t.label+'»?'
+              + (used ? '\n\nEstá en uso en '+used+' transacción(es); se les quitará.' : '');
+      if (!confirm(msg)) return;
+      tags = tags.filter(function(x){ return x.id!==id; });
+      rows.forEach(function(r){
+        var at = r.tags.indexOf(id); if (at!==-1) r.tags.splice(at,1);
+      });
+      renderAll();
+    }
+  });
+
+  document.addEventListener('keydown', function(ev){
+    if (ev.key !== 'Escape') return;
+    if (!$('ovTag').hidden) { closeTg(); return; }
+    if (!$('ovQa').hidden)  { closeQa(); return; }
+    if (!$('ov').hidden)    closeWiz();
+  });
+
+  // ---------- CSV / reset ----------
+  function download(name, text, mime){
+    var blob = new Blob([text], {type:(mime||'text/plain')+';charset=utf-8'});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+  $('btnCsv').addEventListener('click', function(){
+    var seq = mode==='daily' ? dailySeq() : globalSeq();
+    var head = ['#','Fecha','Hora','Codigo','N operacion','Cliente','Perfil incompleto',
+                'Razon social','Monto de envio','Cuenta destino','Monto a recibir','Tipo cambio',
+                'Estado','Comp. envio','Comp. pago','Cliente nuevo','Etiquetas'];
+    var lines = [head.join(';')];
+    visible().forEach(function(r){
+      var c = clientByName(r.client);
+      lines.push([
+        seq[r.id]||'', r.day, r.time, r.code, r.op, r.client,
+        (c && c.incomplete) ? 'SI' : 'NO', r.company,
+        money(r.origin)+' '+r.oc, r.acct, money(r.dest)+' '+r.dc, Number(r.rate).toFixed(3),
+        STATUS[r.status], r.vSend?'SI':'NO', r.vPay?'SI':'NO',
+        isNew(r)?'SI':'NO',
+        r.tags.map(function(id){ var t=tagById(id); return t?t.label:id; }).join(' | ')
+      ].join(';'));
+    });
+    download('transacciones-'+day+'.csv', '﻿'+lines.join('\r\n'), 'text/csv');
+  });
+  $('btnReset').addEventListener('click', function(){
+    if (!confirm('¿Volver a los datos de ejemplo? Se pierden las etiquetas y clientes que crearon.')) return;
+    rows = seedRows(); tags = seedTags(); clients = seedClients();
+    day = '2026-08-05'; renderDays(); renderAll();
+  });
+
+  // ---------- feedback ----------
+  function fbBody(){
+    var who = ($('fbWho').value||'').trim() || '(sin nombre)';
+    var cfg = tags.map(function(t){
+      return '  - '+t.label+' ('+t.color+(t.counts?', cuenta como nuevo':'')
+           + (t.active?'':', inactiva')+')';
+    }).join('\n');
+    return 'Comentarios del mockup — numeración diaria, etiquetas y alta rápida\n'
+         + 'De: '+who+'\n'
+         + '------------------------------------------\n'
+         + ($('fbText').value||'').trim()+'\n\n'
+         + 'Etiquetas que dejaron configuradas:\n'+cfg+'\n';
+  }
+  function fallbackCopy(t, ok){
+    var ta=document.createElement('textarea');
+    ta.value=t; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); ok(); } catch(e){ alert(t); }
+    ta.remove();
+  }
+  $('fbCopy').addEventListener('click', function(){
+    var t = fbBody();
+    function ok(){ $('fbMsg').textContent='Copiado. Péguenlo por WhatsApp.';
+                   setTimeout(function(){ $('fbMsg').textContent=''; }, 4000); }
+    if (navigator.clipboard && navigator.clipboard.writeText)
+      navigator.clipboard.writeText(t).then(ok, function(){ fallbackCopy(t,ok); });
+    else fallbackCopy(t,ok);
+  });
+  $('fbDl').addEventListener('click', function(){
+    var who = ($('fbWho').value||'comentarios').trim().replace(/[^\w\-]+/g,'-').toLowerCase();
+    download('comentarios-'+(who||'mockup')+'.txt', fbBody());
+  });
+  $('fbWho').addEventListener('input', save);
+  $('fbText').addEventListener('input', save);
+
+  // ---------- arranque ----------
+  $('fbWho').value  = p.fbWho  || '';
+  $('fbText').value = p.fbText || '';
+  renderDays(); renderAll();
+})();
+</script>
+</body>
+</html>
