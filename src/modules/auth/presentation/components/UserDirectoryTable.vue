@@ -2,7 +2,7 @@
 import AppDropdown from '@/interface/components/AppDropdown.vue'
 import { USER_ROLE_LABELS } from '../../domain/models'
 import type { UserListItem } from '../../infrastructure/adapters/users_management_api_adapter'
-import { isClientProfileIncomplete } from '../../infrastructure/parse_user'
+import { isClientProfileIncomplete, missingProfileFields } from '../../infrastructure/parse_user'
 
 defineProps<{
   users: UserListItem[]
@@ -76,9 +76,9 @@ function documentNumber(user: UserListItem): string {
               <span
                 v-if="isProfileIncomplete(user)"
                 class="ml-1.5 inline-flex items-center rounded-full border border-[#fed7aa] bg-[#fff7ed] px-1.5 text-[10px] font-semibold text-[#9a3412]"
-                title="Creado con alta rápida: falta email y documento"
+                :title="`Alta rápida sin completar. Falta: ${missingProfileFields(user).join(', ')}`"
               >
-                perfil incompleto
+                Por completar
               </span>
             </td><td class="px-4 py-3 text-[#374151]">{{ user.email || '-' }}</td><td class="px-4 py-3 text-[#374151]"><span class="block text-xs text-[#6b7280]">{{ documentType(user) }}</span>{{ documentNumber(user) }}</td>
             <td class="px-4 py-3"><span class="inline-flex rounded-full bg-[#dbeafe] px-2.5 py-0.5 text-xs font-medium text-brasper-indigoDark">{{ USER_ROLE_LABELS[user.role as keyof typeof USER_ROLE_LABELS] ?? user.role ?? '—' }}</span></td>

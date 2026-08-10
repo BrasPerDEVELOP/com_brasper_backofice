@@ -162,6 +162,18 @@ export function parseUserListItem(item: unknown): UserListItem | null {
  * Se deriva en vez de guardar un flag en la BD porque el dato ya existe: no hay
  * forma de tener email o documento sin haber pasado por el alta completa.
  */
+export function missingProfileFields(user: UserListItem): string[] {
+  const missing: string[] = []
+  if (!user.email?.trim()) missing.push('email')
+  if (!user.lastnames?.trim()) missing.push('apellidos')
+  const hasDocument =
+    !!user.document_number?.trim() ||
+    user.identifications.some((item) => item.document_number.trim() !== '')
+  if (!hasDocument) missing.push('documento')
+  if (user.phone == null) missing.push('teléfono')
+  return missing
+}
+
 export function isClientProfileIncomplete(user: UserListItem): boolean {
   const hasEmail = !!user.email?.trim()
   const hasDocument =

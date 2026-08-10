@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { isClientProfileIncomplete, type UserListItem } from './parse_user'
+import {
+  isClientProfileIncomplete,
+  missingProfileFields,
+  type UserListItem
+} from './parse_user'
 
 const user = (over: Partial<UserListItem> = {}): UserListItem => ({
   id: 'u1',
@@ -40,5 +44,37 @@ describe('perfil incompleto derivado', () => {
 
   it('solo teléfono sigue siendo incompleto', () => {
     expect(isClientProfileIncomplete(user({ phone: 987654321 }))).toBe(true)
+  })
+})
+
+describe('qué falta en el perfil', () => {
+  it('un alta rápida con solo nombre lista todo lo pendiente', () => {
+    expect(missingProfileFields(user())).toEqual([
+      'email',
+      'apellidos',
+      'documento',
+      'teléfono'
+    ])
+  })
+
+  it('no lista lo que ya está', () => {
+    const u = user({
+      email: 'a@b.com',
+      lastnames: 'Tello',
+      phone: 987654321,
+      identifications: [{ document_type: 'dni', document_number: '123', is_primary: true }]
+    })
+    expect(missingProfileFields(u)).toEqual([])
+  })
+
+  it('el teléfono cuenta como presente aunque el resto falte', () => {
+    expect(missingProfileFields(user({ phone: 987654321 }))).not.toContain('teléfono')
+  })
+
+  it('un documento en blanco sigue contando como faltante', () => {
+    const u = user({
+      identifications: [{ document_type: 'dni', document_number: '   ', is_primary: true }]
+    })
+    expect(missingProfileFields(u)).toContain('documento')
   })
 })

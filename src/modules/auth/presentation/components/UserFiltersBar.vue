@@ -26,10 +26,10 @@ const onlyIncomplete = defineModel<boolean>('onlyIncomplete', { required: true }
     <label
       v-if="incompleteCount > 0"
       class="flex cursor-pointer select-none items-center gap-2 rounded-lg border border-[#fed7aa] bg-[#fff7ed] px-3 py-2 text-sm font-medium text-[#9a3412]"
-      title="Clientes creados con alta rápida a los que falta completar el perfil"
+      title="Clientes dados de alta con solo el nombre: sin email ni documento"
     >
       <input v-model="onlyIncomplete" type="checkbox" class="h-4 w-4 rounded border-[#fdba74]" />
-      Perfil incompleto ({{ incompleteCount }})
+      Por completar ({{ incompleteCount }})
     </label>
     <div class="flex items-center gap-2">
       <span class="text-sm font-medium text-[#6b7280]">Total</span>

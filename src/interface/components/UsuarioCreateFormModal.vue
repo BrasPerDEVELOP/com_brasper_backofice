@@ -37,7 +37,15 @@ const props = withDefaults(
   }
 )
 
-const isQuick = computed(() => props.variant === 'quick' && !props.user)
+/**
+ * `expandedFromQuick` deja pasar al formulario completo sin cerrar el modal ni
+ * perder lo escrito: quien empieza rápido y descubre que sí tiene los datos no
+ * debería tener que volver a empezar.
+ */
+const expandedFromQuick = ref(false)
+const isQuick = computed(
+  () => props.variant === 'quick' && !props.user && !expandedFromQuick.value
+)
 
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
@@ -126,6 +134,7 @@ async function hydrateFromDetail(id: string) {
 }
 
 function close() {
+  expandedFromQuick.value = false
   emit('update:modelValue', false)
 }
 
@@ -304,14 +313,23 @@ watch(
             </div>
           </div>
 
-          <p
+          <div
             v-if="isQuick"
             class="rounded-lg border border-[#fed7aa] bg-[#fff7ed] px-4 py-3 text-xs text-[#9a3412]"
           >
-            Email, apellidos, documento y cuenta bancaria quedan pendientes. El
-            cliente aparecerá como «perfil incompleto» en Usuarios hasta que
-            alguien los complete.
-          </p>
+            <p>
+              Email, apellidos, documento y cuenta bancaria quedan pendientes. El
+              cliente aparecerá como «perfil incompleto» en Usuarios hasta que
+              alguien los complete.
+            </p>
+            <button
+              type="button"
+              class="mt-2 font-semibold underline underline-offset-2 hover:no-underline"
+              @click="expandedFromQuick = true"
+            >
+              ¿Tienes todos los datos? Completar el perfil ahora
+            </button>
+          </div>
 
           <p v-if="error" class="rounded-lg bg-[#dc3545]/10 px-4 py-3 text-sm text-[#dc3545]">
             {{ error }}

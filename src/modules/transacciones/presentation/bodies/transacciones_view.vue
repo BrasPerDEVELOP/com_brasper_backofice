@@ -1516,6 +1516,14 @@ watch(
   { immediate: true },
 );
 
+watch(
+  paginatedTransactions,
+  (rows) => {
+    if (rows.length) void resolveMissingClientNames(rows);
+  },
+  { immediate: true },
+);
+
 const totalResults = computed(() => transactionsStore.total);
 
 const totalPages = computed(() =>
@@ -2818,12 +2826,45 @@ function transactionCompanyNameTable(t: Transaction): string {
   return s || "—";
 }
 
+/**
+ * Nombre del cliente. Si todavía no está en el catálogo se muestra un guion, no
+ * el UUID: un identificador crudo en la columna «Cliente» no le dice nada a
+ * ventas y parece un dato corrupto. El nombre llega en cuanto lo resuelve
+ * `resolveMissingClientNames`.
+ */
 function getClientLabel(id: string | undefined): string {
   if (!id) return "-";
   const u =
     cuentasStore.transactionFormUsers.find((u) => u.id === id) ??
     cuentasStore.clientUsers.find((u) => u.id === id);
-  return u?.name ?? id;
+  return u?.name ?? "—";
+}
+
+/** Ids que ya se intentaron resolver, para no repetir la petición en cada render. */
+const attemptedClientLookups = new Set<string>();
+
+/**
+ * Rellena los clientes de la página que no estén en el catálogo.
+ *
+ * El listado de nombres se pide una vez al entrar; cualquier cliente que no
+ * venga en él (por rol, por filtros del endpoint o por ser muy nuevo) dejaría la
+ * celda sin nombre. Se resuelven de a uno y solo una vez por id.
+ */
+async function resolveMissingClientNames(rows: Transaction[]) {
+  const pending = new Set<string>();
+  for (const t of rows) {
+    const id = t.user_id?.trim();
+    if (!id || attemptedClientLookups.has(id)) continue;
+    const known =
+      cuentasStore.transactionFormUsers.some((u) => u.id === id) ||
+      cuentasStore.clientUsers.some((u) => u.id === id);
+    if (!known) pending.add(id);
+  }
+  if (!pending.size) return;
+  for (const id of pending) attemptedClientLookups.add(id);
+  await Promise.all(
+    Array.from(pending).map((id) => cuentasStore.ensureTransactionFormUser(id)),
+  );
 }
 
 /**
@@ -3871,9 +3912,9 @@ onActivated(() => {
                 <span
                   v-if="isClientIncomplete(t.user_id)"
                   class="ml-1 inline-flex items-center rounded-full border border-[#fed7aa] bg-[#fff7ed] px-1.5 text-[10px] font-semibold text-[#9a3412]"
-                  title="Creado con alta rápida; falta completar el perfil"
+                  title="Alta rápida sin completar: falta email y documento"
                 >
-                  perfil incompleto
+                  por completar
                 </span>
               </span>
               <span
