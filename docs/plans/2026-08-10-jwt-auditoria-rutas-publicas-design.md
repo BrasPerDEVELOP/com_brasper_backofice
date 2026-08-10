@@ -13,6 +13,7 @@ El resultado debe garantizar que:
 
 - toda ruta privada requiera un JWT válido;
 - las rutas públicas se autoricen por combinación exacta de método y patrón;
+- todas las rutas API usen una convención canónica sin barra final, sin romper clientes existentes durante la migración;
 - cada acceso exitoso o fallido relevante quede registrado con IP y dispositivo;
 - toda creación, actualización, eliminación y operación sensible registre actor y cambios;
 - las lecturas exitosas ordinarias no generen auditoría;
@@ -85,32 +86,55 @@ La decisión se evaluará por `(método, patrón de ruta)`. Nunca se permitirá 
 | GET | `/` | health informativo |
 | GET | `/health` | infraestructura |
 | GET | `/media/{file_path:path}` | `www` y recursos públicos |
-| GET | `/blog/` | listado público |
+| GET | `/blog` | listado público |
 | GET | `/blog/slug/{slug}` | artículo público |
-| GET | `/home-banner/home-image/` | banner público |
+| GET | `/home-banner/home-image` | banner público |
 | GET | `/home-banner/home-image/{id}` | banner configurado |
 | GET | `/coin/currencies` | calculadora |
 | GET | `/coin/tax-rate` | calculadora |
 | GET | `/coin/commission` | calculadora |
-| GET | `/transactions/coupons/automatic/` | cupón automático |
+| GET | `/transactions/coupons/automatic` | cupón automático |
 | OPTIONS | rutas CORS | preflight del navegador |
 
-`GET /transactions/coupons/` y `GET /transactions/coupons/{id}` permanecerán privados.
+`GET /transactions/coupons` y `GET /transactions/coupons/{id}` permanecerán privados.
 
 ### 3.2 Operaciones públicas controladas
 
 | Método | Ruta | Protección adicional |
 |---|---|---|
-| POST | `/auth/login/` | rate limit, auditoría, mensaje genérico |
+| POST | `/auth/login` | rate limit, auditoría, mensaje genérico |
 | POST | `/auth/refresh` | cookie, rotación, Origin/CSRF |
 | POST | `/auth/reset-password` | rate limit, respuesta no enumerable |
 | POST | `/auth/reset-password/confirm` | rate limit, token de un solo uso |
-| POST | `/user/` | rate limit, validación y auditoría de registro |
-| POST | `/brasper/contact-form/` | rate limit/antispam, payload no auditado |
+| POST | `/user` | rate limit, validación y auditoría de registro |
+| POST | `/brasper/contact-form` | rate limit/antispam, payload no auditado |
 
 Los endpoints `/brasper/ai/*` no son públicos: conservarán autenticación servicio-a-servicio y se identificarán como origen `ia`.
 
 Swagger será público solo en desarrollo o mediante bandera explícita; en producción no se incluirán `/docs`, `/redoc` ni `/openapi.json` en la allowlist ordinaria.
+
+### 3.3 Convención y migración de barras finales
+
+**Convención canónica:** todas las rutas API se publican sin `/` final. La única excepción es la raíz `/`. Los paths de archivos como `/media/{file_path:path}` conservan exactamente el path solicitado.
+
+Alternativas evaluadas:
+
+1. Mantener la mezcla actual: evita trabajo inmediato, pero conserva duplicación y errores difíciles de detectar.
+2. Redirigir automáticamente con `307/308`: parece sencillo, pero detrás del proxy puede construir un `Location` incorrecto, añade un viaje de red y ya ha provocado problemas con métodos mutables y HTTPS.
+3. **Ruta canónica más alias temporal directo — elegida:** FastAPI registra la ruta sin barra en OpenAPI y acepta temporalmente la variante antigua con barra como alias oculto, ejecutando el mismo handler sin redirección.
+
+Reglas de seguridad y compatibilidad:
+
+- la misma política de autenticación y rate limit se aplica a la ruta canónica y al alias;
+- el alias no aparece en OpenAPI y emite una señal de deprecación medible;
+- no se cambian método, body, `Content-Type`, query params ni cabeceras al resolver el alias;
+- no se colapsan barras internas, `..`, separadores codificados ni paths ambiguos;
+- `Domain.apiPath()` será la única función que construya rutas en backoffice;
+- `com_brasper_www` tendrá un helper equivalente y dejará de mezclar paths absolutos/manuales;
+- se buscarán y migrarán todos los strings de endpoint en los tres repositorios;
+- después de desplegar ambos frontends y observar cero tráfico legacy durante la ventana acordada, se eliminan los aliases.
+
+El contrato OpenAPI y la documentación siempre mostrarán únicamente la forma canónica.
 
 ## 4. Modelo de datos
 
@@ -176,9 +200,9 @@ Tabla `user.auth_session`:
 
 Endpoints privados:
 
-- `GET /audit/events/`
+- `GET /audit/events`
 - `GET /audit/events/{event_id}`
-- `GET /audit/logins/`
+- `GET /audit/logins`
 
 Filtros: página, límite con máximo, fechas, usuario, acción, entidad, ID, origen, IP y resultado. Orden predeterminado: más reciente primero.
 
@@ -239,16 +263,20 @@ Actualizar también:
 2. Añadir pruebas que demuestren el estado actual de rutas públicas y privadas.
 3. Confirmar dominios de producción, proxy y política de cookie.
 4. Documentar variables nuevas y procedimiento de generación/rotación de secretos.
+5. Inventariar rutas con y sin barra final y todos sus consumidores en API, backoffice y `www`.
+6. Marcar como canónica la variante sin barra y detectar dobles barras o URLs construidas manualmente.
 
 **Salida:** contrato verificable antes de cambiar auth.
 
 ### Fase 1 — Seguridad base de API
 
 1. Reemplazar `_is_public_path()` por reglas exactas y compiladas.
-2. Activar `AUTH_REQUIRED=True` en entornos protegidos.
-3. Configurar CORS por allowlist.
-4. Añadir request ID y resolución segura de IP.
-5. Rate limits en login, registro, reset y contacto.
+2. Introducir el router compatible que registra forma canónica y alias legacy sin redirect.
+3. Normalizar los paths utilizados por la allowlist sin aceptar formas ambiguas.
+4. Activar `AUTH_REQUIRED=True` en entornos protegidos.
+5. Configurar CORS por allowlist.
+6. Añadir request ID y resolución segura de IP.
+7. Rate limits en login, registro, reset y contacto.
 
 **Salida:** ninguna ruta administrativa hereda acceso público por prefijo.
 
@@ -310,7 +338,7 @@ Cada operación debe obtener el estado anterior antes de mutar y registrar el es
 
 Para limitar el radio de cambio:
 
-1. **API PR 1:** allowlist, CORS, request ID, IP confiable y pruebas.
+1. **API PR 1:** convención de URLs, aliases compatibles, allowlist, CORS, request ID, IP confiable y pruebas.
 2. **API PR 2:** JWT, refresh, sesiones y compatibilidad dual.
 3. **API PR 3:** tablas/servicio de auditoría e instrumentación.
 4. **Backoffice PR:** nuevo auth client, permiso y módulo de auditoría.
@@ -323,6 +351,10 @@ Para limitar el radio de cambio:
 
 - matriz positiva de rutas públicas;
 - matriz negativa: mismo prefijo con otro método devuelve `401`;
+- OpenAPI contiene una sola operación canónica por endpoint y ninguna ruta canónica termina en `/` salvo la raíz;
+- la variante legacy con barra ejecuta temporalmente el mismo handler sin `307/308` ni cambio de método/body;
+- dobles barras, dot-segments y separadores codificados no evaden autenticación ni allowlist;
+- uploads multipart, imports y mutaciones `POST/PUT/PATCH/DELETE` funcionan con la URL canónica;
 - JWT válido, expirado, alterado, issuer/audience incorrectos;
 - refresh rotado, reutilizado y revocado;
 - logout invalida la sesión;
@@ -339,6 +371,7 @@ Para limitar el radio de cambio:
 - menú oculto sin permiso;
 - adapter y mappers de auditoría;
 - filtros, paginación y detalle;
+- todos los adapters construyen URLs canónicas mediante `Domain.apiPath()`;
 - `npm run check` y `npm run build`.
 
 ### WWW
@@ -347,12 +380,15 @@ Para limitar el radio de cambio:
 - cupón automático continúa público;
 - dashboard redirige sin sesión;
 - cuenta y transacción funcionan con sesión renovada;
+- el cliente no contiene endpoints mezclados con y sin barra final;
 - build/prerender no dependen de credenciales privadas.
 
 ### Smoke post-deploy
 
 - cada lectura pública esperada responde `200`;
-- `POST /coin/tax-rate`, `GET /transactions/` y `GET /audit/events/` sin token responden `401`;
+- las URLs canónicas responden sin cabecera `Location` ni redirección intermedia;
+- durante compatibilidad, una muestra de aliases legacy responde igual y sin `307/308`;
+- `POST /coin/tax-rate`, `GET /transactions` y `GET /audit/events` sin token responden `401`;
 - login devuelve access token y cookie segura;
 - crear y eliminar un registro genera auditoría con actor/IP y antes/después;
 - contraseña y tokens no aparecen en consultas de auditoría;
@@ -364,6 +400,7 @@ Para limitar el radio de cambio:
 - Mantener `AUTH_TOKEN_MODE=dual` hasta que ambos frontends estén verificados.
 - Si falla un frontend, volver su deploy sin desactivar autenticación global.
 - Si falla JWT, regresar temporalmente a `dual`, nunca a `AUTH_REQUIRED=False`.
+- Si un consumidor legacy no fue migrado, conservar temporalmente el alias directo; no restaurar redirecciones automáticas ni mezclar nuevamente las URLs canónicas.
 - Si falla la pantalla, los eventos continúan almacenándose y la ruta puede ocultarse.
 - No ejecutar downgrade destructivo de auditoría mientras existan eventos sin respaldo.
 
@@ -371,6 +408,9 @@ Para limitar el radio de cambio:
 
 - `AUTH_REQUIRED=False` no se usa en producción.
 - No hay allowlists basadas en prefijos de módulos completos.
+- OpenAPI y los dos frontends usan rutas sin barra final, salvo `/`.
+- No hay redirecciones `307/308` necesarias para corregir barras en operaciones API.
+- Los aliases legacy se eliminan solo después de pruebas y telemetría sin uso.
 - Tokens opacos retirados después de la ventana dual.
 - Todas las mutaciones acordadas tienen test de auditoría.
 - No se registran lecturas exitosas ordinarias.
