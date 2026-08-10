@@ -4,10 +4,13 @@ import AppDropdown from '@/interface/components/AppDropdown.vue'
 defineProps<{
   roleOptions: Array<{ value: string; label: string }>
   total: number
+  /** Clientes dados de alta a la rápida que siguen sin email ni documento. */
+  incompleteCount: number
 }>()
 
 const search = defineModel<string>('search', { required: true })
 const role = defineModel<string>('role', { required: true })
+const onlyIncomplete = defineModel<boolean>('onlyIncomplete', { required: true })
 </script>
 
 <template>
@@ -20,6 +23,14 @@ const role = defineModel<string>('role', { required: true })
       <label class="text-sm font-medium text-[#6b7280]">Rol</label>
       <AppDropdown v-model="role" :options="roleOptions" placeholder="Todos" :searchable="false" min-width="140px" />
     </div>
+    <label
+      v-if="incompleteCount > 0"
+      class="flex cursor-pointer select-none items-center gap-2 rounded-lg border border-[#fed7aa] bg-[#fff7ed] px-3 py-2 text-sm font-medium text-[#9a3412]"
+      title="Clientes creados con alta rápida a los que falta completar el perfil"
+    >
+      <input v-model="onlyIncomplete" type="checkbox" class="h-4 w-4 rounded border-[#fdba74]" />
+      Perfil incompleto ({{ incompleteCount }})
+    </label>
     <div class="flex items-center gap-2">
       <span class="text-sm font-medium text-[#6b7280]">Total</span>
       <span class="flex h-10 min-w-[4rem] items-center justify-center rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 text-sm font-medium text-[#374151]">{{ total }}</span>

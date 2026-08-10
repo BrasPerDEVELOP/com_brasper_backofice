@@ -2,6 +2,7 @@
 import AppDropdown from '@/interface/components/AppDropdown.vue'
 import { USER_ROLE_LABELS } from '../../domain/models'
 import type { UserListItem } from '../../infrastructure/adapters/users_management_api_adapter'
+import { isClientProfileIncomplete } from '../../infrastructure/parse_user'
 
 defineProps<{
   users: UserListItem[]
@@ -41,6 +42,14 @@ function isClient(user: UserListItem): boolean {
   return ['client', 'cliente'].includes((user.role ?? '').toLowerCase())
 }
 
+/**
+ * Solo se marca a clientes: un asesor sin documento no es un "perfil a completar",
+ * y marcarlos ensuciaría la lista con avisos que nadie va a atender.
+ */
+function isProfileIncomplete(user: UserListItem): boolean {
+  return isClient(user) && isClientProfileIncomplete(user)
+}
+
 function documentType(user: UserListItem): string {
   return user.identifications.length > 1
     ? user.identifications.map((item) => item.document_type.toUpperCase()).join(', ')
@@ -62,7 +71,16 @@ function documentNumber(user: UserListItem): string {
         <thead><tr class="bg-[#dbeafe]"><th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">Nombres</th><th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">Email</th><th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">Documento</th><th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">Rol</th><th class="w-12 px-2 py-3"><span class="sr-only">Acciones</span></th></tr></thead>
         <tbody>
           <tr v-for="user in users" :key="user.id" class="cursor-pointer border-t border-[#e5e7eb] bg-white transition hover:bg-[#f9fafb]" :class="selectedUserId === user.id ? 'bg-[#eef2ff] ring-1 ring-inset ring-brasper-indigoStrong/30' : ''" @click="emit('select', user)">
-            <td class="px-4 py-3 text-[#374151]">{{ user.name || '-' }}</td><td class="px-4 py-3 text-[#374151]">{{ user.email || '-' }}</td><td class="px-4 py-3 text-[#374151]"><span class="block text-xs text-[#6b7280]">{{ documentType(user) }}</span>{{ documentNumber(user) }}</td>
+            <td class="px-4 py-3 text-[#374151]">
+              {{ user.name || '-' }}
+              <span
+                v-if="isProfileIncomplete(user)"
+                class="ml-1.5 inline-flex items-center rounded-full border border-[#fed7aa] bg-[#fff7ed] px-1.5 text-[10px] font-semibold text-[#9a3412]"
+                title="Creado con alta rápida: falta email y documento"
+              >
+                perfil incompleto
+              </span>
+            </td><td class="px-4 py-3 text-[#374151]">{{ user.email || '-' }}</td><td class="px-4 py-3 text-[#374151]"><span class="block text-xs text-[#6b7280]">{{ documentType(user) }}</span>{{ documentNumber(user) }}</td>
             <td class="px-4 py-3"><span class="inline-flex rounded-full bg-[#dbeafe] px-2.5 py-0.5 text-xs font-medium text-brasper-indigoDark">{{ USER_ROLE_LABELS[user.role as keyof typeof USER_ROLE_LABELS] ?? user.role ?? '—' }}</span></td>
             <td class="relative px-2 py-3"><button type="button" class="rounded p-1.5 text-[#6b7280] hover:bg-[#f3f4f6]" aria-label="Acciones del usuario" @click.stop="emit('toggleMenu', user.id)">•••</button>
               <div v-if="openMenuId === user.id" class="absolute right-0 top-full z-20 mt-1 min-w-[180px] rounded-lg border border-[#e5e7eb] bg-white py-1 shadow-lg" @click.stop>

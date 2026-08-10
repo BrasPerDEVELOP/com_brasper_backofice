@@ -154,3 +154,18 @@ export function parseUserListItem(item: unknown): UserListItem | null {
     code_phone: codePhone != null ? String(codePhone) : null
   }
 }
+
+/**
+ * Cliente dado de alta a la rápida: se registró con el nombre para no frenar la
+ * operación del día y le faltan los datos que sí exige un perfil completo.
+ *
+ * Se deriva en vez de guardar un flag en la BD porque el dato ya existe: no hay
+ * forma de tener email o documento sin haber pasado por el alta completa.
+ */
+export function isClientProfileIncomplete(user: UserListItem): boolean {
+  const hasEmail = !!user.email?.trim()
+  const hasDocument =
+    !!user.document_number?.trim() ||
+    user.identifications.some((item) => item.document_number.trim() !== '')
+  return !hasEmail && !hasDocument
+}

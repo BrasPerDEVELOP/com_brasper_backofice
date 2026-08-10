@@ -22,13 +22,22 @@ const props = withDefaults(
     /** Si true, muestra el selector de rol. Si false, usa defaultRole. */
     showRoleField?: boolean
     user?: UserListItem | null
+    /**
+     * `quick` deja solo nombre y teléfono: sirve para dar de alta un cliente en
+     * medio de una transacción sin frenar la operación. El resto del perfil se
+     * completa después desde /app/usuarios.
+     */
+    variant?: 'full' | 'quick'
   }>(),
   {
     defaultRole: 'client',
     showRoleField: false,
-    user: null
+    user: null,
+    variant: 'full'
   }
 )
+
+const isQuick = computed(() => props.variant === 'quick' && !props.user)
 
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
@@ -123,6 +132,10 @@ function close() {
 async function handleSubmit() {
   // Evita guardar con la colección parcial mientras aún llega el detalle.
   if (loadingDetail.value) return
+  if (isQuick.value && !form.value.names?.trim()) {
+    error.value = 'El nombre es obligatorio.'
+    return
+  }
   creating.value = true
   error.value = ''
   try {
@@ -196,12 +209,16 @@ watch(
     >
       <div class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-xl">
         <h2 class="mb-6 text-lg font-semibold text-[#1f2937]">
-          {{ isEditing ? 'Editar usuario' : 'Nuevo usuario' }}
+          {{ isEditing ? 'Editar usuario' : isQuick ? 'Cliente nuevo' : 'Nuevo usuario' }}
         </h2>
+        <p v-if="isQuick" class="-mt-4 mb-6 text-sm text-[#6b7280]">
+          Solo el nombre es obligatorio. Queda como <strong>perfil incompleto</strong>
+          y se puede usar en la transacción de inmediato.
+        </p>
 
         <form class="space-y-6" @submit.prevent="handleSubmit">
           <div class="grid gap-4 sm:grid-cols-2">
-            <div>
+            <div v-if="!isQuick">
               <label class="mb-1.5 block text-sm font-medium text-[#374151]">
                 Email (opcional)
               </label>
@@ -214,16 +231,22 @@ watch(
                 placeholder="usuario@ejemplo.com"
               />
             </div>
-            <div>
-              <label class="mb-1.5 block text-sm font-medium text-[#374151]">Nombres</label>
+            <div :class="isQuick ? 'sm:col-span-2' : ''">
+              <label class="mb-1.5 block text-sm font-medium text-[#374151]">
+                {{ isQuick ? 'Nombre o razón social' : 'Nombres' }}
+                <span v-if="isQuick" class="text-[#dc2626]">*</span>
+              </label>
               <input
                 v-model="form.names"
                 type="text"
                 class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
-                placeholder="Nombres"
+                :placeholder="isQuick ? 'Esperanza Tello' : 'Nombres'"
               />
+              <p v-if="isQuick" class="mt-1.5 text-xs text-[#6b7280]">
+                Como lo escriben en el grupo de WhatsApp. Se corrige después.
+              </p>
             </div>
-            <div>
+            <div v-if="!isQuick">
               <label class="mb-1.5 block text-sm font-medium text-[#374151]">Apellidos</label>
               <input
                 v-model="form.lastnames"
@@ -241,14 +264,14 @@ watch(
                 :searchable="false"
               />
             </div>
-            <UserIdentificationsEditor v-model="identifications" />
+            <UserIdentificationsEditor v-if="!isQuick" v-model="identifications" />
             <p v-if="loadingDetail" class="-mt-1 text-xs text-[#6b7280] sm:col-span-2">
               Cargando identificaciones del usuario…
             </p>
             <p v-else-if="detailError" class="-mt-1 text-xs text-[#dc3545] sm:col-span-2">
               {{ detailError }}
             </p>
-            <div>
+            <div v-if="!isQuick">
               <label class="mb-1.5 block text-sm font-medium text-[#374151]">Código tel.</label>
               <AppDropdown
                 v-model="form.code_phone"
@@ -257,8 +280,10 @@ watch(
                 searchable
               />
             </div>
-            <div>
-              <label class="mb-1.5 block text-sm font-medium text-[#374151]">Teléfono</label>
+            <div :class="isQuick ? 'sm:col-span-2' : ''">
+              <label class="mb-1.5 block text-sm font-medium text-[#374151]">
+                Teléfono <span v-if="isQuick" class="text-xs text-[#6b7280]">(opcional)</span>
+              </label>
               <input
                 v-model.number="form.phone"
                 type="number"
@@ -266,7 +291,7 @@ watch(
                 placeholder="987654321"
               />
             </div>
-            <div class="sm:col-span-2">
+            <div v-if="!isQuick" class="sm:col-span-2">
               <label class="mb-1.5 block text-sm font-medium text-[#374151]">
                 Foto de perfil (opcional)
               </label>
@@ -278,6 +303,15 @@ watch(
               />
             </div>
           </div>
+
+          <p
+            v-if="isQuick"
+            class="rounded-lg border border-[#fed7aa] bg-[#fff7ed] px-4 py-3 text-xs text-[#9a3412]"
+          >
+            Email, apellidos, documento y cuenta bancaria quedan pendientes. El
+            cliente aparecerá como «perfil incompleto» en Usuarios hasta que
+            alguien los complete.
+          </p>
 
           <p v-if="error" class="rounded-lg bg-[#dc3545]/10 px-4 py-3 text-sm text-[#dc3545]">
             {{ error }}

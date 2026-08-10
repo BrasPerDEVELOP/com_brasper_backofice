@@ -8,6 +8,7 @@ import {
   type UserListItem
 } from '../../infrastructure/adapters/users_management_api_adapter'
 import { USER_ROLE_LABELS } from '../../domain/models'
+import { isClientProfileIncomplete } from '../../infrastructure/parse_user'
 import * as XLSX from 'xlsx'
 import UsuarioCreateFormModal from '@/interface/components/UsuarioCreateFormModal.vue'
 import CuentaBancariaCreateFormModal from '@/interface/components/CuentaBancariaCreateFormModal.vue'
@@ -109,14 +110,28 @@ watch(searchQuery, (q) => {
   }, 150)
 }, { immediate: true })
 
+const onlyIncomplete = ref(false)
+
 const filteredByRole = computed(() => {
   const role = roleSelectFilter.value.toLowerCase()
   if (role === 'todos') return users.value
   return users.value.filter((u) => (u.role ?? '').toLowerCase() === role)
 })
 
+/**
+ * Clientes dados de alta a la rápida (solo nombre). El conteo se hace sobre
+ * `users`, no sobre la lista filtrada: es un pendiente global, no del filtro.
+ */
+const incompleteClients = computed(() =>
+  users.value.filter(
+    (u) =>
+      ['client', 'cliente'].includes((u.role ?? '').toLowerCase()) &&
+      isClientProfileIncomplete(u)
+  )
+)
+
 const searchedUsers = computed(() => {
-  const list = filteredByRole.value
+  const list = onlyIncomplete.value ? incompleteClients.value : filteredByRole.value
   const q = debouncedSearch.value.trim().toLowerCase()
   if (!q) return list
   return list.filter((u) => {
@@ -401,7 +416,7 @@ onMounted(async () => {
 
 <template>
   <UserManagementHeader :can-create="canCreateUsers" :can-export="canViewUsers" @create="openCreateModal" @import="showImportModal = true" @export="exportUsersToExcel" />
-  <UserFiltersBar v-model:search="searchQuery" v-model:role="roleSelectFilter" :role-options="roleOptions" :total="searchedUsers.length" />
+  <UserFiltersBar v-model:search="searchQuery" v-model:role="roleSelectFilter" v-model:only-incomplete="onlyIncomplete" :role-options="roleOptions" :total="searchedUsers.length" :incomplete-count="incompleteClients.length" />
 
   <!-- Content -->
   <p v-if="error" class="mb-4 rounded-lg bg-[#dc3545]/10 px-4 py-3 text-sm text-[#dc3545]">
