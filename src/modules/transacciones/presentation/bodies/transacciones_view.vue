@@ -10,6 +10,10 @@ import {
   nextTick,
 } from "vue";
 import { useTransactionPageContext } from "../composables/use_transaction_page_context";
+import { useTableDragScroll } from "../composables/use_table_drag_scroll";
+import { RouterLink } from "vue-router";
+import { useTagsStore } from "../controllers/use_tags_store_controller";
+import { isClientProfileIncomplete } from "@modules/auth/infrastructure/parse_user";
 import { useAuthStore } from "@modules/auth/presentation/controllers/use_auth_store_controller";
 import type { BankAccount } from "@modules/cuentas-bancarias/domain/models";
 import type { Transaction } from "../../domain/models";
@@ -35,6 +39,8 @@ import {
   resolveTransactionCurrencyPair,
   inferOriginCurrencyFromTransactionCode,
   formatTransactionCodeForDisplay,
+  transactionDayKey,
+  tagColorStyle,
   SPECIAL_CALCULATOR_DISCOUNT_CODE,
   isSpecialCalculatorDiscountCode,
   getTransactionSpecialDiscountForDisplay,
@@ -116,6 +122,42 @@ const searchQuery = ref("");
 const openMenuId = ref<string | null>(null);
 const menuTriggerEl = ref<HTMLElement | null>(null);
 const menuPosition = reactive({ top: 0, left: 0 });
+/** Coordenadas del cursor cuando el menú se abre con clic derecho. */
+const menuAnchorPoint = ref<{ x: number; y: number } | null>(null);
+
+const tagsStore = useTagsStore();
+
+/** Etiquetas ofrecidas al registrar: activas, más las que el envío ya tenía. */
+const availableTags = computed(() => {
+  const selected = new Set(form.tag_ids);
+  return tagsStore.tags.filter((t) => t.active || selected.has(t.id));
+});
+
+function toggleFormTag(id: string) {
+  const at = form.tag_ids.indexOf(id);
+  if (at === -1) form.tag_ids.push(id);
+  else form.tag_ids.splice(at, 1);
+}
+
+function tagChipStyle(color: string | undefined) {
+  const c = tagColorStyle(color);
+  return { background: c.bg, color: c.fg, borderColor: c.bd };
+}
+
+/** Etiquetas de una fila, resueltas contra el catálogo. */
+function transactionTags(t: Transaction) {
+  const ids = Array.isArray(t.tag_ids) ? t.tag_ids : [];
+  return ids
+    .map((id) => tagsStore.tagById(id))
+    .filter((tag): tag is NonNullable<typeof tag> => tag != null);
+}
+
+/** La tabla es ancha: se puede desplazar arrastrando, sin buscar la barra. */
+const {
+  containerRef: tableScrollRef,
+  isDragging: isDraggingTable,
+  onPointerDown: onTablePointerDown,
+} = useTableDragScroll();
 const statusFilter = ref<string>("todos");
 const userFilter = ref<string>("");
 const bankAccountFilter = ref<string>("");
@@ -123,6 +165,50 @@ const bankAccountFilter = ref<string>("");
 const currencyPairFilter = ref<string>("");
 const createdAtFrom = ref<string>("");
 const createdAtTo = ref<string>("");
+
+/**
+ * La operación de ventas es diaria: por defecto la tabla muestra un solo día,
+ * que es también la unidad del correlativo `#`. `"todas"` levanta el recorte
+ * para buscar en el histórico.
+ */
+type TransactionScope = "day" | "all";
+
+function todayDayKey(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate(),
+  ).padStart(2, "0")}`;
+}
+
+const transactionScope = ref<TransactionScope>("day");
+const selectedDay = ref<string>(todayDayKey());
+
+const isToday = computed(() => selectedDay.value === todayDayKey());
+
+const selectedDayLabel = computed(() => {
+  const [y, m, d] = selectedDay.value.split("-").map(Number);
+  if (!y || !m || !d) return selectedDay.value;
+  const label = new Date(y, m - 1, d).toLocaleDateString("es-PE", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+});
+
+function shiftSelectedDay(days: number) {
+  const [y = 0, m = 1, d = 1] = selectedDay.value.split("-").map(Number);
+  const next = new Date(y, m - 1, d + days);
+  selectedDay.value = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(
+    next.getDate(),
+  ).padStart(2, "0")}`;
+}
+
+function goToToday() {
+  selectedDay.value = todayDayKey();
+  transactionScope.value = "day";
+}
 /** Razón social Brasper (catálogo): filtrada por moneda de envío; independiente de cuenta destino del cliente. */
 const destinationBankFilterId = ref("");
 /**
@@ -241,6 +327,7 @@ const form = reactive<{
   commission_id: string;
   status: string;
   checked: boolean;
+  tag_ids: string[];
   origin_amount: number;
   destination_amount: number;
   resultado_comision: number | null;
@@ -264,6 +351,7 @@ const form = reactive<{
   commission_id: "",
   status: "verification",
   checked: false,
+  tag_ids: [],
   origin_amount: 0,
   destination_amount: 0,
   resultado_comision: null,
@@ -1318,8 +1406,16 @@ const apiFilterParams = computed((): GetTransactionsParams => {
     if (origin) p.origin_currency = origin.toUpperCase();
     if (destination) p.destination_currency = destination.toUpperCase();
   }
-  const fromMs = localDateInputStartMs(createdAtFrom.value);
-  const toMs = localDateInputEndMs(createdAtTo.value);
+  // En modo día el recorte lo define `selectedDay`; los campos desde/hasta solo
+  // se usan al mirar el histórico completo.
+  const fromMs =
+    transactionScope.value === "day"
+      ? localDateInputStartMs(selectedDay.value)
+      : localDateInputStartMs(createdAtFrom.value);
+  const toMs =
+    transactionScope.value === "day"
+      ? localDateInputEndMs(selectedDay.value)
+      : localDateInputEndMs(createdAtTo.value);
   if (fromMs != null) p.send_date_from = new Date(fromMs).toISOString();
   if (toMs != null) p.send_date_to = new Date(toMs).toISOString();
   const q = debouncedSearch.value.trim();
@@ -1329,6 +1425,38 @@ const apiFilterParams = computed((): GetTransactionsParams => {
 
 /** Página actual (ya filtrada y paginada por el servidor). */
 const paginatedTransactions = computed(() => transactionsStore.transactions);
+
+/** Días (`YYYY-MM-DD`) presentes en la página visible. */
+const visibleDayKeys = computed(() => {
+  const keys = new Set<string>();
+  for (const t of paginatedTransactions.value) {
+    const key = transactionDayKey(t);
+    if (key) keys.add(key);
+  }
+  return Array.from(keys);
+});
+
+/**
+ * Correlativo del envío dentro de su día. Se pide al store porque la página
+ * visible no basta para numerar el día completo (paginación de servidor).
+ */
+const dailySequenceById = computed(() => transactionsStore.dailySequenceById);
+
+function transactionDailyNumber(t: Transaction): string {
+  const id = t.id ?? "";
+  const n = id ? dailySequenceById.value[id] : undefined;
+  return n != null ? String(n) : "—";
+}
+
+watch(
+  // La generación entra en la fuente para que, tras guardar o borrar, el
+  // correlativo se vuelva a pedir aunque los días visibles no hayan cambiado.
+  [visibleDayKeys, () => transactionsStore.sequenceGeneration],
+  ([keys]) => {
+    if (keys.length) void transactionsStore.loadDailySequences(keys);
+  },
+  { immediate: true },
+);
 
 const totalResults = computed(() => transactionsStore.total);
 
@@ -1352,6 +1480,7 @@ function resetForm() {
   form.commission_id = "";
   form.status = "verification";
   form.checked = false;
+  form.tag_ids = [];
   form.origin_amount = 0;
   form.destination_amount = 0;
   form.resultado_comision = null;
@@ -1714,6 +1843,7 @@ async function hydrateEditForm(row: Transaction) {
     form.status = (row.status ?? "verification").toLowerCase();
     form.checked =
       row.checked === true || (row.status ?? "").toLowerCase() === "checked";
+    form.tag_ids = [...(row.tag_ids ?? [])];
     form.origin_amount = roundMoneyAmount(Number(row.origin_amount) || 0);
     form.destination_amount = roundMoneyAmount(
       Number(row.destination_amount) || 0,
@@ -1991,6 +2121,8 @@ async function submitForm() {
       payment_voucher: paymentVoucher,
       checked_image: checkedImage,
       checked: form.checked,
+      // Lista autoritativa: se envía siempre, también vacía (quita las etiquetas).
+      tag_ids: [...form.tag_ids],
       ...bankMeta,
     };
     if (editingId.value) {
@@ -2123,11 +2255,26 @@ const selectedMenuTransaction = computed(() => {
 });
 
 function updateMenuPosition() {
-  if (!menuTriggerEl.value) return;
-  const rect = menuTriggerEl.value.getBoundingClientRect();
   const menuWidth = 168;
   const menuHeight = 96;
   const padding = 8;
+
+  // Clic derecho: el menú se ancla al cursor, no a la celda.
+  const point = menuAnchorPoint.value;
+  if (point) {
+    let px = point.x;
+    let py = point.y;
+    if (px + menuWidth > window.innerWidth - padding)
+      px = window.innerWidth - menuWidth - padding;
+    if (py + menuHeight > window.innerHeight - padding)
+      py = py - menuHeight;
+    menuPosition.top = Math.max(padding, py);
+    menuPosition.left = Math.max(padding, px);
+    return;
+  }
+
+  if (!menuTriggerEl.value) return;
+  const rect = menuTriggerEl.value.getBoundingClientRect();
   let left = rect.right - menuWidth;
   if (left < padding) left = padding;
   if (left + menuWidth > window.innerWidth - padding)
@@ -2407,6 +2554,7 @@ function openEditFromPreview() {
 function closeRowActionMenu() {
   openMenuId.value = null;
   menuTriggerEl.value = null;
+  menuAnchorPoint.value = null;
 }
 
 /**
@@ -2425,19 +2573,11 @@ function confirmDeleteFromMenu() {
   if (t) void handleDelete(t);
 }
 
-function toggleMenu(id: string, event?: Event) {
-  if (openMenuId.value === id) {
-    closeRowActionMenu();
-    return;
-  }
-  menuTriggerEl.value =
-    (event?.target as HTMLElement)?.closest("td") ??
-    (event?.target as HTMLElement) ??
-    null;
-  openMenuId.value = id;
+/** Posiciona el menú ya abierto y engancha los listeners que lo cierran. */
+function bindRowActionMenuDismissal(scrollAnchor: HTMLElement | null) {
   nextTick(() => {
     updateMenuPosition();
-    const scrollParent = menuTriggerEl.value?.closest(".overflow-x-auto");
+    const scrollParent = scrollAnchor?.closest(".overflow-x-auto");
     const close = () => {
       closeRowActionMenu();
       document.removeEventListener("click", close);
@@ -2448,6 +2588,54 @@ function toggleMenu(id: string, event?: Event) {
     scrollParent?.addEventListener("scroll", updateMenuPosition);
     setTimeout(() => document.addEventListener("click", close), 0);
   });
+}
+
+function toggleMenu(id: string, event?: Event) {
+  if (openMenuId.value === id) {
+    closeRowActionMenu();
+    return;
+  }
+  menuAnchorPoint.value = null;
+  menuTriggerEl.value =
+    (event?.target as HTMLElement)?.closest("td") ??
+    (event?.target as HTMLElement) ??
+    null;
+  openMenuId.value = id;
+  bindRowActionMenuDismissal(menuTriggerEl.value);
+}
+
+/**
+ * Clic derecho sobre la fila: mismo menú que los tres puntitos
+ * (Previsualizar / Editar / Eliminar), pero anclado al cursor.
+ */
+function onRowContextMenu(t: Transaction, event: MouseEvent) {
+  const id = t.id ?? "";
+  if (!id) return;
+  menuTriggerEl.value = event.target as HTMLElement | null;
+  menuAnchorPoint.value = { x: event.clientX, y: event.clientY };
+  openMenuId.value = id;
+  bindRowActionMenuDismissal(menuTriggerEl.value);
+}
+
+/** Pista de los atajos de fila, mostrada como tooltip en cada `<tr>`. */
+const rowShortcutHint = computed(() =>
+  canUpdateTransactions.value
+    ? "Doble clic para editar · clic derecho para más acciones"
+    : "Doble clic para previsualizar · clic derecho para más acciones",
+);
+
+/**
+ * Doble clic sobre la fila: abre la edición, o la vista previa si no hay permiso
+ * para editar. Se ignora si el doble clic cayó sobre un control de la fila.
+ */
+function onRowDoubleClick(t: Transaction, event: MouseEvent) {
+  const target = event.target as HTMLElement | null;
+  if (target?.closest("a, button, input, select, textarea, label")) return;
+  // Un doble clic deja texto seleccionado; molesta al abrir el modal encima.
+  window.getSelection()?.removeAllRanges();
+  closeRowActionMenu();
+  if (canUpdateTransactions.value) openEditModal(t);
+  else void openPreviewModal(t);
 }
 
 function goToPage(page: number) {
@@ -2578,6 +2766,18 @@ function getClientLabel(id: string | undefined): string {
     cuentasStore.transactionFormUsers.find((u) => u.id === id) ??
     cuentasStore.clientUsers.find((u) => u.id === id);
   return u?.name ?? id;
+}
+
+/**
+ * Cliente dado de alta a la rápida (solo nombre). Se marca en la fila para que
+ * alguien complete el perfil después, sin frenar la operación del día.
+ */
+function isClientIncomplete(id: string | undefined): boolean {
+  if (!id) return false;
+  const u =
+    cuentasStore.transactionFormUsers.find((u) => u.id === id) ??
+    cuentasStore.clientUsers.find((u) => u.id === id);
+  return u ? isClientProfileIncomplete(u) : false;
 }
 
 function getSalesAdvisorLabel(id: string | undefined): string {
@@ -3028,6 +3228,8 @@ watch(
     currencyPairFilter,
     createdAtFrom,
     createdAtTo,
+    transactionScope,
+    selectedDay,
     debouncedSearch,
     perPage,
   ],
@@ -3062,6 +3264,7 @@ onMounted(() => {
     cuentasStore.loadBanks(),
     tasasStore.loadTaxRates(),
     comisionesStore.loadCommissions(),
+    tagsStore.loadTags(),
   ]);
 });
 
@@ -3152,6 +3355,96 @@ onActivated(() => {
         </div>
       </div>
 
+      <!--
+        Alcance de la lista. La operación es diaria, así que por defecto se
+        muestra un solo día — que es además la unidad del correlativo `#`.
+      -->
+      <div
+        class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#dbe7fb] bg-[#f5f8ff] px-4 py-3"
+      >
+        <div class="flex flex-wrap items-center gap-3">
+          <div class="inline-flex overflow-hidden rounded-lg border border-[#dbe7fb]">
+            <button
+              type="button"
+              class="px-3 py-1.5 text-sm transition"
+              :class="
+                transactionScope === 'day'
+                  ? 'bg-brasper-indigoStrong font-medium text-white'
+                  : 'bg-white text-[#374151] hover:bg-[#f9fafb]'
+              "
+              :aria-pressed="transactionScope === 'day'"
+              @click="transactionScope = 'day'"
+            >
+              Por día
+            </button>
+            <button
+              type="button"
+              class="border-l border-[#dbe7fb] px-3 py-1.5 text-sm transition"
+              :class="
+                transactionScope === 'all'
+                  ? 'bg-brasper-indigoStrong font-medium text-white'
+                  : 'bg-white text-[#374151] hover:bg-[#f9fafb]'
+              "
+              :aria-pressed="transactionScope === 'all'"
+              @click="transactionScope = 'all'"
+            >
+              Todas
+            </button>
+          </div>
+
+          <template v-if="transactionScope === 'day'">
+            <div class="flex items-center gap-1">
+              <button
+                type="button"
+                class="rounded-lg border border-[#dbe7fb] bg-white px-2 py-1.5 text-sm text-[#374151] transition hover:bg-[#f9fafb]"
+                title="Día anterior"
+                @click="shiftSelectedDay(-1)"
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                class="rounded-lg border border-[#dbe7fb] bg-white px-2 py-1.5 text-sm text-[#374151] transition hover:bg-[#f9fafb] disabled:opacity-40"
+                title="Día siguiente"
+                :disabled="isToday"
+                @click="shiftSelectedDay(1)"
+              >
+                ›
+              </button>
+            </div>
+            <div>
+              <p class="text-base font-semibold leading-tight text-[#232b4d]">
+                {{ selectedDayLabel }}
+                <span
+                  v-if="isToday"
+                  class="ml-1 rounded-md bg-[#dcfce7] px-1.5 py-0.5 text-[11px] font-semibold text-[#15803d]"
+                >
+                  hoy
+                </span>
+              </p>
+              <p class="text-xs text-[#6b7280]">
+                De 00:00 a 23:59 · {{ totalResults }}
+                {{ totalResults === 1 ? "envío" : "envíos" }}
+              </p>
+            </div>
+            <AppDateInput v-model="selectedDay" size="sm" class="min-w-[150px]" />
+            <button
+              v-if="!isToday"
+              type="button"
+              class="rounded-lg border border-[#dbe7fb] bg-white px-3 py-1.5 text-sm text-brasper-indigoStrong transition hover:bg-[#f9fafb]"
+              @click="goToToday"
+            >
+              Ir a hoy
+            </button>
+          </template>
+          <p v-else class="text-sm text-[#374151]">
+            Histórico completo · <strong>{{ totalResults }}</strong> envíos.
+            La columna <code class="rounded bg-white px-1">#</code> sigue siendo el
+            número del envío dentro de su día.
+          </p>
+        </div>
+      </div>
+
       <!-- Filtros -->
       <div class="flex flex-wrap items-center gap-4 text-sm">
         <div class="flex flex-col gap-0.5">
@@ -3198,7 +3491,7 @@ onActivated(() => {
             min-width="130px"
           />
         </div>
-        <div class="flex flex-col gap-0.5">
+        <div v-if="transactionScope === 'all'" class="flex flex-col gap-0.5">
           <label class="text-[11px] text-[#6b7280]">Envío desde</label>
           <AppDateInput
             v-model="createdAtFrom"
@@ -3206,7 +3499,7 @@ onActivated(() => {
             class="min-w-[150px]"
           />
         </div>
-        <div class="flex flex-col gap-0.5">
+        <div v-if="transactionScope === 'all'" class="flex flex-col gap-0.5">
           <label class="text-[11px] text-[#6b7280]">Envío hasta</label>
           <AppDateInput v-model="createdAtTo" size="sm" class="min-w-[150px]" />
         </div>
@@ -3272,7 +3565,10 @@ onActivated(() => {
 
     <div
       v-else
+      ref="tableScrollRef"
       class="relative overflow-x-auto rounded-xl border border-[#e5e7eb] bg-white"
+      :class="isDraggingTable ? 'cursor-grabbing select-none' : 'cursor-grab'"
+      @pointerdown="onTablePointerDown"
     >
       <div
         v-if="
@@ -3302,7 +3598,7 @@ onActivated(() => {
           <tr class="bg-[#dbeafe]">
             <th
               class="w-12 px-3 py-3 text-right font-semibold text-brasper-indigoDark"
-              title="Número de fila"
+              title="Envío del día: el contador reinicia cada día"
             >
               #
             </th>
@@ -3409,14 +3705,17 @@ onActivated(() => {
             </td>
           </tr>
           <tr
-            v-for="(t, rowIndex) in paginatedTransactions"
+            v-for="t in paginatedTransactions"
             :key="t.id ?? ''"
             class="border-t border-[#e5e7eb] bg-white transition hover:bg-[#f9fafb]"
+            :title="rowShortcutHint"
+            @dblclick="onRowDoubleClick(t, $event)"
+            @contextmenu.prevent="onRowContextMenu(t, $event)"
           >
             <td
               class="whitespace-nowrap px-3 py-3 text-right text-xs font-medium tabular-nums text-[#9ca3af]"
             >
-              {{ (currentPage - 1) * perPage + rowIndex + 1 }}
+              {{ transactionDailyNumber(t) }}
             </td>
             <td class="px-2 py-3">
               <button
@@ -3469,8 +3768,30 @@ onActivated(() => {
             <td class="whitespace-nowrap px-4 py-3 text-[#374151]">
               {{ t.operation_number || "—" }}
             </td>
-            <td class="max-w-[160px] truncate px-4 py-3 text-[#374151]">
-              {{ getClientLabel(t.user_id) }}
+            <td class="max-w-[200px] px-4 py-3 text-[#374151]">
+              <span class="block truncate">
+                {{ getClientLabel(t.user_id) }}
+                <span
+                  v-if="isClientIncomplete(t.user_id)"
+                  class="ml-1 inline-flex items-center rounded-full border border-[#fed7aa] bg-[#fff7ed] px-1.5 text-[10px] font-semibold text-[#9a3412]"
+                  title="Creado con alta rápida; falta completar el perfil"
+                >
+                  perfil incompleto
+                </span>
+              </span>
+              <span
+                v-if="transactionTags(t).length"
+                class="mt-1 flex flex-wrap gap-1"
+              >
+                <span
+                  v-for="tag in transactionTags(t)"
+                  :key="tag.id"
+                  class="inline-flex items-center rounded-full border px-2 py-px text-[10px] font-semibold"
+                  :style="tagChipStyle(tag.color)"
+                >
+                  {{ tag.label }}
+                </span>
+              </span>
             </td>
             <td
               class="max-w-[180px] truncate px-4 py-3 text-[#374151]"
@@ -5187,6 +5508,58 @@ onActivated(() => {
                     . Crea una con el botón + junto a cuenta destino.
                   </p>
                 </div>
+                <div class="mt-5 border-t border-dashed border-[#d8e5fb] pt-5">
+                  <label class="block text-sm font-medium text-[#374151]">
+                    Etiquetas
+                  </label>
+                  <p class="mt-0.5 text-xs text-[#6b7280]">
+                    Se marcan aquí, junto al cliente. El catálogo se administra en
+                    Configuración &gt; Etiquetas.
+                  </p>
+                  <!--
+                    El bloque se muestra siempre: si se ocultara cuando no hay
+                    catálogo, un fallo del endpoint se vería igual que "esta
+                    función no existe" y nadie sabría dónde reclamar.
+                  -->
+                  <p
+                    v-if="tagsStore.error"
+                    class="mt-2.5 rounded-lg border border-[#fecaca] bg-[#fef2f2] px-3 py-2 text-xs text-[#b91c1c]"
+                  >
+                    No se pudo cargar el catálogo de etiquetas: {{ tagsStore.error }}
+                  </p>
+                  <p
+                    v-else-if="!availableTags.length"
+                    class="mt-2.5 rounded-lg border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2 text-xs text-[#6b7280]"
+                  >
+                    Todavía no hay etiquetas activas.
+                    <RouterLink
+                      to="/app/etiquetas"
+                      class="font-medium text-brasper-indigoStrong underline"
+                    >
+                      Crear la primera en Configuración &gt; Etiquetas
+                    </RouterLink>
+                  </p>
+                  <div v-else class="mt-2.5 flex flex-wrap gap-2">
+                    <button
+                      v-for="tag in availableTags"
+                      :key="tag.id"
+                      type="button"
+                      class="rounded-full border px-3 py-1 text-[11px] font-semibold transition"
+                      :class="
+                        form.tag_ids.includes(tag.id)
+                          ? ''
+                          : 'border-[#e5e7eb] bg-white text-[#6b7280] hover:border-[#c7d2fe]'
+                      "
+                      :style="
+                        form.tag_ids.includes(tag.id) ? tagChipStyle(tag.color) : undefined
+                      "
+                      :aria-pressed="form.tag_ids.includes(tag.id)"
+                      @click="toggleFormTag(tag.id)"
+                    >
+                      {{ tag.label }}<span v-if="tag.counts_as_new_client"> ★</span>
+                    </button>
+                  </div>
+                </div>
               </section>
 
               <section
@@ -5866,6 +6239,7 @@ onActivated(() => {
       v-model="showTransactionClientModal"
       :show-role-field="false"
       default-role="client"
+      variant="quick"
       @created="onTransactionClientCreated"
     />
     <CuentaBancariaCreateFormModal
