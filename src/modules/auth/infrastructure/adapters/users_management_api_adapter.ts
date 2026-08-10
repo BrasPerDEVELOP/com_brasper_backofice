@@ -242,12 +242,23 @@ export async function updateUser(payload: UpdateUserPayload): Promise<UserListIt
   }
 }
 
-/** Elimina un usuario por ID. Intenta el endpoint REST y cae al contrato con id en body. */
+/**
+ * Elimina un usuario por ID.
+ *
+ * La ruta del backend es `DELETE /user/{id}` **sin barra final**. Con la barra,
+ * FastAPI responde 307 hacia la misma URL sin ella; el proxy la reescribe a
+ * HTTP y el navegador bloquea el DELETE por contenido mixto, así que el borrado
+ * fallaba siempre. Es la misma trampa ya documentada en el adaptador de
+ * transacciones.
+ *
+ * Se conserva el intento con el id en el cuerpo como respaldo para despliegues
+ * antiguos que exponían ese contrato.
+ */
 export async function deleteUser(userId: string): Promise<void> {
   const id = userId.trim()
   if (!id) throw new Error('ID de usuario inválido')
   try {
-    await apiClient.delete(Domain.apiPath(`user/${id}/`))
+    await apiClient.delete(Domain.apiPath(`user/${id}`))
   } catch (firstError) {
     try {
       await apiClient.delete(Domain.apiPath('user/'), {
