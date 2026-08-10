@@ -1,5 +1,48 @@
 import type { Transaction, TransactionDestination } from '../../domain/models'
 
+/**
+ * Etiquetas del envío. El API devuelve `tag_ids`; se acepta también `tags` con
+ * objetos por si un endpoint las expande, para no depender de una sola forma.
+ */
+function parseTagIds(value: unknown): string[] | undefined {
+  if (value == null) return undefined
+  // `transactionFromApiRecord` mezcla el registro crudo, así que si aquí
+  // devolviéramos undefined ante un string, ese string llegaría al modelo como
+  // `tag_ids` y `.map` reventaría. Por eso se normaliza también el texto.
+  let list: unknown[]
+  if (Array.isArray(value)) {
+    list = value
+  } else if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (!trimmed) return []
+    if (trimmed.startsWith('[')) {
+      try {
+        const parsed: unknown = JSON.parse(trimmed)
+        list = Array.isArray(parsed) ? parsed : [parsed]
+      } catch {
+        list = trimmed.split(',')
+      }
+    } else {
+      list = trimmed.split(',')
+    }
+  } else {
+    // Cualquier otra cosa (número, objeto) es basura: se trata como «sin
+    // etiquetas» en vez de dejar que el valor crudo sobreviva al merge.
+    return []
+  }
+  const ids = list
+    .map((item) => {
+      if (typeof item === 'string') return item.trim()
+      if (item && typeof item === 'object') {
+        const id = (item as Record<string, unknown>).id
+        return id != null ? String(id).trim() : ''
+      }
+      return ''
+    })
+    .filter((id) => id !== '')
+  return Array.from(new Set(ids))
+}
+
 function parseDestinations(value: unknown): TransactionDestination[] | undefined {
   if (!Array.isArray(value)) return undefined
   return value.flatMap((item, index) => {
@@ -299,6 +342,7 @@ export function parseTransaction(item: unknown): Transaction {
     created_by: o.created_by != null ? String(o.created_by) : undefined,
     updated_at: o.updated_at != null ? String(o.updated_at) : undefined,
     checked: transactionChecked,
+    tag_ids: parseTagIds(o.tag_ids ?? o.tags),
     comision_final_interna: comisionFinalInterna ?? resultado,
     impuesto_final_interno: impuestoFinalInterno,
     venta_final: ventaFinal,

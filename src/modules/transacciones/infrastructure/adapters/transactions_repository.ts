@@ -50,6 +50,11 @@ export interface CreateTransactionPayload {
   social_reason_bank_id?: string | null
   /** En POST el servidor ignora y deja `false`; usar solo en PUT. */
   checked?: boolean
+  /**
+   * Lista autoritativa de etiquetas: reemplaza las actuales (a diferencia de los
+   * comprobantes, que se acumulan). Omitir el campo las deja como estaban.
+   */
+  tag_ids?: string[]
 }
 
 export interface UpdateTransactionPayload extends Partial<CreateTransactionPayload> {

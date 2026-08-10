@@ -125,3 +125,36 @@ describe('parseTransactions', () => {
     expect(parseTransactions({})).toEqual([])
   })
 })
+
+describe('etiquetas del envío', () => {
+  it('lee tag_ids como lista de strings', () => {
+    const t = transactionFromApiRecord({ id: '1', tag_ids: ['a', 'b'] })
+    expect(t.tag_ids).toEqual(['a', 'b'])
+  })
+
+  it('acepta tags expandidas como objetos', () => {
+    const t = transactionFromApiRecord({ id: '1', tags: [{ id: 'a' }, { id: 'b' }] })
+    expect(t.tag_ids).toEqual(['a', 'b'])
+  })
+
+  it('descarta duplicados y vacíos', () => {
+    const t = transactionFromApiRecord({ id: '1', tag_ids: ['a', 'a', '', '  ', 'b'] })
+    expect(t.tag_ids).toEqual(['a', 'b'])
+  })
+
+  it('sin etiquetas queda undefined, no una lista falsa', () => {
+    expect(transactionFromApiRecord({ id: '1' }).tag_ids).toBeUndefined()
+  })
+
+  it('normaliza un tag_ids en texto para que nunca llegue un string al modelo', () => {
+    // El merge del parser deja pasar el registro crudo: si esto devolviera
+    // undefined, `tag_ids` quedaría como string y `.map` reventaría en la tabla.
+    expect(transactionFromApiRecord({ id: '1', tag_ids: 'a,b' }).tag_ids).toEqual([
+      'a',
+      'b'
+    ])
+    expect(transactionFromApiRecord({ id: '1', tag_ids: '["a"]' }).tag_ids).toEqual(['a'])
+    expect(transactionFromApiRecord({ id: '1', tag_ids: '' }).tag_ids).toEqual([])
+    expect(transactionFromApiRecord({ id: '1', tag_ids: 42 }).tag_ids).toEqual([])
+  })
+})

@@ -14,6 +14,7 @@ function firstPermittedAppPath(authStore: ReturnType<typeof useAuthStore>): stri
     { path: '/app/comisiones', permission: 'commissions.view' },
     { path: '/app/tasas', permission: 'rates.view' },
     { path: '/app/cuentas-brasper', permission: 'company_bank_accounts.view' },
+    { path: '/app/etiquetas', permission: 'tags.view' },
     { path: '/app/home-banner', permission: 'home_banner.view' },
     { path: '/app/blog', permission: 'blog.view' },
     { path: '/app/roles-permisos', permission: 'roles.permissions.view' },
@@ -113,6 +114,12 @@ const routes: RouteRecordRaw[] = [
         }
       },
       {
+        path: 'etiquetas',
+        name: 'etiquetas',
+        component: () => import('@modules/transacciones/presentation/bodies/etiquetas_view.vue'),
+        meta: { breadcrumb: 'Configuración > Etiquetas', permission: 'tags.view' }
+      },
+      {
         path: 'home-banner',
         name: 'home-banner',
         component: () => import('@modules/home-banner/presentation/bodies/banner_view.vue'),
@@ -154,6 +161,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/cuentas', redirect: (to) => ({ path: '/app/usuarios', query: { ...to.query, tab: 'accounts' } }) },
   { path: '/tasas', redirect: '/app/tasas' },
   { path: '/cuentas-brasper', redirect: '/app/cuentas-brasper' },
+  { path: '/etiquetas', redirect: '/app/etiquetas' },
   { path: '/home-banner', redirect: '/app/home-banner' },
   { path: '/blog', redirect: '/app/blog' },
   { path: '/roles-permisos', redirect: '/app/roles-permisos' },

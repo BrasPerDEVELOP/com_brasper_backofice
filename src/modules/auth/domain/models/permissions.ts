@@ -101,6 +101,16 @@ export const PERMISSION_MODULES = [
     ]
   },
   {
+    key: 'tags',
+    label: 'Etiquetas',
+    permissions: [
+      { key: 'tags.view', label: 'Ver' },
+      { key: 'tags.create', label: 'Crear' },
+      { key: 'tags.update', label: 'Editar' },
+      { key: 'tags.delete', label: 'Eliminar' }
+    ]
+  },
+  {
     key: 'home_banner',
     label: 'Banner Home',
     permissions: [
@@ -157,6 +167,7 @@ const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
     'transactions.view',
     'transactions.create',
     'transactions.update',
+    'tags.view',
     'calculator.view',
     'coupons.view',
     'coupons.create',

@@ -45,6 +45,8 @@ export interface Transaction {
   /** Imagen checklist (path/URL), nullable en API */
   checked_image?: string | string[] | null
   checked?: boolean
+  /** Ids del catálogo de etiquetas aplicadas al envío. */
+  tag_ids?: string[]
   created_at?: string
   created_by?: string
   updated_at?: string
