@@ -13,6 +13,11 @@ import { useTransactionPageContext } from "../composables/use_transaction_page_c
 import { useTableDragScroll } from "../composables/use_table_drag_scroll";
 import { RouterLink } from "vue-router";
 import { useTagsStore } from "../controllers/use_tags_store_controller";
+import {
+  TRANSACTION_EXPORT_HEADERS,
+  buildTransactionExportRows,
+  transactionExportFilename,
+} from "../../infrastructure/utils/transactions_export";
 import { isClientProfileIncomplete } from "@modules/auth/infrastructure/parse_user";
 import { useAuthStore } from "@modules/auth/presentation/controllers/use_auth_store_controller";
 import type { BankAccount } from "@modules/cuentas-bancarias/domain/models";
@@ -208,6 +213,59 @@ function shiftSelectedDay(days: number) {
 function goToToday() {
   selectedDay.value = todayDayKey();
   transactionScope.value = "day";
+}
+
+const isExporting = ref(false);
+const exportError = ref("");
+
+/**
+ * Descarga en Excel lo mismo que anuncia el contador de resultados, no la
+ * página visible: el usuario espera el día completo (o el histórico si está en
+ * «Todas»), con los filtros de estado, cliente, moneda y búsqueda aplicados.
+ */
+async function exportTransactionsToExcel() {
+  if (isExporting.value) return;
+  isExporting.value = true;
+  exportError.value = "";
+  try {
+    const rows = await transactionsStore.fetchAllForExport(apiFilterParams.value);
+
+    // El correlativo se resuelve con el día completo: calcularlo sobre las filas
+    // exportadas daría números corridos en cuanto haya un filtro de estado.
+    const days = Array.from(
+      new Set(rows.map((t) => transactionDayKey(t)).filter((d): d is string => !!d)),
+    );
+    await transactionsStore.loadDailySequences(days);
+
+    const XLSX = await import("xlsx");
+    const data = buildTransactionExportRows(rows, {
+      dailySequenceById: transactionsStore.dailySequenceById,
+      clientLabel: getClientLabel,
+      companyName: transactionCompanyNameTable,
+      destinationAccounts: getTransactionDestinationAccountsLabel,
+      currencies: (t) => getTransactionCurrencies(t),
+      tagById: (id) => tagsStore.tagById(id),
+    });
+    const sheet = XLSX.utils.aoa_to_sheet([
+      [...TRANSACTION_EXPORT_HEADERS],
+      ...data,
+    ]);
+    const book = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(book, sheet, "Transacciones");
+    XLSX.writeFile(
+      book,
+      transactionExportFilename(
+        transactionScope.value,
+        selectedDay.value,
+        todayDayKey(),
+      ),
+    );
+  } catch (e) {
+    exportError.value =
+      e instanceof Error ? e.message : "No se pudo generar el Excel";
+  } finally {
+    isExporting.value = false;
+  }
 }
 /** Razón social Brasper (catálogo): filtrada por moneda de envío; independiente de cuenta destino del cliente. */
 const destinationBankFilterId = ref("");
@@ -3442,6 +3500,45 @@ onActivated(() => {
             La columna <code class="rounded bg-white px-1">#</code> sigue siendo el
             número del envío dentro de su día.
           </p>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <span v-if="exportError" class="text-xs text-[#dc3545]">
+            {{ exportError }}
+          </span>
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 rounded-lg border border-[#dbe7fb] bg-white px-3 py-2 text-sm font-medium text-brasper-indigoStrong transition hover:bg-[#f9fafb] disabled:opacity-50"
+            :disabled="isExporting || totalResults === 0"
+            :title="
+              transactionScope === 'day'
+                ? `Descargar los ${totalResults} envíos de este día, con los filtros aplicados`
+                : `Descargar los ${totalResults} envíos del histórico, con los filtros aplicados`
+            "
+            @click="exportTransactionsToExcel"
+          >
+            <svg
+              class="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+              />
+            </svg>
+            {{
+              isExporting
+                ? "Generando…"
+                : transactionScope === "day"
+                  ? "Exportar el día"
+                  : "Exportar todo"
+            }}
+          </button>
         </div>
       </div>
 

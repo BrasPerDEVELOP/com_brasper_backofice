@@ -32,6 +32,13 @@ const DAILY_SEQUENCE_PAGE_SIZE = 100
 /** Corta la paginación de un día por si el backend devolviera un total absurdo. */
 const DAILY_SEQUENCE_MAX_PAGES = 20
 
+/**
+ * Tope de páginas al exportar. A 100 por página son 20 000 filas, muy por
+ * encima de cualquier export razonable; evita un bucle infinito si el backend
+ * devolviera un `total` incoherente.
+ */
+const EXPORT_MAX_PAGES = 200
+
 let transactionsRepositorySingleton: TransactionsRepository | null = null
 
 function getTransactionsRepository(): TransactionsRepository {
@@ -199,6 +206,32 @@ export const useTransactionsStore = defineStore('transactions', {
           }
         })
       )
+    },
+
+    /**
+     * Trae TODAS las transacciones que cumplen el filtro, paginando.
+     *
+     * La exportación no puede quedarse con la página visible: el usuario espera
+     * el mismo conjunto que anuncia el contador de resultados. No toca el
+     * estado del store para no pisar la tabla mientras se descarga.
+     */
+    async fetchAllForExport(params?: GetTransactionsParams): Promise<Transaction[]> {
+      const repo = getTransactionsRepository()
+      const useCase = new GetTransactionsUseCase(repo)
+      const { skip: _skip, limit: _limit, ...filters } = params ?? {}
+      const all: Transaction[] = []
+      let skip = 0
+      for (let page = 0; page < EXPORT_MAX_PAGES; page++) {
+        const { items, total } = await useCase.execute({
+          ...filters,
+          skip,
+          limit: DAILY_SEQUENCE_PAGE_SIZE
+        })
+        all.push(...items)
+        skip += DAILY_SEQUENCE_PAGE_SIZE
+        if (items.length < DAILY_SEQUENCE_PAGE_SIZE || all.length >= total) break
+      }
+      return all
     },
 
     /** Invalida el correlativo cacheado tras crear, editar o borrar un envío. */
