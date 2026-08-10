@@ -286,7 +286,8 @@
       <div class="row" style="justify-content:space-between">
         <div class="row">
           <label class="check"><input type="checkbox" id="onlyNew" /> Solo clientes nuevos</label>
-          <label class="check"><input type="checkbox" id="onlyDay" checked /> Solo el día seleccionado</label>
+          <label class="check"><input type="checkbox" id="onlyDay" checked />
+            Solo el día seleccionado <span class="hint" id="dayRange"></span></label>
         </div>
         <div class="row">
           <span class="hint">Etiquetas:</span>
@@ -622,10 +623,27 @@
     var n=0; rows.forEach(function(r){ if(r.tags.indexOf(id)!==-1) n++; }); return n;
   }
 
+  function nextDay(d){
+    var z = d.split('-').map(Number);
+    var dt = new Date(z[0], z[1]-1, z[2]+1);
+    return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')
+         + '-'+String(dt.getDate()).padStart(2,'0');
+  }
+  /**
+   * Días ofrecidos en el filtro: los que tienen envíos, el día seleccionado (aunque esté vacío)
+   * y el siguiente al último — para poder ver cómo arranca un día en cero.
+   */
   function days(){
     var seen={}, out=[];
     rows.forEach(function(r){ if(!seen[r.day]){ seen[r.day]=1; out.push(r.day); } });
+    out.sort();
+    var after = out.length ? nextDay(out[out.length-1]) : day;
+    if (!seen[after]) out.push(after);
+    if (day && out.indexOf(day)===-1) out.push(day);
     return out.sort();
+  }
+  function countOfDay(d){
+    var n=0; rows.forEach(function(r){ if(r.day===d) n++; }); return n;
   }
   /** Correlativo dentro del día por orden de ingreso — la lógica que iría a transaction_domain.ts */
   function dailySeq(){
@@ -646,9 +664,13 @@
     }).forEach(function(r,i){ map[r.id]=200+i+1; });
     return map;
   }
+  /**
+   * Orden de pantalla: el más reciente arriba. El número del envío NO depende de esto —
+   * lo asigna dailySeq() por hora de ingreso —, así que el de arriba es el más alto del día.
+   */
   function visible(){
     var out = rows.slice().sort(function(a,b){
-      var ka=a.day+a.time, kb=b.day+b.time; return ka<kb?-1:ka>kb?1:0;
+      var ka=a.day+a.time, kb=b.day+b.time; return ka<kb?1:ka>kb?-1:0;
     });
     if ($('onlyDay').checked) out = out.filter(function(r){ return r.day===day; });
     if ($('onlyNew').checked) out = out.filter(isNew);
@@ -673,7 +695,9 @@
     $('modeDaily').setAttribute('aria-pressed',  mode==='daily');
     $('modeExpl').innerHTML = mode==='daily'
       ? 'La columna <code>#</code> cuenta los envíos <b>de ese día</b>: el primero de la mañana es el 1, '
-      + 'el siguiente el 2, y el último ingresado es el número más alto. Al cambiar de día vuelve a 1. '
+      + 'el siguiente el 2, y así. La lista se muestra <b>del más reciente al más antiguo</b>, '
+      + 'así que el número más alto queda arriba: el envío de hace un rato es el que encabeza. '
+      + 'Cada día arranca de cero y el primero que entre vuelve a ser el 1. '
       + 'El número no se mueve si filtran u ordenan — pertenece al envío, no a la pantalla.'
       : 'Así funciona hoy: <code>#</code> es solo el número de fila sobre el histórico completo '
       + '(arranca en 201 porque ya hay ~200 envíos anteriores). No dice nada del día y se mueve al filtrar.';
@@ -722,7 +746,11 @@
     var tb   = $('tbody');
 
     if (!list.length){
-      tb.innerHTML = '<tr><td colspan="'+span+'" class="empty">No hay transacciones que cumplan el filtro.</td></tr>';
+      var msg = ($('onlyDay').checked && !$('onlyNew').checked && countOfDay(day)===0)
+        ? '<b>'+fmtDay(day)+' todavía no tiene envíos.</b><br />'
+          + 'El día arranca en cero: el primero que se registre será el <b>N° 1</b>.'
+        : 'No hay transacciones que cumplan el filtro.';
+      tb.innerHTML = '<tr><td colspan="'+span+'" class="empty">'+msg+'</td></tr>';
       return;
     }
     var html='', lastDay=null;
@@ -804,7 +832,9 @@
 
   function renderDays(){
     $('dayPick').innerHTML = days().map(function(d){
-      return '<option value="'+d+'"'+(d===day?' selected':'')+'>'+fmtDay(d)+'</option>';
+      var n = countOfDay(d);
+      return '<option value="'+d+'"'+(d===day?' selected':'')+'>'
+           + fmtDay(d)+' · '+(n ? n+(n===1?' envío':' envíos') : 'sin envíos')+'</option>';
     }).join('');
   }
   function renderTagPlace(){
@@ -812,8 +842,12 @@
     $('tagCol').setAttribute('aria-pressed',    tagPlace==='col');
   }
 
+  function renderDayRange(){
+    $('dayRange').textContent = '(' + shortDay(day) + ' de 00:00 a 23:59)';
+  }
+
   function renderAll(){
-    renderMode(); renderTagPlace(); renderKpis(); renderHead(); renderTable();
+    renderMode(); renderTagPlace(); renderDayRange(); renderKpis(); renderHead(); renderTable();
     renderIncomplete(); renderTagCfg(); save();
     if (!$('ov').hidden) renderWiz();
   }
