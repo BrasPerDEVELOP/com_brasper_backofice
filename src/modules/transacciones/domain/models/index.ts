@@ -1,3 +1,11 @@
+export type {
+  TransactionTag,
+  TagColorKey,
+  TagColorStyle,
+  CreateTagPayload,
+  UpdateTagPayload,
+} from './tag'
+export { TAG_COLOR_KEYS, TAG_COLOR_STYLES, tagColorStyle } from './tag'
 export type { Transaction, TransactionDestination, TransactionStatus } from './transaction'
 export { TRANSACTION_STATUSES, TRANSACTION_STATUS_LABELS } from './transaction'
 export {
@@ -16,6 +24,8 @@ export {
   transactionMatchesCurrencyPair,
   inferOriginCurrencyFromTransactionCode,
   formatTransactionCodeForDisplay,
+  transactionDayKey,
+  buildDailySequenceMap,
   SPECIAL_CALCULATOR_DISCOUNT_CODE,
   isSpecialCalculatorDiscountCode,
   getTransactionSpecialDiscountInfo,

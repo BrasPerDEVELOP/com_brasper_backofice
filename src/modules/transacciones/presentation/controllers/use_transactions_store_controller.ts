@@ -17,6 +17,20 @@ import {
 import { TransactionsApiAdapter } from '../../infrastructure/adapters'
 import type { TransactionsRepository } from '../../infrastructure/adapters/transactions_repository'
 import { enrichTransactionsWithSpecialDiscountMeta, enrichTransactionWithSpecialDiscountMeta, removeTransactionSpecialDiscountMeta } from '../../infrastructure/utils/transaction_special_discount_meta'
+import {
+  buildDailySequenceMap,
+  localDateInputStartMs,
+  localDateInputEndMs
+} from '../../domain/transaction_domain'
+
+/**
+ * Tamaño de página al traer el día completo. El endpoint declara `le=100`:
+ * pedir más devuelve 422, así que se pagina en tandas de 100.
+ */
+const DAILY_SEQUENCE_PAGE_SIZE = 100
+
+/** Corta la paginación de un día por si el backend devolviera un total absurdo. */
+const DAILY_SEQUENCE_MAX_PAGES = 20
 
 let transactionsRepositorySingleton: TransactionsRepository | null = null
 
@@ -52,6 +66,19 @@ interface TransactionsState {
   transactions: Transaction[]
   /** Total de registros que coinciden con el filtro (paginación de servidor). */
   total: number
+  /**
+   * Correlativo del envío dentro de su día (`id` → `n`). Cada día reinicia en 1.
+   * No se puede derivar de `transactions` porque esa es solo la página visible:
+   * lo llena `loadDailySequences` trayendo el día completo.
+   */
+  dailySequenceById: Record<string, number>
+  /** Días (`YYYY-MM-DD`) cuyo correlativo ya se resolvió, para no repedirlos. */
+  loadedSequenceDays: string[]
+  /**
+   * Sube en cada invalidación del correlativo. La vista la observa para volver a
+   * pedirlo aunque los días visibles sean los mismos que antes de guardar.
+   */
+  sequenceGeneration: number
   isLoading: boolean
   isRefreshing: boolean
   isImporting: boolean
@@ -65,6 +92,9 @@ export const useTransactionsStore = defineStore('transactions', {
   state: (): TransactionsState => ({
     transactions: [],
     total: 0,
+    dailySequenceById: {},
+    loadedSequenceDays: [],
+    sequenceGeneration: 0,
     isLoading: false,
     isRefreshing: false,
     isImporting: false,
@@ -113,6 +143,71 @@ export const useTransactionsStore = defineStore('transactions', {
       return next
     },
 
+    /**
+     * Resuelve el correlativo diario de los días indicados (`YYYY-MM-DD`).
+     *
+     * El listado viene paginado por el servidor, así que la página visible no
+     * alcanza para numerar el día: se pide el día completo por `send_date` y se
+     * numera con `buildDailySequenceMap`. Un día de operación son decenas de
+     * registros, no miles, por eso una petición por día es suficiente.
+     */
+    async loadDailySequences(dayKeys: string[]) {
+      const pending = Array.from(new Set(dayKeys)).filter(
+        (key) => key && !this.loadedSequenceDays.includes(key)
+      )
+      if (pending.length === 0) return
+
+      const repo = getTransactionsRepository()
+      const useCase = new GetTransactionsUseCase(repo)
+
+      await Promise.all(
+        pending.map(async (key) => {
+          const from = localDateInputStartMs(key)
+          const to = localDateInputEndMs(key)
+          if (from == null || to == null) return
+          try {
+            // Se filtra por `send_date`: un envío sin esa fecha no vuelve en esta
+            // consulta y la tabla le muestra "—" en vez de un número equivocado.
+            const range = {
+              send_date_from: new Date(from).toISOString(),
+              send_date_to: new Date(to).toISOString()
+            }
+            const dayItems: Transaction[] = []
+            let skip = 0
+            for (let page = 0; page < DAILY_SEQUENCE_MAX_PAGES; page++) {
+              const { items, total } = await useCase.execute({
+                ...range,
+                skip,
+                limit: DAILY_SEQUENCE_PAGE_SIZE
+              })
+              dayItems.push(...items)
+              skip += DAILY_SEQUENCE_PAGE_SIZE
+              if (items.length < DAILY_SEQUENCE_PAGE_SIZE || dayItems.length >= total) break
+            }
+            const sequence = buildDailySequenceMap(dayItems)
+            const merged = { ...this.dailySequenceById }
+            sequence.forEach((n, id) => {
+              merged[id] = n
+            })
+            this.dailySequenceById = merged
+            this.loadedSequenceDays = [...this.loadedSequenceDays, key]
+          } catch (e) {
+            // La tabla muestra "—" y sigue funcionando, pero el fallo no puede
+            // quedar mudo: un 422 por parámetros inválidos se vería igual que
+            // "este día no tiene envíos".
+            console.error(`No se pudo numerar el día ${key}:`, e)
+          }
+        })
+      )
+    },
+
+    /** Invalida el correlativo cacheado tras crear, editar o borrar un envío. */
+    resetDailySequences() {
+      this.dailySequenceById = {}
+      this.loadedSequenceDays = []
+      this.sequenceGeneration += 1
+    },
+
     async importExcel(file: File, filters?: GetTransactionsParams) {
       this.isImporting = true
       this.error = null
@@ -120,6 +215,7 @@ export const useTransactionsStore = defineStore('transactions', {
         const repo = getTransactionsRepository()
         const useCase = new ImportTransactionsFromExcelUseCase(repo)
         await useCase.execute(file)
+        this.resetDailySequences()
         await this.loadTransactions(filters)
       } catch (e) {
         const msg = e instanceof Error ? e.message : ''
@@ -144,6 +240,7 @@ export const useTransactionsStore = defineStore('transactions', {
         const created = await useCase.execute(payload)
         this.transactions = [created, ...this.transactions]
         this.total += 1
+        this.resetDailySequences()
         return created
       } catch (e) {
         this.error = errorMessageFromCatch(e, 'Error al crear transacción')
@@ -163,6 +260,8 @@ export const useTransactionsStore = defineStore('transactions', {
         const idx = this.transactions.findIndex((t) => (t.id ?? '') === id)
         const enriched = enrichTransactionWithSpecialDiscountMeta(updated)
         if (idx >= 0) this.transactions[idx] = enriched
+        // La fecha de envío pudo cambiar: el correlativo del día se recalcula.
+        this.resetDailySequences()
         return enriched
       } catch (e) {
         this.error = errorMessageFromCatch(e, 'Error al actualizar transacción')
@@ -181,6 +280,7 @@ export const useTransactionsStore = defineStore('transactions', {
         removeTransactionSpecialDiscountMeta(id)
         this.transactions = this.transactions.filter((t) => (t.id ?? '') !== id)
         this.total = Math.max(0, this.total - 1)
+        this.resetDailySequences()
       } catch (e) {
         this.error = e instanceof Error ? e.message : 'Error al eliminar transacción'
         throw e

@@ -561,3 +561,64 @@ export function getTransactionSpecialDiscountInfo(
     persisted: false,
   };
 }
+
+/**
+ * Día calendario local (`YYYY-MM-DD`) al que pertenece un envío.
+ * Se agrupa por `send_date` (la fecha de envío que ve ventas) y solo cae en
+ * `created_at` cuando el registro no la tiene.
+ */
+export function transactionDayKey(t: Transaction): string | null {
+  const raw = t.send_date?.trim() || t.created_at?.trim() || "";
+  if (!raw) return null;
+  const ms = Date.parse(raw);
+  if (Number.isNaN(ms)) return null;
+  const d = new Date(ms);
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${month}-${day}`;
+}
+
+/** Instante usado para ordenar dentro del día: el orden real de ingreso. */
+function transactionSequenceMs(t: Transaction): number {
+  const raw = t.created_at?.trim() || t.send_date?.trim() || "";
+  const ms = Date.parse(raw);
+  return Number.isNaN(ms) ? 0 : ms;
+}
+
+/**
+ * Correlativo de cada envío **dentro de su día**: el primero de la mañana es el 1,
+ * el siguiente el 2, y el último ingresado es el número más alto. Cada día reinicia.
+ *
+ * El número pertenece al envío, no a la pantalla: no depende del orden de la tabla,
+ * del filtro ni de la página. Por eso hay que alimentar esta función con **todos**
+ * los envíos del día, no con la página visible (ver `loadDailySequences` en el store).
+ */
+export function buildDailySequenceMap(
+  transactions: Transaction[],
+): Map<string, number> {
+  const byDay = new Map<string, Transaction[]>();
+  for (const t of transactions) {
+    if (!t.id) continue;
+    const key = transactionDayKey(t);
+    if (!key) continue;
+    const bucket = byDay.get(key);
+    if (bucket) bucket.push(t);
+    else byDay.set(key, [t]);
+  }
+
+  const sequence = new Map<string, number>();
+  for (const bucket of byDay.values()) {
+    bucket
+      .slice()
+      .sort((a, b) => {
+        const diff = transactionSequenceMs(a) - transactionSequenceMs(b);
+        // Empate de timestamp: desempatamos por id para que el número sea estable
+        // entre recargas en vez de depender del orden que devuelva el API.
+        return diff !== 0 ? diff : (a.id ?? "").localeCompare(b.id ?? "");
+      })
+      .forEach((t, index) => {
+        sequence.set(t.id as string, index + 1);
+      });
+  }
+  return sequence;
+}

@@ -9,6 +9,7 @@ import {
   SPECIAL_CALCULATOR_DISCOUNT_CODE,
   getTransactionSpecialDiscountInfo,
   getTransactionSpecialDiscountForDisplay,
+  buildDailySequenceMap,
 } from './transaction_domain'
 
 describe('resolveTransactionCurrencyPair', () => {
@@ -148,5 +149,80 @@ describe('getTransactionSpecialDiscountInfo', () => {
     }
     expect(getTransactionSpecialDiscountInfo(tx, catalogs)).toBeNull()
     expect(getTransactionSpecialDiscountForDisplay(tx, catalogs)).toBeNull()
+  })
+})
+
+describe('buildDailySequenceMap', () => {
+  const tx = (
+    id: string,
+    send_date: string | undefined,
+    created_at?: string,
+  ): Transaction => ({ id, send_date, created_at }) as Transaction
+
+  it('reinicia el correlativo en cada día y respeta el orden de ingreso', () => {
+    const map = buildDailySequenceMap([
+      tx('c', '2026-08-05T11:58:00', '2026-08-05T11:58:00'),
+      tx('a', '2026-08-05T07:34:00', '2026-08-05T07:34:00'),
+      tx('b', '2026-08-05T08:02:00', '2026-08-05T08:02:00'),
+      tx('d', '2026-08-06T07:31:00', '2026-08-06T07:31:00'),
+      tx('e', '2026-08-06T09:15:00', '2026-08-06T09:15:00'),
+    ])
+    expect(map.get('a')).toBe(1)
+    expect(map.get('b')).toBe(2)
+    expect(map.get('c')).toBe(3)
+    // el día siguiente arranca de cero otra vez
+    expect(map.get('d')).toBe(1)
+    expect(map.get('e')).toBe(2)
+  })
+
+  it('el número no depende del orden en que llega la lista', () => {
+    const items = [
+      tx('a', '2026-08-05T07:34:00', '2026-08-05T07:34:00'),
+      tx('b', '2026-08-05T08:02:00', '2026-08-05T08:02:00'),
+      tx('c', '2026-08-05T11:58:00', '2026-08-05T11:58:00'),
+    ]
+    const ascending = buildDailySequenceMap(items)
+    const descending = buildDailySequenceMap(items.slice().reverse())
+    expect(descending.get('a')).toBe(ascending.get('a'))
+    expect(descending.get('c')).toBe(ascending.get('c'))
+  })
+
+  it('agrupa por send_date aunque created_at caiga en otro día', () => {
+    const map = buildDailySequenceMap([
+      tx('a', '2026-08-05T07:34:00', '2026-08-04T23:50:00'),
+      tx('b', '2026-08-05T08:02:00', '2026-08-05T08:02:00'),
+    ])
+    expect(map.get('a')).toBe(1)
+    expect(map.get('b')).toBe(2)
+  })
+
+  it('cae en created_at cuando no hay send_date', () => {
+    const map = buildDailySequenceMap([
+      tx('a', undefined, '2026-08-05T09:00:00'),
+      tx('b', undefined, '2026-08-05T10:00:00'),
+    ])
+    expect(map.get('a')).toBe(1)
+    expect(map.get('b')).toBe(2)
+  })
+
+  it('desempata por id para que el número sea estable entre recargas', () => {
+    const same = '2026-08-05T08:00:00'
+    const map = buildDailySequenceMap([tx('zzz', same, same), tx('aaa', same, same)])
+    expect(map.get('aaa')).toBe(1)
+    expect(map.get('zzz')).toBe(2)
+  })
+
+  it('ignora registros sin id y sin fecha utilizable', () => {
+    const map = buildDailySequenceMap([
+      { send_date: '2026-08-05T07:00:00' } as Transaction,
+      tx('a', 'no-es-una-fecha'),
+      tx('b', '2026-08-05T08:02:00', '2026-08-05T08:02:00'),
+    ])
+    expect(map.get('a')).toBeUndefined()
+    expect(map.get('b')).toBe(1)
+  })
+
+  it('devuelve un mapa vacío si no hay transacciones', () => {
+    expect(buildDailySequenceMap([]).size).toBe(0)
   })
 })
