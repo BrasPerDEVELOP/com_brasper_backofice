@@ -65,11 +65,20 @@ function parseSessionResponse(raw: unknown): LoginResponse {
   if (!user) {
     throw new Error('Respuesta de login inválida')
   }
+  if (!user) {
+    throw new Error('Respuesta de login inválida')
+  }
 
   if (!token) {
     throw new Error('No se recibió token de sesión. Revisa la respuesta del servidor.')
   }
+  if (!token) {
+    throw new Error('No se recibió token de sesión. Revisa la respuesta del servidor.')
+  }
 
+  if (import.meta.env.DEV) {
+    log.debug('Usuario parseado:', { id: user.id, email: user.email, role: user.role })
+  }
   if (import.meta.env.DEV) {
     log.debug('Usuario parseado:', { id: user.id, email: user.email, role: user.role })
   }
