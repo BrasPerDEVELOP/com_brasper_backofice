@@ -42,6 +42,10 @@ describe('perfil incompleto derivado', () => {
     expect(isClientProfileIncomplete(u)).toBe(true)
   })
 
+  it('el placeholder del listado no cuenta como email', () => {
+    expect(isClientProfileIncomplete(user({ email: '-' }))).toBe(true)
+  })
+
   it('solo teléfono sigue siendo incompleto', () => {
     expect(isClientProfileIncomplete(user({ phone: 987654321 }))).toBe(true)
   })
@@ -76,5 +80,9 @@ describe('qué falta en el perfil', () => {
       identifications: [{ document_type: 'dni', document_number: '   ', is_primary: true }]
     })
     expect(missingProfileFields(u)).toContain('documento')
+  })
+
+  it('el placeholder del listado mantiene el email como pendiente', () => {
+    expect(missingProfileFields(user({ email: '-' }))).toContain('email')
   })
 })

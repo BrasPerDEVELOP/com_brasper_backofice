@@ -13,6 +13,7 @@ import {
 import { USER_ROLE_LABELS, PHONE_CODES } from '@/modules/auth/domain/models'
 import AppDropdown from '@/interface/components/AppDropdown.vue'
 import UserIdentificationsEditor from '@/interface/components/UserIdentificationsEditor.vue'
+import UsuarioQuickCreateDialog from '@/interface/components/UsuarioQuickCreateDialog.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -45,6 +46,9 @@ const props = withDefaults(
 const expandedFromQuick = ref(false)
 const isQuick = computed(
   () => props.variant === 'quick' && !props.user && !expandedFromQuick.value
+)
+const isAdvancedFromQuick = computed(
+  () => props.variant === 'quick' && !props.user && expandedFromQuick.value
 )
 
 const emit = defineEmits<{
@@ -138,6 +142,11 @@ function close() {
   emit('update:modelValue', false)
 }
 
+function openAdvancedDialog() {
+  error.value = ''
+  expandedFromQuick.value = true
+}
+
 async function handleSubmit() {
   // Evita guardar con la colección parcial mientras aún llega el detalle o si ya hay un envío en curso.
   if (creating.value || loadingDetail.value) return
@@ -203,7 +212,11 @@ async function handleSubmit() {
 watch(
   () => props.modelValue,
   (visible) => {
-    if (!visible) return
+    if (!visible) {
+      expandedFromQuick.value = false
+      return
+    }
+    expandedFromQuick.value = false
     resetForm()
     if (props.user?.id) void hydrateFromDetail(props.user.id)
   }
@@ -212,22 +225,37 @@ watch(
 
 <template>
   <Teleport to="body">
+    <UsuarioQuickCreateDialog
+      v-if="modelValue && isQuick"
+      :names="form.names ?? ''"
+      :phone="form.phone ?? null"
+      :creating="creating"
+      :error="error"
+      @update:names="form.names = $event"
+      @update:phone="form.phone = $event"
+      @advanced="openAdvancedDialog"
+      @submit="handleSubmit"
+      @close="close"
+    />
+
     <div
-      v-if="modelValue"
+      v-else-if="modelValue"
       class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="usuario-form-dialog-title"
     >
       <div class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-xl">
-        <h2 class="mb-6 text-lg font-semibold text-[#1f2937]">
-          {{ isEditing ? 'Editar usuario' : isQuick ? 'Cliente nuevo' : 'Nuevo usuario' }}
+        <h2 id="usuario-form-dialog-title" class="mb-6 text-lg font-semibold text-[#1f2937]">
+          {{ isEditing ? 'Editar usuario' : isAdvancedFromQuick ? 'Creación avanzada de usuario' : 'Nuevo usuario' }}
         </h2>
-        <p v-if="isQuick" class="-mt-4 mb-6 text-sm text-[#6b7280]">
-          Solo el nombre es obligatorio. Queda como <strong>perfil incompleto</strong>
-          y se puede usar en la transacción de inmediato.
+        <p v-if="isAdvancedFromQuick" class="-mt-4 mb-6 text-sm text-[#6b7280]">
+          Completa la información disponible. Este usuario quedará seleccionado en la transacción.
         </p>
 
         <form class="space-y-6" @submit.prevent="handleSubmit">
           <div class="grid gap-4 sm:grid-cols-2">
-            <div v-if="!isQuick">
+            <div>
               <label class="mb-1.5 block text-sm font-medium text-[#374151]">
                 Email (opcional)
               </label>
@@ -240,22 +268,18 @@ watch(
                 placeholder="usuario@ejemplo.com"
               />
             </div>
-            <div :class="isQuick ? 'sm:col-span-2' : ''">
+            <div>
               <label class="mb-1.5 block text-sm font-medium text-[#374151]">
-                {{ isQuick ? 'Nombre o razón social' : 'Nombres' }}
-                <span v-if="isQuick" class="text-[#dc2626]">*</span>
+                Nombres
               </label>
               <input
                 v-model="form.names"
                 type="text"
                 class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
-                :placeholder="isQuick ? 'Esperanza Tello' : 'Nombres'"
+                placeholder="Nombres"
               />
-              <p v-if="isQuick" class="mt-1.5 text-xs text-[#6b7280]">
-                Como lo escriben en el grupo de WhatsApp. Se corrige después.
-              </p>
             </div>
-            <div v-if="!isQuick">
+            <div>
               <label class="mb-1.5 block text-sm font-medium text-[#374151]">Apellidos</label>
               <input
                 v-model="form.lastnames"
@@ -273,14 +297,14 @@ watch(
                 :searchable="false"
               />
             </div>
-            <UserIdentificationsEditor v-if="!isQuick" v-model="identifications" />
+            <UserIdentificationsEditor v-model="identifications" />
             <p v-if="loadingDetail" class="-mt-1 text-xs text-[#6b7280] sm:col-span-2">
               Cargando identificaciones del usuario…
             </p>
             <p v-else-if="detailError" class="-mt-1 text-xs text-[#dc3545] sm:col-span-2">
               {{ detailError }}
             </p>
-            <div v-if="!isQuick">
+            <div>
               <label class="mb-1.5 block text-sm font-medium text-[#374151]">Código tel.</label>
               <AppDropdown
                 v-model="form.code_phone"
@@ -289,9 +313,9 @@ watch(
                 searchable
               />
             </div>
-            <div :class="isQuick ? 'sm:col-span-2' : ''">
+            <div>
               <label class="mb-1.5 block text-sm font-medium text-[#374151]">
-                Teléfono <span v-if="isQuick" class="text-xs text-[#6b7280]">(opcional)</span>
+                Teléfono
               </label>
               <input
                 v-model.number="form.phone"
@@ -300,7 +324,7 @@ watch(
                 placeholder="987654321"
               />
             </div>
-            <div v-if="!isQuick" class="sm:col-span-2">
+            <div class="sm:col-span-2">
               <label class="mb-1.5 block text-sm font-medium text-[#374151]">
                 Foto de perfil (opcional)
               </label>
@@ -311,24 +335,6 @@ watch(
                 @change="onProfileImageChange"
               />
             </div>
-          </div>
-
-          <div
-            v-if="isQuick"
-            class="rounded-lg border border-[#fed7aa] bg-[#fff7ed] px-4 py-3 text-xs text-[#9a3412]"
-          >
-            <p>
-              Email, apellidos, documento y cuenta bancaria quedan pendientes. El
-              cliente aparecerá como «perfil incompleto» en Usuarios hasta que
-              alguien los complete.
-            </p>
-            <button
-              type="button"
-              class="mt-2 font-semibold underline underline-offset-2 hover:no-underline"
-              @click="expandedFromQuick = true"
-            >
-              ¿Tienes todos los datos? Completar el perfil ahora
-            </button>
           </div>
 
           <p v-if="error" class="rounded-lg bg-[#dc3545]/10 px-4 py-3 text-sm text-[#dc3545]">

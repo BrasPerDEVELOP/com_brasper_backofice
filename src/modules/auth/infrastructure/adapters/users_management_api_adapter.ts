@@ -3,7 +3,12 @@ import { apiClient } from '@/interface/api/client'
 import { formatApiErrorBody } from '@/interface/api/format_api_error'
 import { Domain } from '@/interface/infrastructure/services'
 import { USER_ROLES } from '../../domain/models'
-import { parseUserListItem, type UserIdentification, type UserListItem } from '../parse_user'
+import {
+  isClientProfileIncomplete,
+  parseUserListItem,
+  type UserIdentification,
+  type UserListItem
+} from '../parse_user'
 
 export { USER_ROLES }
 // Re-exportado para no romper importadores existentes (usuarios_view, transacciones).
@@ -43,8 +48,30 @@ export async function fetchUsers(params?: FetchUsersParams): Promise<UserListIte
   })
   const raw = response.data
   const arr = Array.isArray(raw) ? raw : extractArray(raw)
-  const users = arr.map(parseUser).filter((u): u is UserListItem => u != null)
-  return users.sort((a, b) => a.name.localeCompare(b.name, 'es'))
+  const usersById = new Map<string, UserListItem>()
+  for (const item of arr) {
+    const user = parseUser(item)
+    if (!user) continue
+    const current = usersById.get(user.id)
+    if (!current || userCompletenessScore(user) > userCompletenessScore(current)) {
+      usersById.set(user.id, user)
+    }
+  }
+  return Array.from(usersById.values()).sort((a, b) => a.name.localeCompare(b.name, 'es'))
+}
+
+/**
+ * Si el API repite un mismo id (por ejemplo, al expandir relaciones), conserva
+ * la representación con más datos en vez de pintar dos filas del mismo usuario.
+ */
+function userCompletenessScore(user: UserListItem): number {
+  return (
+    (user.email !== '-' ? 1 : 0) +
+    (user.names ? 1 : 0) +
+    (user.lastnames ? 1 : 0) +
+    (user.phone != null ? 1 : 0) +
+    user.identifications.length * 2
+  )
 }
 
 /** @deprecated Use fetchUsers instead. */
@@ -172,8 +199,33 @@ export async function findUserByEmail(
   return match(await fetchUsers())
 }
 
-/** Crea un nuevo usuario. POST /user/ (multipart/form-data) */
-export async function createUser(payload: CreateUserPayload): Promise<UserListItem> {
+const createUserInflight = new Map<string, Promise<UserListItem>>()
+
+function createUserRequestKey(payload: CreateUserPayload): string {
+  const image = payload.profile_image
+  return JSON.stringify({
+    email: normalizeEmail(payload.email),
+    names: payload.names?.trim().toLowerCase() ?? '',
+    lastnames: payload.lastnames?.trim().toLowerCase() ?? '',
+    role: payload.role?.trim().toLowerCase() ?? '',
+    password: payload.password?.trim() ?? DEFAULT_USER_TEMPORARY_PASSWORD,
+    document_number: payload.document_number?.replace(/\s+/g, '').toLowerCase() ?? '',
+    document_type: payload.document_type?.trim().toLowerCase() ?? '',
+    identifications: (payload.identifications ?? []).map((item) => ({
+      document_type: item.document_type.trim().toLowerCase(),
+      document_number: item.document_number.replace(/\s+/g, '').toLowerCase(),
+      is_primary: item.is_primary
+    })),
+    phone: payload.phone == null ? '' : String(payload.phone).trim(),
+    code_phone: payload.code_phone?.trim() ?? '',
+    image:
+      image instanceof File
+        ? `${image.name}:${image.size}:${image.type}:${image.lastModified}`
+        : ''
+  })
+}
+
+async function postUser(payload: CreateUserPayload): Promise<UserListItem> {
   const url = Domain.apiPath('user')
   const form = new FormData()
   appendUserFormFields(form, {
@@ -205,6 +257,91 @@ export async function createUser(payload: CreateUserPayload): Promise<UserListIt
     }
     throw e instanceof Error ? e : new Error('Error al crear usuario')
   }
+}
+
+function normalizePersonName(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
+function isClientCreation(payload: CreateUserPayload): boolean {
+  return ['client', 'cliente'].includes(payload.role?.trim().toLowerCase() ?? '')
+}
+
+function completesProfile(payload: CreateUserPayload): boolean {
+  return Boolean(
+    payload.email?.trim() ||
+      payload.document_number?.trim() ||
+      payload.identifications?.some((item) => item.document_number.trim())
+  )
+}
+
+function phonesAreCompatible(user: UserListItem, payload: CreateUserPayload): boolean {
+  if (user.phone == null || payload.phone == null || payload.phone === '') return true
+  return String(user.phone).trim() === String(payload.phone).trim()
+}
+
+async function findIncompleteClientToComplete(
+  payload: CreateUserPayload
+): Promise<UserListItem | null> {
+  if (!isClientCreation(payload) || !completesProfile(payload)) return null
+
+  const requestedName = normalizePersonName(
+    [payload.names, payload.lastnames].filter(Boolean).join(' ')
+  )
+  if (!requestedName) return null
+
+  const candidates = (await fetchUsers({ role: 'client' })).filter(
+    (user) =>
+      isClientProfileIncomplete(user) &&
+      normalizePersonName(user.name) === requestedName &&
+      phonesAreCompatible(user, payload)
+  )
+  if (candidates.length > 1) {
+    throw new Error(
+      'Hay más de un cliente incompleto con ese nombre. Edita el perfil correcto para evitar duplicados.'
+    )
+  }
+  return candidates[0] ?? null
+}
+
+async function createOrCompleteUser(payload: CreateUserPayload): Promise<UserListItem> {
+  const incompleteClient = await findIncompleteClientToComplete(payload)
+  if (!incompleteClient) return postUser(payload)
+
+  return updateUser({
+    id: incompleteClient.id,
+    email: payload.email,
+    names: payload.names,
+    lastnames: payload.lastnames,
+    role: payload.role,
+    document_number: payload.document_number,
+    document_type: payload.document_type,
+    identifications: payload.identifications,
+    profile_image: payload.profile_image,
+    phone: payload.phone,
+    code_phone: payload.code_phone
+  })
+}
+
+/**
+ * Crea un usuario con semántica single-flight: llamadas concurrentes con el
+ * mismo payload comparten un único POST y reciben la misma respuesta.
+ */
+export function createUser(payload: CreateUserPayload): Promise<UserListItem> {
+  const key = createUserRequestKey(payload)
+  const pending = createUserInflight.get(key)
+  if (pending) return pending
+
+  const request = createOrCompleteUser(payload).finally(() => {
+    if (createUserInflight.get(key) === request) createUserInflight.delete(key)
+  })
+  createUserInflight.set(key, request)
+  return request
 }
 
 /** Actualiza un usuario. PUT /user/ (multipart/form-data con id). */

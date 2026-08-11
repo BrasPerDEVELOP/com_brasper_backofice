@@ -164,7 +164,7 @@ export function parseUserListItem(item: unknown): UserListItem | null {
  */
 export function missingProfileFields(user: UserListItem): string[] {
   const missing: string[] = []
-  if (!user.email?.trim()) missing.push('email')
+  if (!hasUsableEmail(user.email)) missing.push('email')
   if (!user.lastnames?.trim()) missing.push('apellidos')
   const hasDocument =
     !!user.document_number?.trim() ||
@@ -175,9 +175,14 @@ export function missingProfileFields(user: UserListItem): string[] {
 }
 
 export function isClientProfileIncomplete(user: UserListItem): boolean {
-  const hasEmail = !!user.email?.trim()
+  const hasEmail = hasUsableEmail(user.email)
   const hasDocument =
     !!user.document_number?.trim() ||
     user.identifications.some((item) => item.document_number.trim() !== '')
   return !hasEmail && !hasDocument
+}
+
+function hasUsableEmail(email: string | undefined): boolean {
+  const normalized = email?.trim()
+  return Boolean(normalized && normalized !== '-')
 }
