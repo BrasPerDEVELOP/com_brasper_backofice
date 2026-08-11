@@ -97,8 +97,10 @@ function rowKeyValue(row: Row, index: number): string {
   <div class="overflow-hidden rounded-2xl border border-[#d8e5fb] bg-white shadow-lg shadow-brasper-indigoStrong/10">
     <AppSpinner v-if="loading" center size="lg" :label="loadingLabel" />
 
+    <!-- `EmptyState` solo expone `icon` y `actions`: enviarlo a `#default` hacía
+         que el slot `empty` no renderizara nunca. -->
     <EmptyState v-else-if="rows.length === 0" :title="emptyTitle" :description="emptyDescription">
-      <template v-if="$slots.empty" #default><slot name="empty" /></template>
+      <template v-if="$slots.empty" #actions><slot name="empty" /></template>
     </EmptyState>
 
     <div v-else class="overflow-x-auto">
