@@ -52,7 +52,7 @@ function parseCoupons(data: unknown): Coupon[] {
 export class CuponesApiAdapter implements CuponesRepository {
   private endpoint(path = ''): string {
     const p = path.replace(/^\/+/, '')
-    return p ? Domain.apiPath(`transactions/coupons/${p}`) : Domain.apiPath('transactions/coupons/')
+    return p ? Domain.apiPath(`transactions/coupons/${p}`) : Domain.apiPath('transactions/coupons')
   }
 
   async getCoupons(): Promise<Coupon[]> {

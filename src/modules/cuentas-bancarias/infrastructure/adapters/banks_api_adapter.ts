@@ -54,12 +54,12 @@ function omitEmptyOptionalBankFields<T extends CreateBankBody | UpdateBankBody>(
 }
 
 /** Rutas relativas al `baseURL` de axios (evita http/https duplicado y 301 en DELETE). */
-const BANKS_COLLECTION_PATH = 'transactions/banks/'
+const BANKS_COLLECTION_PATH = 'transactions/banks'
 
 function bankDetailPath(id: string): string {
   const trimmed = id.replace(/\/$/, '').trim()
   if (!trimmed) throw new Error('Id de banco inválido')
-  return `${BANKS_COLLECTION_PATH}${encodeURIComponent(trimmed)}`
+  return `${BANKS_COLLECTION_PATH}/${encodeURIComponent(trimmed)}`
 }
 
 function parseBank(item: unknown): BankOption | null {

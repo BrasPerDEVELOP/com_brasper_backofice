@@ -56,6 +56,7 @@ const allNavItems = [
 ];
 
 const allBottomNavItems = [
+  { to: "/app/auditoria", label: "Auditoría", icon: "ledger", permission: "audit.view" },
   { to: "/app/roles-permisos", label: "Permisos", icon: "settings", permission: "roles.permissions.view" },
 ];
 
@@ -95,6 +96,7 @@ const breadcrumbs = computed(() => {
     perfil: "Cuenta > Perfil",
     usuarios: "Cuenta > Usuarios",
     "roles-permisos": "Configuración > Permisos de roles",
+    auditoria: "Seguridad > Auditoría",
   };
   return map[name];
 });

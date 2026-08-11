@@ -1,24 +1,17 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/interface/infrastructure/services', () => ({
-  Domain: {
-    apiUrl: (path: string) => `https://api.test/${path}`
-  }
+vi.mock('@/interface/api/client', () => ({
+  apiClient: { request: vi.fn() }
 }))
 
+vi.mock('@/interface/infrastructure/services', () => ({
+  Domain: { apiPath: (path: string) => path.replace(/^\/+|\/+$/g, '') }
+}))
+
+import { apiClient } from '@/interface/api/client'
 import { HomeBannerApiAdapter } from './home_banner_api_adapter'
 
-const ENDPOINT = 'https://api.test/home-banner/home-image/'
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json' }
-  })
-}
-
-function formEntries(init: RequestInit | undefined): Record<string, string> {
-  const body = init?.body
+function formEntries(body: unknown): Record<string, string> {
   if (!(body instanceof FormData)) throw new Error('Expected FormData body')
   const out: Record<string, string> = {}
   for (const [key, value] of body.entries()) {
@@ -37,111 +30,81 @@ const SERVER_BANNER = {
 }
 
 describe('HomeBannerApiAdapter', () => {
-  const fetchMock = vi.fn()
   let adapter: HomeBannerApiAdapter
 
   beforeEach(() => {
     adapter = new HomeBannerApiAdapter()
-    vi.stubGlobal('fetch', fetchMock)
-    fetchMock.mockReset()
+    vi.mocked(apiClient.request).mockReset()
   })
 
-  afterEach(() => {
-    vi.unstubAllGlobals()
+  it('envía PUT multipart por la ruta canónica protegida', async () => {
+    vi.mocked(apiClient.request).mockResolvedValue({ data: SERVER_BANNER })
+    const file = new File(['x'], 'nuevo.webp', { type: 'image/webp' })
+
+    const result = await adapter.updateBanner({
+      id: '42',
+      enable: true,
+      banner_es: file,
+      banner_pr: 'home_banner/pr.webp',
+      banner_en: null
+    })
+
+    const config = vi.mocked(apiClient.request).mock.calls[0]?.[0]
+    expect(config?.url).toBe('home-banner/home-image')
+    expect(config?.method).toBe('PUT')
+    expect(formEntries(config?.data)).toEqual({
+      id: '42',
+      enable: 'true',
+      banner_es: 'file:nuevo.webp',
+      banner_pr: 'home_banner/pr.webp'
+    })
+    expect(result.id).toBe('42')
   })
 
-  describe('updateBanner', () => {
-    it('envía PUT multipart SIN cabecera Authorization', async () => {
-      fetchMock.mockResolvedValue(jsonResponse(SERVER_BANNER))
-      const file = new File(['x'], 'nuevo.webp', { type: 'image/webp' })
-
-      const result = await adapter.updateBanner({
-        id: '42',
-        enable: true,
-        banner_es: file,
-        banner_pr: 'home_banner/pr.webp',
-        banner_en: null
-      })
-
-      expect(fetchMock).toHaveBeenCalledTimes(1)
-      const [url, init] = fetchMock.mock.calls[0]
-      expect(url).toBe(ENDPOINT)
-      expect(init.method).toBe('PUT')
-      // No se manda token: las rutas del banner son públicas.
-      expect(init.headers).toBeUndefined()
-
-      expect(formEntries(init)).toEqual({
-        id: '42',
-        enable: 'true',
-        banner_es: 'file:nuevo.webp',
-        banner_pr: 'home_banner/pr.webp'
-      })
-      expect(result.id).toBe('42')
+  it('propaga el mensaje de error del backend', async () => {
+    vi.mocked(apiClient.request).mockRejectedValue({
+      response: { status: 400, data: { detail: 'archivo inválido' } }
     })
-
-    it('propaga el mensaje de error del backend', async () => {
-      fetchMock.mockResolvedValue(jsonResponse({ detail: 'archivo inválido' }, 400))
-
-      await expect(adapter.updateBanner({ id: '42', enable: true })).rejects.toThrow(
-        'archivo inválido'
-      )
-    })
-
-    it('lanza error cuando la respuesta no contiene un banner válido', async () => {
-      fetchMock.mockResolvedValue(jsonResponse({ ok: true }))
-
-      await expect(adapter.updateBanner({ id: '42', enable: true })).rejects.toThrow(
-        'Respuesta de guardado de banner inválida'
-      )
-    })
-
-    it('desempaqueta el banner cuando viene dentro de data', async () => {
-      fetchMock.mockResolvedValue(jsonResponse({ data: SERVER_BANNER }))
-
-      const result = await adapter.updateBanner({ id: '42', enable: true })
-      expect(result.id).toBe('42')
-      expect(result.banner_es).toBe('home_banner/es.webp')
-    })
+    await expect(adapter.updateBanner({ id: '42', enable: true })).rejects.toThrow(
+      'archivo inválido'
+    )
   })
 
-  describe('createBanner', () => {
-    it('envía POST multipart sin id y sin Authorization', async () => {
-      fetchMock.mockResolvedValue(jsonResponse(SERVER_BANNER))
-      const file = new File(['x'], 'es.webp', { type: 'image/webp' })
-
-      await adapter.createBanner({
-        enable: false,
-        banner_es: file,
-        banner_pr: null,
-        banner_en: null
-      })
-
-      const [url, init] = fetchMock.mock.calls[0]
-      expect(url).toBe(ENDPOINT)
-      expect(init.method).toBe('POST')
-      expect(init.headers).toBeUndefined()
-      const fields = formEntries(init)
-      expect(fields).toEqual({ enable: 'false', banner_es: 'file:es.webp' })
-      expect(fields.id).toBeUndefined()
-    })
+  it('lanza error cuando la respuesta no contiene un banner válido', async () => {
+    vi.mocked(apiClient.request).mockResolvedValue({ data: { ok: true } })
+    await expect(adapter.updateBanner({ id: '42', enable: true })).rejects.toThrow(
+      'Respuesta de guardado de banner inválida'
+    )
   })
 
-  describe('getBanner', () => {
-    it('hace GET sin token y devuelve el primer elemento de un arreglo', async () => {
-      fetchMock.mockResolvedValue(jsonResponse([SERVER_BANNER]))
+  it('desempaqueta el banner cuando viene dentro de data', async () => {
+    vi.mocked(apiClient.request).mockResolvedValue({ data: { data: SERVER_BANNER } })
+    const result = await adapter.updateBanner({ id: '42', enable: true })
+    expect(result.id).toBe('42')
+  })
 
-      const result = await adapter.getBanner()
+  it('envía POST multipart sin id', async () => {
+    vi.mocked(apiClient.request).mockResolvedValue({ data: SERVER_BANNER })
+    const file = new File(['x'], 'es.webp', { type: 'image/webp' })
+    await adapter.createBanner({ enable: false, banner_es: file, banner_pr: null, banner_en: null })
 
-      const [url, init] = fetchMock.mock.calls[0]
-      expect(url).toBe(ENDPOINT)
-      expect(init.method).toBe('GET')
-      expect(init.headers).toBeUndefined()
-      expect(result?.id).toBe('42')
+    const config = vi.mocked(apiClient.request).mock.calls[0]?.[0]
+    expect(config?.method).toBe('POST')
+    expect(formEntries(config?.data)).toEqual({ enable: 'false', banner_es: 'file:es.webp' })
+  })
+
+  it('hace GET público y devuelve el primer elemento', async () => {
+    vi.mocked(apiClient.request).mockResolvedValue({ data: [SERVER_BANNER] })
+    const result = await adapter.getBanner()
+    expect(vi.mocked(apiClient.request).mock.calls[0]?.[0]).toMatchObject({
+      url: 'home-banner/home-image',
+      method: 'GET'
     })
+    expect(result?.id).toBe('42')
+  })
 
-    it('devuelve null cuando no hay banner', async () => {
-      fetchMock.mockResolvedValue(jsonResponse(null))
-      expect(await adapter.getBanner()).toBeNull()
-    })
+  it('devuelve null cuando no hay banner', async () => {
+    vi.mocked(apiClient.request).mockResolvedValue({ data: null })
+    expect(await adapter.getBanner()).toBeNull()
   })
 })

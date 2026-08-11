@@ -3,7 +3,6 @@ import {
   ALL_PERMISSIONS,
   getDefaultPermissionsForRole,
   isAdminRole,
-  normalizePermissions,
   normalizeStoredRole,
   type PermissionKey,
   type User
@@ -11,51 +10,13 @@ import {
 import type { UpdateProfilePayload } from '../../infrastructure/adapters/auth_repository'
 import { LoginUseCase } from '../../application/use_cases'
 import { AuthApiAdapter } from '../../infrastructure/adapters'
+import { refreshAccessToken } from '@/interface/api/client'
 
 interface AuthState {
   user: User | null
   token: string | null
   isLoading: boolean
   error: string | null
-}
-
-const TOKEN_KEY = 'token'
-const USER_KEY = 'auth_user'
-
-function loadStoredUser(): User | null {
-  try {
-    const raw = localStorage.getItem(USER_KEY)
-    if (!raw) return null
-    const data = JSON.parse(raw) as unknown
-    if (data === null || typeof data !== 'object') return null
-    const o = data as Record<string, unknown>
-    if (o.id == null || o.email == null) return null
-    const names = o.names != null ? String(o.names) : null
-    const lastnames = o.lastnames != null ? String(o.lastnames) : null
-    const email = String(o.email)
-    const name = [names, lastnames].filter(Boolean).join(' ') || email
-    const phoneVal = o.phone
-    const phone = typeof phoneVal === 'number' ? phoneVal : (typeof phoneVal === 'string' && phoneVal ? Number(phoneVal) : null)
-    const roleNorm = normalizeStoredRole(o.role)
-    return {
-      id: String(o.id),
-      email,
-      names,
-      lastnames,
-      name,
-      document_number: o.document_number != null ? String(o.document_number) : null,
-      document_type: o.document_type != null ? String(o.document_type) : null,
-      profile_image: o.profile_image != null ? String(o.profile_image) : null,
-      is_agent: Boolean(o.is_agent),
-      role: roleNorm,
-      phone: Number.isFinite(phone) ? phone : null,
-      code_phone: o.code_phone != null ? String(o.code_phone) : null,
-      permissions: normalizePermissions(o.permissions, roleNorm),
-      must_change_password: Boolean(o.must_change_password)
-    }
-  } catch {
-    return null
-  }
 }
 
 /** Construye el payload para PUT /user/ (FormData). Si changes.profile_image es File, se envía para actualizar la imagen. */
@@ -79,8 +40,6 @@ function buildPutPayload(
     profile_image: changes.profile_image instanceof File ? changes.profile_image : undefined,
     document_number: (changes.document_number ?? user.document_number ?? '').trim() || undefined,
     document_type: (changes.document_type ?? user.document_type ?? '').trim() || undefined,
-    is_agent: user.is_agent,
-    role: user.role ?? undefined,
     phone: changes.phone ?? user.phone ?? undefined,
     code_phone: (changes.code_phone ?? user.code_phone ?? '').trim() || undefined
   }
@@ -89,7 +48,7 @@ function buildPutPayload(
 export const useAuthStore = defineStore('auth', {
   state: (): AuthState => ({
     user: null,
-    token: localStorage.getItem(TOKEN_KEY),
+    token: null,
     isLoading: false,
     error: null
   }),
@@ -97,29 +56,29 @@ export const useAuthStore = defineStore('auth', {
   getters: {
     isAuthenticated: (state) => state.user !== null,
     isAdmin: (state) => isAdminRole(state.user?.role),
+    // `parseUser` ya sustituye una lista vacía por los defaults del rol, así que
+    // aquí solo queda cubrir el caso sin usuario cargado.
     permissions: (state) =>
-      state.user?.permissions?.length
-        ? state.user.permissions
-        : getDefaultPermissionsForRole(state.user?.role)
+      state.user?.permissions ?? getDefaultPermissionsForRole(state.user?.role)
   },
 
   actions: {
     setSession(user: User, token: string) {
       this.user = user
       this.token = token
-      localStorage.setItem(TOKEN_KEY, token)
-      localStorage.setItem(USER_KEY, JSON.stringify(user))
+    },
+
+    setAccessToken(token: string | null) {
+      this.token = token
     },
 
     clearSession() {
       this.user = null
       this.token = null
       this.error = null
-      localStorage.removeItem(TOKEN_KEY)
-      localStorage.removeItem(USER_KEY)
     },
 
-    /** Permite al controlador establecer errores desde flujos externos (SSO, validaciones). */
+    /** Permite al controlador establecer errores desde validaciones de acceso. */
     setError(message: string | null) {
       this.error = message
     },
@@ -178,44 +137,31 @@ export const useAuthStore = defineStore('auth', {
     },
 
     async logout() {
-      this.clearSession()
       const repository = new AuthApiAdapter()
-      await repository.logout()
-    },
-
-    restoreUser() {
-      const token = localStorage.getItem(TOKEN_KEY)
-      if (!token) return
-      this.token = token
-      const user = loadStoredUser()
-      this.user = user
-      if (!user) {
-        this.token = null
-        localStorage.removeItem(TOKEN_KEY)
-        localStorage.removeItem(USER_KEY)
+      try {
+        await repository.logout()
+      } finally {
+        this.clearSession()
       }
     },
 
     /**
-     * Valida la sesión en el backend (GET /user/{id}).
-     * Si hay token y user.id, obtiene el usuario actual.
+     * Restaura la sesión desde la cookie HttpOnly y valida el usuario en el API.
      */
-    async restoreSession(): Promise<void> {
-      const token = this.token ?? localStorage.getItem(TOKEN_KEY)
-      if (!token) return
-      this.token = token
-      const storedUser = loadStoredUser()
-      if (!storedUser?.id) return
+    async restoreSession(): Promise<boolean> {
+      if (this.token && this.user) return true
       try {
+        if (!this.token) this.token = await refreshAccessToken()
         const repository = new AuthApiAdapter()
-        const user = await repository.getCurrentUser(storedUser.id)
+        const user = await repository.getCurrentUser('current')
         if (user) {
           this.user = user
-          localStorage.setItem(USER_KEY, JSON.stringify(user))
+          return true
         }
       } catch {
-        // Errores de red u otros
+        this.clearSession()
       }
+      return false
     },
 
     async updateProfile(changes: {
@@ -236,7 +182,6 @@ export const useAuthStore = defineStore('auth', {
         const user = await repository.updateProfile(payload)
         if (user) {
           this.user = user
-          localStorage.setItem(USER_KEY, JSON.stringify(user))
         }
       } catch (e: unknown) {
         const err = e as { response?: { status?: number; data?: unknown } }
@@ -271,7 +216,6 @@ export const useAuthStore = defineStore('auth', {
         await repository.changePassword(payload)
         if (this.user?.must_change_password) {
           this.user = { ...this.user, must_change_password: false }
-          localStorage.setItem(USER_KEY, JSON.stringify(this.user))
         }
       } catch (e: unknown) {
         const err = e as { response?: { status?: number; data?: unknown } }

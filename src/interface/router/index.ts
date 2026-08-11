@@ -16,6 +16,7 @@ function firstPermittedAppPath(authStore: ReturnType<typeof useAuthStore>): stri
     { path: '/app/cuentas-brasper', permission: 'company_bank_accounts.view' },
     { path: '/app/etiquetas', permission: 'tags.view' },
     { path: '/app/home-banner', permission: 'home_banner.view' },
+    { path: '/app/auditoria', permission: 'audit.view' },
     { path: '/app/blog', permission: 'blog.view' },
     { path: '/app/roles-permisos', permission: 'roles.permissions.view' },
     { path: '/app/perfil', permission: 'profile.view' }
@@ -138,6 +139,12 @@ const routes: RouteRecordRaw[] = [
         meta: { breadcrumb: 'Configuración > Permisos de roles', permission: 'roles.permissions.view' }
       },
       {
+        path: 'auditoria',
+        name: 'auditoria',
+        component: () => import('@modules/auditoria/presentation/bodies/auditoria_view.vue'),
+        meta: { breadcrumb: 'Seguridad > Auditoría', permission: 'audit.view' }
+      },
+      {
         path: 'perfil',
         name: 'perfil',
         component: () => import('@modules/auth/presentation/bodies/profile_view.vue'),
@@ -165,6 +172,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/home-banner', redirect: '/app/home-banner' },
   { path: '/blog', redirect: '/app/blog' },
   { path: '/roles-permisos', redirect: '/app/roles-permisos' },
+  { path: '/auditoria', redirect: '/app/auditoria' },
   { path: '/calculator', redirect: '/app/calculator' },
   { path: '/cupones', redirect: '/app/cupones' },
   { path: '/contabilidad', redirect: '/app/contabilidad' },
@@ -190,20 +198,13 @@ router.beforeEach(async (to) => {
   }
   
   if (to.meta.requiresAuth) {
-    authStore.restoreUser()
-
-    if (!authStore.token) {
+    const restored = await authStore.restoreSession()
+    if (!restored || !authStore.user) {
       return { path: '/' }
     }
 
-    if (!authStore.user) {
-      await authStore.logout()
-      return { path: '/' }
-    }
-
-    // B1 (Fase B) — el rol `client` (o cuentas sin permisos de backoffice) se
-    // bloquea también cuando la sesión se restaura desde localStorage, no solo
-    // en el login. Preservamos el motivo para mostrarlo en la pantalla de login.
+    // El rol `client` (o cuentas sin permisos de backoffice) se bloquea también
+    // al restaurar la sesión desde la cookie HttpOnly.
     if (!authStore.validateBackofficeAccess()) {
       const reason = authStore.error
       await authStore.logout()

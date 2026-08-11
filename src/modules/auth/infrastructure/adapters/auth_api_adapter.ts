@@ -1,4 +1,5 @@
 import { apiClient } from '@/interface/api/client'
+import { Domain } from '@/interface/infrastructure/services'
 import { createLoggerWithContext } from '@/interface/infrastructure/logger'
 import type {
   AuthRepository,
@@ -14,7 +15,7 @@ const log = createLoggerWithContext('auth')
 /** Rutas relativas al `baseURL` de axios (siempre HTTPS vía `.env` + interceptor). */
 function authPath(subpath: string): string {
   const segment = subpath.replace(/^\/+/, '').replace(/\/+$/, '')
-  return segment ? `auth/${segment}/` : 'auth/'
+  return Domain.apiPath(segment ? `auth/${segment}` : 'auth')
 }
 
 export class AuthApiAdapter implements AuthRepository {
@@ -116,8 +117,6 @@ export class AuthApiAdapter implements AuthRepository {
     if (payload.email != null && payload.email !== '') body.email = payload.email
     if (payload.document_number != null && payload.document_number !== '') body.document_number = payload.document_number
     if (payload.document_type != null && payload.document_type !== '') body.document_type = payload.document_type
-    if (payload.is_agent != null) body.is_agent = payload.is_agent
-    if (payload.role != null && payload.role !== '') body.role = payload.role
     if (payload.phone != null) body.phone = payload.phone
     if (payload.code_phone != null && payload.code_phone !== '') body.code_phone = payload.code_phone
     if (profileImage) body.profile_image = profileImage

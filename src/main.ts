@@ -5,6 +5,7 @@ import App from './App.vue'
 import { router } from '@/interface/router'
 import { setAuthCallbacks } from '@/interface/api/client'
 import { useAuthStore } from '@modules/auth/presentation/controllers/use_auth_store_controller'
+import { purgeLegacySession } from '@modules/auth/infrastructure/purge_legacy_session'
 import { env } from '@/interface/config/env'
 import '@/interface/styles/main.css'
 
@@ -22,6 +23,9 @@ if (import.meta.env.DEV && 'serviceWorker' in navigator) {
   }
 }
 
+// Antes de montar: retira el token y el perfil que dejaron versiones previas.
+purgeLegacySession()
+
 const pinia = createPinia()
 const app = createApp(App)
 app.use(pinia)
@@ -33,6 +37,7 @@ setAuthCallbacks(
     const store = useAuthStore()
     return store.token ?? null
   },
+  (token) => useAuthStore().setAccessToken(token),
   () => {
     useAuthStore().clearSession()
     router.push('/')

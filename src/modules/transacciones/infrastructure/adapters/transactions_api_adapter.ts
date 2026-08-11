@@ -1,8 +1,4 @@
-import {
-  apiClient,
-  getApiAuthHeaders,
-  triggerUnauthorized
-} from '@/interface/api/client'
+import { apiClient } from '@/interface/api/client'
 import { formatApiErrorBody } from '@/interface/api/format_api_error'
 import { Domain } from '@/interface/infrastructure/services'
 import { env } from '@/interface/config/env'
@@ -29,7 +25,7 @@ import {
 export class TransactionsApiAdapter implements TransactionsRepository {
   private endpoint(path: string): string {
     const p = path.replace(/^\/+/, '')
-    return p ? Domain.apiPath(`transactions/${p}`) : Domain.apiPath('transactions/')
+    return p ? Domain.apiPath(`transactions/${p}`) : Domain.apiPath('transactions')
   }
 
   async getTransactions(params?: GetTransactionsParams): Promise<PagedTransactions> {
@@ -176,40 +172,16 @@ export class TransactionsApiAdapter implements TransactionsRepository {
       formData.append('social_reason_bank_id', payload.social_reason_bank_id.trim())
     }
 
-    /**
-     * `fetch` + FormData evita que axios 1.x deje `Content-Type: application/json`
-     * y corrompa el multipart (400 del servidor al subir archivos).
-     */
-    const res = await fetch(Domain.apiUrl(this.endpoint('')), {
-      method: 'POST',
-      body: formData,
-      headers: getApiAuthHeaders()
-    })
-
-    const ct = res.headers.get('content-type') ?? ''
-    let raw: unknown = null
-    if (ct.includes('application/json')) {
-      raw = await res.json().catch(() => null)
-    } else {
-      const text = await res.text().catch(() => '')
-      if (text) {
-        try {
-          raw = JSON.parse(text)
-        } catch {
-          raw = text
-        }
-      }
-    }
-
-    if (res.status === 401) {
-      triggerUnauthorized()
-      throw new Error('Sesión expirada o no autorizado')
-    }
-
-    if (!res.ok) {
-      const msg =
-        formatApiErrorBody(raw) ?? `Error al crear transacción (${res.status})`
-      throw new Error(msg)
+    let raw: unknown
+    try {
+      const response = await apiClient.post<unknown>(this.endpoint(''), formData)
+      raw = response.data
+    } catch (error: unknown) {
+      const response = (error as { response?: { status?: number; data?: unknown } }).response
+      const message =
+        formatApiErrorBody(response?.data) ??
+        `Error al crear transacción (${response?.status ?? 'sin respuesta'})`
+      throw new Error(message)
     }
 
     const obj = raw != null && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
@@ -276,7 +248,7 @@ export class TransactionsApiAdapter implements TransactionsRepository {
 
   async importFromExcel(file: File): Promise<unknown> {
     const path = env.transactionsImportPath
-    const url = path ? Domain.apiPath(path) : this.endpoint('import/')
+    const url = path ? Domain.apiPath(path) : this.endpoint('import')
     const ext = file.name.toLowerCase().split('.').pop() ?? ''
     let payload: { items: unknown[] }
 

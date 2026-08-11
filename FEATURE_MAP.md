@@ -23,21 +23,22 @@ Vue View (*_view.vue)
 
 | Módulo | Ruta Vue | Permiso view | Store Pinia | Adapter principal | API path (Domain.apiPath) | Capas |
 |--------|----------|--------------|-------------|-------------------|---------------------------|-------|
-| auth / login | `/` | público | `useAuthStore` | `auth_api_adapter` | `auth/login/` | Completo |
+| auth / login | `/` | público | `useAuthStore` | `auth_api_adapter` | `auth/login` | Completo |
 | dashboard | `/app/dashboard` | `dashboard.view` | — (multi-store) | varios | — | Solo presentation ⚠️ |
 | metrics | `/app/metricas` | `metrics.view` | `use_metrics_store` | `metrics_api_adapter` | `env.metricsWeeklyPath` | Completo |
-| transacciones | `/app/transacciones` | `transactions.view` | `use_transactions_store` | `transactions_api_adapter` | `transactions/` | Completo — **god view** |
+| transacciones | `/app/transacciones` | `transactions.view` | `use_transactions_store` | `transactions_api_adapter` | `transactions` | Completo — **god view** |
 | contabilidad | `/app/contabilidad` | `accounting.view` | — | — | — | Solo presentation ⚠️ |
 | calculator | `/app/calculator` | `calculator.view` | `useCalculatorStore` | `calculator_api_adapter` | `coin/{path}` | Completo |
-| cupones | `/app/cupones` | `coupons.view` | `use_cupones_store` | `cupones_api_adapter` | `transactions/coupons/` | Completo |
-| comisiones | `/app/comisiones` | `commissions.view` | `use_comisiones_store` | `comisiones_api_adapter` | `coin/` | Completo |
-| auth / usuarios + cuentas | `/app/usuarios` | `users.view` o `bank_accounts.view` | auth store + `use_cuentas_bancarias_store` | `users_management_api_adapter` + `cuentas_bancarias_api_adapter` | `user/` + `transactions/bank-accounts/` | Completo — workspace unificado; `/app/cuentas` redirige aquí |
-| cuentas Brasper | `/app/cuentas-brasper` | `company_bank_accounts.view` | `use_cuentas_bancarias_store` (catálogo) | `banks_api_adapter` | `transactions/banks/` | Completo — CRUD corporativo de razón social, banco, moneda, país y cuenta |
-| tasas | `/app/tasas` | `rates.view` | `use_tasas_store` | `tasas_api_adapter` | `coin/` | Completo |
+| cupones | `/app/cupones` | `coupons.view` | `use_cupones_store` | `cupones_api_adapter` | `transactions/coupons` | Completo |
+| comisiones | `/app/comisiones` | `commissions.view` | `use_comisiones_store` | `comisiones_api_adapter` | `coin` | Completo |
+| auth / usuarios + cuentas | `/app/usuarios` | `users.view` o `bank_accounts.view` | auth store + `use_cuentas_bancarias_store` | `users_management_api_adapter` + `cuentas_bancarias_api_adapter` | `user` + `transactions/bank-accounts` | Completo — workspace unificado; `/app/cuentas` redirige aquí |
+| cuentas Brasper | `/app/cuentas-brasper` | `company_bank_accounts.view` | `use_cuentas_bancarias_store` (catálogo) | `banks_api_adapter` | `transactions/banks` | Completo — CRUD corporativo de razón social, banco, moneda, país y cuenta |
+| tasas | `/app/tasas` | `rates.view` | `use_tasas_store` | `tasas_api_adapter` | `coin` | Completo |
 | home-banner | `/app/home-banner` | `home_banner.view` | — | `home_banner_api_adapter` | (ver adapter) | Sin application ⚠️ |
-| blog | `/app/blog` | `blog.view` | — | `blog_api_adapter` | `blog/` | Sin application ⚠️ |
-| auth / roles | `/app/roles-permisos` | `roles.permissions.view` | auth store | `role_permissions_api_adapter` | `roles/permissions/` | Completo |
+| blog | `/app/blog` | `blog.view` | — | `blog_api_adapter` | `blog` | Sin application ⚠️ |
+| auth / roles | `/app/roles-permisos` | `roles.permissions.view` | auth store | `role_permissions_api_adapter` | `roles/permissions` | Completo |
 | auth / perfil | `/app/perfil` | `profile.view` | auth store | `auth_api_adapter` | `env.authProfilePath` | Completo |
+| auditoría | `/app/auditoria` | `audit.view` | `useAuditStore` | `audit_api_adapter` | `audit/events` + `audit/logins` | Completo; solo lectura |
 
 ### Módulos stub — ELIMINADOS (Fase B ✅)
 
@@ -59,6 +60,8 @@ No confundir con los reales `transacciones`, `cuentas-bancarias`, `auth/usuarios
 | blog | `.create` | `.update` | `.delete` | |
 | users | `.create` | `.update` | `.delete` | `.reset_password` |
 | home_banner | — | `.update` | — | |
+| integrations | `.create` | `.update` | `.delete` | administración API |
+| contact_forms | — | — | — | `.view` para datos recibidos |
 
 **Gate UI (Fase B ✅):** botones mutables gateados con `auth.hasPermission('module.action')`
 en transacciones, cupones, comisiones, tasas, cuentas, blog, banner, usuarios (+ guards
@@ -71,7 +74,7 @@ defensivos en los handlers).
 | Quirk | Dónde | Nota |
 |-------|-------|------|
 | PUT transaction `id` en body | `transactions_api_adapter.ts` | No en URL path |
-| FormData POST transaction | adapter + `fetch` | No axios (boundary) |
+| FormData POST transaction | `transactions_api_adapter.ts` + `apiClient` | El interceptor elimina `Content-Type` para que axios genere el boundary |
 | Field aliases | adapters | `resultado_comision` ↔ `commission_result` |
 | Razón social exacta | `social_reason_bank_id` | FK independiente; `bank_id` sigue perteneciendo a la cuenta destino |
 | Múltiples cuentas destino | `destinations[]` | Lista cuenta+monto; `bank_account_destination_id` conserva el primer destino por compatibilidad |

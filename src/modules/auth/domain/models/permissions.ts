@@ -119,6 +119,26 @@ export const PERMISSION_MODULES = [
     ]
   },
   {
+    key: 'audit',
+    label: 'Auditoría',
+    permissions: [{ key: 'audit.view', label: 'Ver' }]
+  },
+  {
+    key: 'contact_forms',
+    label: 'Formularios de contacto',
+    permissions: [{ key: 'contact_forms.view', label: 'Ver' }]
+  },
+  {
+    key: 'integrations',
+    label: 'Integraciones',
+    permissions: [
+      { key: 'integrations.view', label: 'Ver' },
+      { key: 'integrations.create', label: 'Crear' },
+      { key: 'integrations.update', label: 'Editar' },
+      { key: 'integrations.delete', label: 'Eliminar' }
+    ]
+  },
+  {
     key: 'blog',
     label: 'Blog',
     permissions: [

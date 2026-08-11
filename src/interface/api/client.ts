@@ -1,150 +1,171 @@
-import axios, { type AxiosInstance, AxiosHeaders, type InternalAxiosRequestConfig } from 'axios'
+import axios, {
+  AxiosHeaders,
+  type AxiosError,
+  type AxiosInstance,
+  type InternalAxiosRequestConfig
+} from 'axios'
+import { Domain } from '@/interface/infrastructure/services'
+import { createLoggerWithContext } from '@/interface/infrastructure/logger'
 
 declare module 'axios' {
   interface AxiosRequestConfig {
     skipAuthRedirect?: boolean
   }
 }
-import { Domain } from '@/interface/infrastructure/services'
-import { createLoggerWithContext } from '@/interface/infrastructure/logger'
 
 const log = createLoggerWithContext('api')
 
-/** Proveedor de token (ej. desde store o localStorage). */
 export type GetTokenFn = () => string | null
-
-/** Callback cuando el backend responde 401 (token inválido/expirado). */
+export type SetTokenFn = (token: string | null) => void
 export type OnUnauthorizedFn = () => void
 
-let getToken: GetTokenFn = () =>
-  typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null
-let onUnauthorized: OnUnauthorizedFn = () => {
-  if (typeof localStorage !== 'undefined') {
-    localStorage.removeItem('token')
-    localStorage.removeItem('auth_user')
-  }
-  if (typeof window !== 'undefined') window.location.href = '/'
+interface RetriableRequestConfig extends InternalAxiosRequestConfig {
+  _authRetry?: boolean
+  skipAuthRedirect?: boolean
 }
 
-/**
- * Configura callbacks de auth. Llamar desde main.ts tras crear Pinia y Router
- * para usar el store y redirigir con Vue Router.
- */
+let getToken: GetTokenFn = () => null
+let setToken: SetTokenFn = () => undefined
+let onUnauthorized: OnUnauthorizedFn = () => undefined
+
 export function setAuthCallbacks(
   tokenFn: GetTokenFn,
+  tokenSetter: SetTokenFn,
   unauthorizedFn: OnUnauthorizedFn
 ): void {
   getToken = tokenFn
+  setToken = tokenSetter
   onUnauthorized = unauthorizedFn
 }
 
 const AUTH_PREFIX = (import.meta.env.VITE_AUTH_HEADER_PREFIX as string)?.trim() || 'Bearer'
 
-/** Base HTTPS del API desde `.env` (`VITE_API_BASE_URL` o `VITE_DOMAIN`). */
 export function getApiBaseUrl(): string {
   return Domain.buildBaseUrl()
 }
 
-/** Path relativo sin barra inicial (para combinar con base). */
 function toRelativePath(url: string | undefined): string {
   if (!url?.trim()) return ''
   const raw = url.trim()
-  if (!/^https?:\/\//i.test(raw)) {
-    return raw.replace(/^\/+/, '')
-  }
+  if (!/^https?:\/\//i.test(raw)) return Domain.apiPath(raw)
   try {
     const parsed = new URL(Domain.ensureHttpsUrl(raw))
-    const path = parsed.pathname.replace(/^\//, '')
-    return (path || '') + parsed.search
+    return Domain.apiPath(`${parsed.pathname}${parsed.search}${parsed.hash}`)
   } catch {
-    return raw.replace(/^\/+/, '')
+    return Domain.apiPath(raw)
   }
 }
 
-/**
- * Cada petición usa URL absoluta HTTPS.
- * Evita que axios reutilice un baseURL en http (p. ej. .env antiguo sin reiniciar Vite).
- */
-function applyHttpsRequestUrl(config: InternalAxiosRequestConfig): void {
-  const base = getApiBaseUrl()
+function applyApiRequestUrl(config: InternalAxiosRequestConfig): void {
   const relative = toRelativePath(config.url)
-  const absolute = relative ? Domain.apiUrl(relative) : base
   config.baseURL = ''
-  config.url = absolute
+  config.url = relative ? Domain.apiUrl(relative) : getApiBaseUrl()
+}
+
+function targetsApi(config: Pick<InternalAxiosRequestConfig, 'url' | 'baseURL'>): boolean {
+  try {
+    return new URL(config.url ?? '', config.baseURL || getApiBaseUrl()).origin ===
+      new URL(getApiBaseUrl()).origin
+  } catch {
+    return false
+  }
+}
+
+function canonicalRequestPath(config: Pick<InternalAxiosRequestConfig, 'url' | 'baseURL'>): string {
+  try {
+    return new URL(config.url ?? '', config.baseURL || getApiBaseUrl()).pathname.replace(/\/+$/, '')
+  } catch {
+    return ''
+  }
 }
 
 export const apiClient: AxiosInstance = axios.create({
   timeout: 30_000,
-  headers: {
-    'Content-Type': 'application/json'
-  }
+  headers: { 'Content-Type': 'application/json' }
 })
 
-/** Para `fetch` + FormData: misma auth que axios, sin Content-Type (boundary del navegador). */
-export function getApiAuthHeaders(): HeadersInit {
-  const token = getToken()
-  if (!token) return {}
-  return { Authorization: `${AUTH_PREFIX} ${token}` }
+const refreshClient = axios.create({ timeout: 30_000 })
+let refreshPromise: Promise<string> | null = null
+
+async function requestNewAccessToken(): Promise<string> {
+  const response = await refreshClient.post<unknown>(Domain.apiUrl('auth/refresh'), null, {
+    withCredentials: true,
+    headers: { 'X-Client-App': 'backoffice' }
+  })
+  const payload = response.data as Record<string, unknown> | null
+  const token = payload && typeof payload.access_token === 'string' ? payload.access_token : ''
+  if (!token) throw new Error('La renovación no devolvió un access token')
+  setToken(token)
+  return token
+}
+
+/** Comparte una única renovación entre todas las peticiones 401 concurrentes. */
+export async function refreshAccessToken(): Promise<string> {
+  if (!refreshPromise) {
+    refreshPromise = requestNewAccessToken().finally(() => {
+      refreshPromise = null
+    })
+  }
+  return refreshPromise
 }
 
 export function triggerUnauthorized(): void {
+  setToken(null)
   onUnauthorized()
 }
 
 apiClient.interceptors.request.use(
   (config) => {
-    applyHttpsRequestUrl(config)
-
-    const token = getToken()
-    if (token) {
-      config.headers.Authorization = `${AUTH_PREFIX} ${token}`
+    applyApiRequestUrl(config)
+    const isApi = targetsApi(config)
+    config.withCredentials = isApi
+    if (isApi) {
+      config.headers.set('X-Client-App', 'backoffice')
+      const token = getToken()
+      if (token) config.headers.set('Authorization', `${AUTH_PREFIX} ${token}`)
+    } else {
+      config.headers.delete('Authorization')
     }
     if (config.data instanceof FormData) {
-      const headers = AxiosHeaders.from(config.headers ?? {})
+      const headers = AxiosHeaders.from(config.headers)
       headers.delete('Content-Type')
       config.headers = headers
     }
     if (import.meta.env.DEV && config.url) {
-      const method = (config.method ?? 'GET').toUpperCase()
-      log.debug(`${method} ${config.url}`, config.params ?? '')
+      log.debug(`${(config.method ?? 'GET').toUpperCase()} ${config.url}`, config.params ?? '')
     }
     return config
   },
-  (err) => {
-    log.error('Request error', err)
-    return Promise.reject(err)
-  }
+  (error: unknown) => Promise.reject(error)
 )
 
 apiClient.interceptors.response.use(
   (response) => response,
-  (err) => {
-    const status = err.response?.status
-    const url = err.config?.url ?? err.request?.url
-    const skipAuthRedirect = (err.config as { skipAuthRedirect?: boolean })?.skipAuthRedirect === true
+  async (error: AxiosError) => {
+    const config = error.config as RetriableRequestConfig | undefined
+    const status = error.response?.status
+    const path = config ? canonicalRequestPath(config) : ''
+    const isAuthEntryPoint = path.endsWith('/auth/login') || path.endsWith('/auth/refresh')
 
-    if (status === 401 && !skipAuthRedirect) {
-      log.warn('401 Unauthorized', url, '→ cerrando sesión')
-      onUnauthorized()
-      return Promise.reject(err)
+    if (status === 401 && config && targetsApi(config) && !config._authRetry && !isAuthEntryPoint) {
+      config._authRetry = true
+      try {
+        const token = await refreshAccessToken()
+        config.headers.set('Authorization', `${AUTH_PREFIX} ${token}`)
+        return await apiClient.request(config)
+      } catch (refreshError) {
+        setToken(null)
+        if (!config.skipAuthRedirect) onUnauthorized()
+        return Promise.reject(refreshError)
+      }
     }
 
     log.error(
       'API error',
-      status ?? err.code ?? 'network',
-      url,
-      err.response?.data ?? err.message
+      status ?? error.code ?? 'network',
+      config?.url ?? error.request?.responseURL,
+      error.response?.data ?? error.message
     )
-    return Promise.reject(err)
+    return Promise.reject(error)
   }
 )
-
-if (import.meta.env.DEV) {
-  const raw = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim()
-  if (raw?.toLowerCase().startsWith('http://')) {
-    console.warn(
-      '[api] VITE_API_BASE_URL usa http://; las peticiones se fuerzan a HTTPS. ' +
-        'Actualiza .env y reinicia `npm run dev`.'
-    )
-  }
-}

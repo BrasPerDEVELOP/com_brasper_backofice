@@ -112,21 +112,9 @@ export const env = {
     return getEnv('VITE_LOG_LEVEL', import.meta.env.PROD ? 'warn' : 'debug')
   },
 
-  /** Secreto compartido para descifrar redirección SSO admin. */
-  get adminRedirectSecret(): string {
-    return getEnv('VITE_ADMIN_REDIRECT_SECRET', '')
-  },
-
-  /** Ventana máxima (segundos) para aceptar payload SSO. */
-  get adminSsoMaxAgeSeconds(): number {
-    const raw = getEnv('VITE_ADMIN_SSO_MAX_AGE_SECONDS', '60')
-    const parsed = Number(raw)
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 60
-  },
-
   /** Ruta del endpoint de importación de transacciones. Si vacío, no hay import masivo. */
   get transactionsImportPath(): string {
-    return getEnv('VITE_TRANSACTIONS_IMPORT_PATH', 'transactions/import/')
+    return getEnv('VITE_TRANSACTIONS_IMPORT_PATH', 'transactions/import')
   },
 
   /** Ruta del endpoint de métricas semanales. Por defecto: metrics/weekly */

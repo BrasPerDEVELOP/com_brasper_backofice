@@ -1,4 +1,5 @@
 import { formatApiErrorBody } from '@/interface/api/format_api_error'
+import { apiClient } from '@/interface/api/client'
 import { Domain } from '@/interface/infrastructure/services'
 import type {
   HomeBannerRepository,
@@ -7,7 +8,7 @@ import type {
 } from './home_banner_repository'
 import type { HomeBanner } from '../../domain/models'
 
-const PATH = 'home-banner/home-image/'
+const PATH = 'home-banner/home-image'
 
 function parseBanner(raw: unknown): HomeBanner | null {
   if (raw == null || typeof raw !== 'object') return null
@@ -34,35 +35,22 @@ function appendBannerField(form: FormData, key: string, value: File | string | n
   if (value != null && value !== '') form.append(key, value)
 }
 
-async function parseJsonResponse(res: Response): Promise<unknown> {
-  const ct = res.headers.get('content-type') ?? ''
-  if (ct.includes('application/json')) {
-    return res.json().catch(() => null)
-  }
-  const text = await res.text().catch(() => '')
-  if (!text) return null
-  try {
-    return JSON.parse(text)
-  } catch {
-    return text
-  }
-}
-
-/**
- * Los endpoints del banner son públicos (sin token). Se usa `fetch` sin cabecera
- * `Authorization` a propósito: enviar un token haría que el backend intente
- * validarlo y respondería "Not authenticated". Tampoco se toca la sesión global.
- */
+/** GET es público; POST/PUT usan la sesión y renovación central del apiClient. */
 async function requestBanner(method: 'GET' | 'POST' | 'PUT', form?: FormData): Promise<unknown> {
-  const res = await fetch(Domain.apiUrl(PATH), {
-    method,
-    body: form
-  })
-  const raw = await parseJsonResponse(res)
-  if (!res.ok) {
-    throw new Error(formatApiErrorBody(raw) ?? `Error al procesar el banner (${res.status})`)
+  try {
+    const response = await apiClient.request<unknown>({
+      url: Domain.apiPath(PATH),
+      method,
+      data: form
+    })
+    return response.data
+  } catch (error: unknown) {
+    const response = (error as { response?: { status?: number; data?: unknown } }).response
+    throw new Error(
+      formatApiErrorBody(response?.data) ??
+        `Error al procesar el banner (${response?.status ?? 'sin respuesta'})`
+    )
   }
-  return raw
 }
 
 function parseBannerResponse(raw: unknown): HomeBanner {

@@ -10,7 +10,7 @@ function isLocalApiHost(hostOrDomain: string): boolean {
   )
 }
 
-/** Fuerza https en hosts remotos (sin quitar barras finales de rutas Django). */
+/** Fuerza https en hosts remotos. */
 function ensureHttpsUrl(url: string): string {
   const trimmed = url.trim()
   if (!trimmed) return trimmed
@@ -59,16 +59,21 @@ function buildBaseUrl(): string {
 }
 
 /**
- * Path relativo para axios (`baseURL` + path).
- * Ej: apiPath('auth/login/') → 'auth/login/'
+ * Path relativo canónico para axios (`baseURL` + path).
+ * Conserva query/fragmento, pero la ruta no empieza ni termina en `/`.
+ * Ej: apiPath('/auth/login/?next=app') → 'auth/login?next=app'
  */
 function apiPath(path: string): string {
-  return path.replace(/^\/+/, '')
+  const suffixIndex = path.search(/[?#]/)
+  const pathname = suffixIndex >= 0 ? path.slice(0, suffixIndex) : path
+  const suffix = suffixIndex >= 0 ? path.slice(suffixIndex) : ''
+  const canonicalPath = pathname.replace(/^\/+/, '').replace(/\/+$/, '')
+  return `${canonicalPath}${suffix}`
 }
 
 /**
  * URL absoluta HTTPS (fetch, enlaces, depuración).
- * Ej: apiUrl('transactions/') → 'https://apibras.../transactions/'
+ * Ej: apiUrl('transactions/') → 'https://apibras.../transactions'
  */
 function apiUrl(path: string): string {
   const base = buildBaseUrl()

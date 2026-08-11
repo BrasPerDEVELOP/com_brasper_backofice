@@ -37,7 +37,7 @@ function parseBlog(item: unknown): Blog {
 export class BlogApiAdapter implements BlogRepository {
   private endpoint(path = ''): string {
     const p = path.replace(/^\/+/, '')
-    return p ? Domain.apiPath(`blog/${p}`) : Domain.apiPath('blog/')
+    return p ? Domain.apiPath(`blog/${p}`) : Domain.apiPath('blog')
   }
 
   async listBlogs(skip = 0, limit = 20): Promise<{ items: Blog[]; total: number }> {

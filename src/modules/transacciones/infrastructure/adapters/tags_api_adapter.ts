@@ -31,7 +31,7 @@ export function tagFromApiRecord(raw: unknown): TransactionTag {
 
 function endpoint(path = ''): string {
   const p = path.replace(/^\/+/, '')
-  return p ? Domain.apiPath(`transactions/tags/${p}`) : Domain.apiPath('transactions/tags/')
+  return p ? Domain.apiPath(`transactions/tags/${p}`) : Domain.apiPath('transactions/tags')
 }
 
 export class TagsApiAdapter {

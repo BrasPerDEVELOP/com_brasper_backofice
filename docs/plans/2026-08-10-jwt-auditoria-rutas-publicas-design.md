@@ -1,6 +1,6 @@
 # Diseño y plan — JWT, rutas públicas y auditoría Brasper
 
-**Estado:** Diseño acordado; listo para ejecución por fases  
+**Estado:** Implementado en los tres repositorios; pendiente migración y despliegue gradual
 **Fecha:** 2026-08-10  
 **Repositorios:** `com_brasper_api`, `com_brasper_backofice`, `com_brasper_www`  
 **Referencia estudiada:** únicamente `Stemis/stemis-api` y `Stemis/stemis-web`
@@ -25,7 +25,7 @@ El resultado debe garantizar que:
 
 ### 2.1 Autenticación
 
-- JWT de acceso de corta duración, firmado con un secreto exclusivo `JWT_SECRET`.
+- JWT de acceso de corta duración, firmado con un secreto exclusivo `JWT_SECRET_KEY`.
 - No reutilizar `SECRET_KEY`, credenciales de R2 ni secretos de integraciones.
 - El proceso debe fallar al iniciar si el secreto falta, es débil o contiene un placeholder.
 - Claims mínimos: `sub`, `sid`, `jti`, `iss`, `aud`, `iat`, `nbf`, `exp` y `client_app`.
@@ -50,7 +50,7 @@ Request
        selección de campos + censura + persistencia transaccional
 ```
 
-Las mutaciones críticas y su evento se confirman en la misma transacción. Si no puede escribirse la auditoría, la mutación no se confirma. Los intentos de login tienen su propia transacción.
+La fila base de auditoría se inserta antes de ejecutar la mutación y comparte la sesión transaccional existente; si no puede escribirse, el handler no se ejecuta. Los casos de uso legacy que confirman internamente persisten esa fila junto con la mutación y el enriquecimiento permitido se confirma al finalizar. Los intentos de login tienen su propia transacción.
 
 No se añadirá Redis/BullMQ solo para copiar Stemis: la API actual no depende de Redis y la escritura directa ofrece durabilidad atómica.
 
@@ -85,11 +85,15 @@ La decisión se evaluará por `(método, patrón de ruta)`. Nunca se permitirá 
 |---|---|---|
 | GET | `/` | health informativo |
 | GET | `/health` | infraestructura |
-| GET | `/media/{file_path:path}` | `www` y recursos públicos |
+| GET | `/media/profile_images/{file}` | perfiles públicos |
+| GET | `/media/home_banner/{file}` | banners públicos |
+| GET | `/media/home_popup/{file}` | popups públicos |
 | GET | `/blog` | listado público |
 | GET | `/blog/slug/{slug}` | artículo público |
 | GET | `/home-banner/home-image` | banner público |
 | GET | `/home-banner/home-image/{id}` | banner configurado |
+| GET | `/home-banner/home-popup` | popup público |
+| GET | `/home-banner/home-popup/{id}` | popup configurado |
 | GET | `/coin/currencies` | calculadora |
 | GET | `/coin/tax-rate` | calculadora |
 | GET | `/coin/commission` | calculadora |
@@ -107,7 +111,7 @@ La decisión se evaluará por `(método, patrón de ruta)`. Nunca se permitirá 
 | POST | `/auth/reset-password` | rate limit, respuesta no enumerable |
 | POST | `/auth/reset-password/confirm` | rate limit, token de un solo uso |
 | POST | `/user` | rate limit, validación y auditoría de registro |
-| POST | `/brasper/contact-form` | rate limit/antispam, payload no auditado |
+| POST | `/brasper/contact-form` | rate limit/antispam, auditoría solo de metadatos no personales |
 
 Los endpoints `/brasper/ai/*` no son públicos: conservarán autenticación servicio-a-servicio y se identificarán como origen `ia`.
 
@@ -190,6 +194,7 @@ Tabla `user.auth_session`:
 - Preferir snapshots permitidos por entidad, no copiar automáticamente el request completo.
 - Censura recursiva defensiva para claves como `password`, `token`, `secret`, `authorization`, `recovery_code`, `cookie` y variantes.
 - Documentos, cuentas, CCI, CPF, PIX y otros identificadores financieros se guardan enmascarados cuando el valor concreto no sea imprescindible.
+- Los vouchers de transacción no usan el dominio R2 público: pasan por `/media/transaction_vouchers/*` con control de dueño o `transactions.view`.
 - La bitácora será append-only desde la aplicación: sin rutas `POST`, `PUT`, `PATCH` o `DELETE` para auditoría.
 - El usuario funcional de la aplicación no recibirá permiso SQL para modificar o borrar filas de auditoría cuando la infraestructura permita separar roles.
 - `X-Forwarded-For` solo se confiará si el peer inmediato pertenece a `TRUSTED_PROXY_CIDRS`; de lo contrario se usa `request.client.host`.
@@ -279,6 +284,22 @@ Actualizar también:
 7. Rate limits en login, registro, reset y contacto.
 
 **Salida:** ninguna ruta administrativa hereda acceso público por prefijo.
+
+### Fase 1.1 — Estandarización de URLs sin regresiones
+
+Esta fase se ejecuta después del router compatible y antes de retirar cualquier alias:
+
+1. Exportar desde OpenAPI el inventario canónico completo de método y path; ningún path termina en `/`, salvo la raíz.
+2. Buscar en API, backoffice y `www` todos los endpoints escritos manualmente, incluyendo plantillas, uploads, imports, query strings y rutas con identificador.
+3. Hacer que `Domain.apiPath()` y el helper equivalente de `www` eliminen únicamente barras externas y preserven path params, query y fragment; nunca normalizar barras internas o secuencias ambiguas.
+4. Migrar todos los adapters a la forma canónica y prohibir concatenaciones que puedan producir `//` o volver a añadir el prefijo de compañía.
+5. Mantener por cada endpoint un alias directo oculto con una sola `/` final; debe ejecutar el mismo handler y conservar método, body, permisos, auditoría y rate limit, sin responder `307/308`.
+6. Añadir un test de contrato que compare OpenAPI, allowlist pública, inventario de auditoría y endpoints consumidos por ambos frontends.
+7. Probar una muestra representativa de `GET`, formularios, JSON, multipart, importación y `DELETE` en las dos variantes mientras dure la compatibilidad.
+8. Añadir un gate estático que falle si aparece una nueva URL API literal con `/` final o si una forma canónica provoca una redirección.
+9. Medir uso de aliases legacy en producción y retirarlos únicamente después de desplegar API, backoffice y `www`, completar smoke tests y observar la ventana acordada sin tráfico legacy.
+
+**Salida:** una sola convención visible y consumida, compatibilidad temporal sin redirecciones y evidencia automatizada de que no se rompieron los flujos existentes.
 
 ### Fase 2 — JWT y sesiones
 

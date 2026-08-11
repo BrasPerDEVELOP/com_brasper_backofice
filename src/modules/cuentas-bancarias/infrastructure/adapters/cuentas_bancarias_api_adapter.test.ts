@@ -20,7 +20,7 @@ describe('CuentasBancariasApiAdapter', () => {
   it('envía los filtros opcionales cuando existen', async () => {
     vi.mocked(apiClient.get).mockResolvedValueOnce({ data: [] })
     await new CuentasBancariasApiAdapter().getBankAccounts({ userId: 'u1', bank_country: 'pe', account_flow: 'destination' })
-    expect(apiClient.get).toHaveBeenCalledWith('/api/transactions/bank-accounts/?user_id=u1&bank_country=pe&account_flow=destination')
+    expect(apiClient.get).toHaveBeenCalledWith('/api/transactions/bank-accounts?user_id=u1&bank_country=pe&account_flow=destination')
   })
 
   it('actualiza con PUT enviando el id en el body y parsea la respuesta', async () => {
@@ -33,7 +33,7 @@ describe('CuentasBancariasApiAdapter', () => {
       account_number: '001102320201062626'
     })
     expect(apiClient.put).toHaveBeenCalledWith(
-      '/api/transactions/bank-accounts/',
+      '/api/transactions/bank-accounts',
       expect.objectContaining({ id: 'a1', bank_id: 'b2', account_number: '001102320201062626' })
     )
     expect(updated.id).toBe('a1')
@@ -55,7 +55,7 @@ describe('CuentasBancariasApiAdapter', () => {
       cci_number_confirmation: cci
     })
     expect(apiClient.post).toHaveBeenCalledWith(
-      '/api/transactions/bank-accounts/',
+      '/api/transactions/bank-accounts',
       expect.objectContaining({ cci_number: cci, cci_number_confirmation: cci })
     )
   })

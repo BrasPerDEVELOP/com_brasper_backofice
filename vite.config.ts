@@ -45,6 +45,13 @@ export default defineConfig({
           },
         ],
       },
+      // Los íconos del manifest (/assets/logos/logo.png) ya los captura
+      // `globPatterns` de abajo. Si además los agrega el manifest, la misma URL
+      // entra dos veces al precache (una con `__WB_REVISION__` y otra sin él),
+      // Workbox lanza `add-to-cache-list-conflicting-entries` y el install del
+      // service worker falla: el SW nuevo nunca se activa y el viejo sigue
+      // sirviendo la app indefinidamente.
+      includeManifestIcons: false,
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         navigateFallback: 'index.html',

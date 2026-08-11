@@ -22,7 +22,7 @@ describe('banks api adapter (cuentas Brasper)', () => {
       pix: null
     })
     expect(apiClient.post).toHaveBeenCalledWith(
-      'transactions/banks/',
+      'transactions/banks',
       expect.objectContaining({ bank: 'BCP', company: 'Brasper 21 SAC' })
     )
     expect(vi.mocked(apiClient.post).mock.calls[0]?.[1]).not.toHaveProperty('account')
@@ -34,7 +34,7 @@ describe('banks api adapter (cuentas Brasper)', () => {
     })
     await updateBank('b1', { bank: 'Interbank' })
     expect(apiClient.put).toHaveBeenCalledWith(
-      'transactions/banks/',
+      'transactions/banks',
       expect.objectContaining({ id: 'b1', bank: 'Interbank' })
     )
   })

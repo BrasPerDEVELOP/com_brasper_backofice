@@ -9,7 +9,6 @@ vi.mock('@/interface/api/client', () => ({
     post: vi.fn(),
     put: vi.fn()
   },
-  getApiAuthHeaders: () => ({}),
   triggerUnauthorized: vi.fn()
 }))
 
@@ -54,7 +53,7 @@ describe('deleteUser', () => {
     await deleteUser('abc-123')
 
     expect(del).toHaveBeenCalledTimes(2)
-    expect(del.mock.calls[1][0]).toBe('https://api.test/user/')
+    expect(del.mock.calls[1][0]).toBe('https://api.test/user')
     expect((del.mock.calls[1][1] as { data: unknown }).data).toEqual({ id: 'abc-123' })
   })
 

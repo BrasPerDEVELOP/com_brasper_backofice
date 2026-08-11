@@ -91,7 +91,7 @@ export class CuentasBancariasApiAdapter implements CuentasBancariasRepository {
     const p = path.replace(/^\/+/, '')
     return p
       ? Domain.apiPath(`transactions/bank-accounts/${p}`)
-      : Domain.apiPath('transactions/bank-accounts/')
+      : Domain.apiPath('transactions/bank-accounts')
   }
 
   async getBankAccounts(params?: GetBankAccountsParams): Promise<BankAccount[]> {

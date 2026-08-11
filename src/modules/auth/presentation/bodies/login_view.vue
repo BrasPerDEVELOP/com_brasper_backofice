@@ -147,10 +147,10 @@
 
           <button
             type="submit"
-            :disabled="authStore.isLoading || isSsoProcessing"
+            :disabled="authStore.isLoading"
             class="mt-1 w-full rounded-xl bg-gradient-to-r from-[#4361EE] via-brasper-indigoStrong to-[#4B2FC4] px-4 py-3 font-semibold text-white shadow-lg shadow-brasper-indigoStrong/30 transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {{ isSsoProcessing ? 'Validando SSO...' : authStore.isLoading ? 'Ingresando...' : 'Entrar al panel' }}
+            {{ authStore.isLoading ? 'Ingresando...' : 'Entrar al panel' }}
           </button>
 
           <p v-if="authStore.error" class="rounded-lg bg-brasper-danger/10 px-3 py-2 text-center text-sm text-brasper-danger">
@@ -177,19 +177,15 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { env } from '@/interface/config/env'
 import { useAuthStore } from '../controllers/use_auth_store_controller'
-import { useAdminSso } from '../composables/use_admin_sso'
 
-const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
-const { processFromQuery } = useAdminSso()
 
 const username = ref(env.username)
 const password = ref(env.password)
-const isSsoProcessing = ref(false)
 const showPassword = ref(false)
 const rememberSession = ref(true)
 const showForgotHint = ref(false)
@@ -199,33 +195,9 @@ const supportMailto = 'mailto:soporte@brasper.com?subject=Ayuda%20para%20acceder
 /** Versión (commit) para soporte: qué build está corriendo el usuario. */
 const appVersion = env.appVersion.flavor
 
-async function tryAdminSsoLogin() {
-  const query = new URLSearchParams(window.location.search)
-  const hasSsoSignal = ['data', 'iv', 'salt', 'v'].some((key) => query.has(key))
-  if (!hasSsoSignal) return
-
-  isSsoProcessing.value = true
-  authStore.setError(null)
-  try {
-    const success = await processFromQuery(query)
-    if (success) {
-      await router.replace('/app/transacciones')
-      return
-    }
-  } catch (error) {
-    authStore.clearSession()
-    authStore.setError(error instanceof Error ? error.message : 'SSO inválido o expirado.')
-  } finally {
-    isSsoProcessing.value = false
-  }
-
-  await router.replace({ path: route.path, query: {} })
-}
-
 onMounted(() => {
   if (!username.value) username.value = env.username
   if (!password.value) password.value = env.password
-  void tryAdminSsoLogin()
 })
 
 const handleLogin = async () => {
