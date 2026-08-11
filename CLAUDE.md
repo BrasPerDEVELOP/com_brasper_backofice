@@ -81,13 +81,28 @@ Key `.env` variables (all prefixed `VITE_`):
 | `VITE_AUTH_PROFILE_PATH` | Profile endpoint path (default: `me`) |
 | `VITE_AUTH_PROFILE_METHOD` | `put` or `patch` for profile updates |
 | `VITE_ADMIN_REDIRECT_SECRET` | Shared secret for SSO admin redirect |
+| `VITE_FACEBOOK_APP_ID` | Meta app ID. Empty ⇒ the Facebook button is hidden |
+| `VITE_FACEBOOK_REDIRECT_URI` | Exact `redirect_uri` registered in Meta (default: `origin + '/'`) |
+| `VITE_FACEBOOK_AUTH_PATH` | Endpoint that exchanges the OAuth `code` (default: `auth/facebook/`) |
+| `VITE_FACEBOOK_SCOPE` | Requested permissions (default: `email,public_profile`) |
+| `VITE_FACEBOOK_API_VERSION` | Graph API version for the OAuth dialog (default: `v19.0`) |
+| `VITE_GOOGLE_CLIENT_ID` | Google OAuth 2.0 **client ID** (`*.apps.googleusercontent.com`). Empty ⇒ the Google button is hidden |
+| `VITE_GOOGLE_REDIRECT_URI` | Exact `redirect_uri` registered in Google Cloud Console (default: `origin + '/'`) |
+| `VITE_GOOGLE_AUTH_PATH` | Endpoint that exchanges the OAuth `code` (default: `auth/google/`) |
+| `VITE_GOOGLE_SCOPE` | Requested scopes, space-separated (default: `openid email profile`) |
 | `VITE_USERNAME` / `VITE_PASSWORD` | Dev-only login prefill |
+
+Never put an OAuth **client secret** (Google `GOCSPX-…`, Meta app secret) in a `VITE_*` variable — Vite inlines them into the public bundle. The backend does the exchange, and it does not read these from env either: it loads `client_id` / `client_secret` / `redirect_uri` from the `integrations.integration` table (one row per `provider`, JSONB `config`). So the only OAuth value that belongs in this `.env` is the public app/client ID.
 
 ## Module inventory
 
 Active modules (fully implemented): `auth`, `transacciones`, `tasas`, `comisiones`, `cupones`, `cuentas-bancarias`, `calculator`, `dashboard`, `contabilidad`, `home-banner`, `blog`.
 
 The empty stub modules `transactions/`, `accounts/`, `user/` were removed in Fase B. Do not confuse them with the real modules `transacciones`, `cuentas-bancarias`, and `auth` (user management lives under `auth/usuarios`).
+
+Facebook and Google Login both use the OAuth **authorization code** flow, so no client secret ever reaches the browser: `use_facebook_login.ts` / `use_google_login.ts` redirect to the provider dialog with an anti-CSRF `state`, and on return `POST {VITE_FACEBOOK_AUTH_PATH}` / `POST {VITE_GOOGLE_AUTH_PATH}` sends `{ code, redirect_uri }`. The backend must exchange the code and answer with the same shape as `auth/login/` (`{ user, token }`, optionally nested under `data`) — `parseSessionResponse` in the adapter normalizes all three. Pure query/URL logic lives in `infrastructure/facebook_oauth.ts` and `infrastructure/google_oauth.ts` (both tested); the composables only own `window`/`sessionStorage` access.
+
+Both providers return to the same URL (`origin + '/'` with `?code=&state=`), so the pending `state` decides who claims the callback. `infrastructure/oauth_state.ts` keeps that invariant: starting one flow clears the other provider's `state`, otherwise a stale `state` would make the wrong provider claim the `code` and reject it as a CSRF mismatch.
 
 The `auth` module is larger than typical — it handles login, the unified user/bank-account workspace (`/app/usuarios`), profile, and role/permission management. The old `/app/cuentas` route redirects to `/app/usuarios?tab=accounts`; bank-account forms and state remain owned by `cuentas-bancarias` and are composed from the auth route view.
 

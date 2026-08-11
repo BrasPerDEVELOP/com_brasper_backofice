@@ -147,7 +147,7 @@
 
           <button
             type="submit"
-            :disabled="authStore.isLoading"
+            :disabled="isBusy"
             class="mt-1 w-full rounded-xl bg-gradient-to-r from-[#4361EE] via-brasper-indigoStrong to-[#4B2FC4] px-4 py-3 font-semibold text-white shadow-lg shadow-brasper-indigoStrong/30 transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {{ authStore.isLoading ? 'Ingresando...' : 'Entrar al panel' }}
@@ -166,6 +166,53 @@
           </p>
         </form>
 
+        <template v-if="hasSocialLogin">
+          <div class="my-6 flex items-center gap-3">
+            <span class="h-px flex-1 bg-[#e5e7eb]"></span>
+            <span class="text-xs uppercase tracking-[0.2em] text-brasper-textSoft">o continúa con</span>
+            <span class="h-px flex-1 bg-[#e5e7eb]"></span>
+          </div>
+
+          <div class="flex flex-col gap-3">
+            <!--
+              Login con Facebook desactivado. Para reactivarlo hay que descomentar
+              también su bloque en el <script setup> (import, refs, callback y handler).
+            <button
+              v-if="isFacebookEnabled"
+              type="button"
+              :disabled="isBusy"
+              class="flex w-full items-center justify-center gap-2.5 rounded-xl bg-[#1877F2] px-4 py-3 font-semibold text-white shadow-lg shadow-[#1877F2]/25 transition hover:bg-[#166FE5] disabled:cursor-not-allowed disabled:opacity-50"
+              @click="handleFacebookLogin"
+            >
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.412c0-3.017 1.792-4.684 4.533-4.684 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.93-1.956 1.887v2.27h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z" />
+              </svg>
+              {{ isFacebookProcessing ? 'Validando con Facebook...' : 'Iniciar sesión con Facebook' }}
+            </button>
+            -->
+
+            <button
+              v-if="isGoogleEnabled"
+              type="button"
+              :disabled="isBusy"
+              class="flex w-full items-center justify-center gap-2.5 rounded-xl border border-[#dadce0] bg-white px-4 py-3 font-semibold text-[#3c4043] shadow-sm transition hover:bg-[#f8f9fa] disabled:cursor-not-allowed disabled:opacity-50"
+              @click="handleGoogleLogin"
+            >
+              <svg class="h-5 w-5" viewBox="0 0 48 48" aria-hidden="true">
+                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24s.92 7.54 2.56 10.78l7.97-6.19z" />
+                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+              </svg>
+              {{ isGoogleProcessing ? 'Validando con Google...' : 'Iniciar sesión con Google' }}
+            </button>
+          </div>
+
+          <p class="mt-2 text-center text-xs text-brasper-textSoft">
+            Tu cuenta debe estar vinculada a un usuario del backoffice.
+          </p>
+        </template>
+
         <footer class="mt-8 text-center text-xs text-brasper-textSoft">
           © {{ currentYear }} Brasper &nbsp;•&nbsp; Términos &nbsp;•&nbsp; Privacidad
           <span class="mt-1 block text-[10px] text-brasper-textSoft/70">{{ appVersion }}</span>
@@ -176,42 +223,148 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, ref, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { env } from '@/interface/config/env'
 import { useAuthStore } from '../controllers/use_auth_store_controller'
+// import { useFacebookLogin } from '../composables/use_facebook_login'
+import { useGoogleLogin } from '../composables/use_google_login'
 
+const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+// const {
+//   isEnabled: isFacebookEnabled,
+//   startLogin: startFacebookLogin,
+//   hasPendingCallback: hasFacebookCallback,
+//   processFromQuery: processFacebookCallback
+// } = useFacebookLogin()
+const {
+  isEnabled: isGoogleEnabled,
+  startLogin: startGoogleLogin,
+  hasPendingCallback: hasGoogleCallback,
+  processFromQuery: processGoogleCallback
+} = useGoogleLogin()
 
 const username = ref(env.username)
 const password = ref(env.password)
+// const isFacebookProcessing = ref(false)
+const isGoogleProcessing = ref(false)
 const showPassword = ref(false)
 const rememberSession = ref(true)
 const showForgotHint = ref(false)
+
+const isBusy = computed(() => authStore.isLoading || isGoogleProcessing.value)
+const hasSocialLogin = computed(() => isGoogleEnabled.value)
 
 const currentYear = new Date().getFullYear()
 const supportMailto = 'mailto:soporte@brasper.com?subject=Ayuda%20para%20acceder%20al%20backoffice'
 /** Versión (commit) para soporte: qué build está corriendo el usuario. */
 const appVersion = env.appVersion.flavor
 
+/*
+ * Facebook devuelve al login con `?code=&state=`: canjeamos el code por sesión
+ * y limpiamos la query para no dejar el code expuesto en la barra de direcciones.
+ *
+ * Desactivado junto con el botón de Facebook del template.
+ *
+async function tryFacebookCallback() {
+  const query = new URLSearchParams(window.location.search)
+  if (!hasFacebookCallback(query)) return
+
+  isFacebookProcessing.value = true
+  authStore.setError(null)
+  try {
+    const success = await processFacebookCallback(query)
+    if (success && (await enterPanel())) return
+  } catch (error) {
+    authStore.clearSession()
+    authStore.setError(
+      error instanceof Error ? error.message : 'No se pudo iniciar sesión con Facebook.'
+    )
+  } finally {
+    isFacebookProcessing.value = false
+  }
+
+  await router.replace({ path: route.path, query: {} })
+}
+*/
+
+/**
+ * Google devuelve al login con `?code=&state=`: canjeamos el code por sesión
+ * y limpiamos la query para no dejar el code expuesto en la barra de direcciones.
+ */
+async function tryGoogleCallback() {
+  const query = new URLSearchParams(window.location.search)
+  if (!hasGoogleCallback(query)) return
+
+  isGoogleProcessing.value = true
+  authStore.setError(null)
+  try {
+    const success = await processGoogleCallback(query)
+    if (success && (await enterPanel())) return
+  } catch (error) {
+    authStore.clearSession()
+    authStore.setError(
+      error instanceof Error ? error.message : 'No se pudo iniciar sesión con Google.'
+    )
+  } finally {
+    isGoogleProcessing.value = false
+  }
+
+  await router.replace({ path: route.path, query: {} })
+}
+
 onMounted(() => {
   if (!username.value) username.value = env.username
   if (!password.value) password.value = env.password
+  void (async () => {
+    if (!authStore.isAuthenticated) await tryGoogleCallback()
+  })()
 })
+
+/** Entra al panel si la cuenta tiene acceso; si no, cierra sesión y deja el motivo visible. */
+async function enterPanel(): Promise<boolean> {
+  if (!authStore.validateBackofficeAccess()) {
+    const reason = authStore.error
+    await authStore.logout()
+    authStore.setError(reason)
+    return false
+  }
+  await router.push('/app/transacciones')
+  return true
+}
 
 const handleLogin = async () => {
   try {
     await authStore.login(username.value, password.value)
-    if (!authStore.validateBackofficeAccess()) {
-      const reason = authStore.error
-      await authStore.logout()
-      authStore.setError(reason)
-      return
-    }
-    await router.push('/app/transacciones')
+    await enterPanel()
   } catch {
     // Error ya manejado en el store
+  }
+}
+
+/*
+const handleFacebookLogin = () => {
+  authStore.setError(null)
+  try {
+    startFacebookLogin()
+  } catch (error) {
+    authStore.setError(
+      error instanceof Error ? error.message : 'No se pudo abrir el inicio con Facebook.'
+    )
+  }
+}
+*/
+
+const handleGoogleLogin = () => {
+  authStore.setError(null)
+  try {
+    startGoogleLogin()
+  } catch (error) {
+    authStore.setError(
+      error instanceof Error ? error.message : 'No se pudo abrir el inicio con Google.'
+    )
   }
 }
 </script>

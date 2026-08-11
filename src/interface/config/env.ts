@@ -120,5 +120,62 @@ export const env = {
   /** Ruta del endpoint de métricas semanales. Por defecto: metrics/weekly */
   get metricsWeeklyPath(): string {
     return getEnv('VITE_METRICS_WEEKLY_PATH', 'metrics/weekly')
+  },
+
+  /** App ID de Facebook Login. Si está vacío, el botón de Facebook no se muestra. */
+  get facebookAppId(): string {
+    return getEnv('VITE_FACEBOOK_APP_ID', '').trim()
+  },
+
+  /** Endpoint que canjea el `code` de Facebook por una sesión Brasper. */
+  get facebookAuthPath(): string {
+    return getEnv('VITE_FACEBOOK_AUTH_PATH', 'auth/facebook/').trim() || 'auth/facebook/'
+  },
+
+  /** Versión del Graph API usada en el diálogo OAuth. */
+  get facebookApiVersion(): string {
+    return getEnv('VITE_FACEBOOK_API_VERSION', 'v19.0').trim() || 'v19.0'
+  },
+
+  /** Permisos solicitados a Facebook (separados por coma). */
+  get facebookScope(): string {
+    return getEnv('VITE_FACEBOOK_SCOPE', 'email,public_profile').trim() || 'email,public_profile'
+  },
+
+  /**
+   * `redirect_uri` exacto registrado en la app de Facebook. Si está vacío se usa
+   * el origin actual + `/` (la ruta del login). Debe coincidir carácter por
+   * carácter entre el diálogo OAuth y el canje del code en el backend.
+   */
+  get facebookRedirectUri(): string {
+    return getEnv('VITE_FACEBOOK_REDIRECT_URI', '').trim()
+  },
+
+  /**
+   * Client ID de Google Login (termina en `.apps.googleusercontent.com`).
+   * Si está vacío, el botón de Google no se muestra. El client *secret* nunca
+   * va aquí: lo usa el backend para canjear el `code`.
+   */
+  get googleClientId(): string {
+    return getEnv('VITE_GOOGLE_CLIENT_ID', '').trim()
+  },
+
+  /** Endpoint que canjea el `code` de Google por una sesión Brasper. */
+  get googleAuthPath(): string {
+    return getEnv('VITE_GOOGLE_AUTH_PATH', 'auth/google/').trim() || 'auth/google/'
+  },
+
+  /** Permisos solicitados a Google (separados por espacio, como exige OAuth 2.0). */
+  get googleScope(): string {
+    return getEnv('VITE_GOOGLE_SCOPE', 'openid email profile').trim() || 'openid email profile'
+  },
+
+  /**
+   * `redirect_uri` exacto registrado en Google Cloud Console ("Authorized redirect
+   * URIs"). Si está vacío se usa el origin actual + `/` (la ruta del login). Debe
+   * coincidir carácter por carácter entre el diálogo OAuth y el canje del code.
+   */
+  get googleRedirectUri(): string {
+    return getEnv('VITE_GOOGLE_REDIRECT_URI', '').trim()
   }
 }

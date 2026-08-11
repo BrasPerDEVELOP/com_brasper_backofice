@@ -3,7 +3,12 @@ import { ref, computed, onMounted, watch } from "vue";
 import { useTransactionsStore } from "@modules/transacciones/presentation/controllers/use_transactions_store_controller";
 import { useCuentasBancariasStore } from "@modules/cuentas-bancarias/presentation/controllers/use_cuentas_bancarias_store_controller";
 import type { BankAccount } from "@modules/cuentas-bancarias/domain/models";
-import type { Transaction } from "@modules/transacciones/domain/models";
+import { useTasasStore } from "@modules/tasas/presentation/controllers/use_tasas_store_controller";
+import { useComisionesStore } from "@modules/comisiones/presentation/controllers/use_comisiones_store_controller";
+import type {
+  Transaction,
+  TransactionSpecialDiscountInfo,
+} from "@modules/transacciones/domain/models";
 import type { GetTransactionsParams } from "@modules/transacciones/infrastructure/adapters/transactions_repository";
 import {
   TRANSACTION_STATUSES,
@@ -14,6 +19,8 @@ import {
   formatTransactionCodeForDisplay,
   localDateInputStartMs,
   localDateInputEndMs,
+  getTransactionSpecialDiscountForDisplay,
+  SPECIAL_CALCULATOR_DISCOUNT_CODE,
 } from "@modules/transacciones/domain/models";
 import AppDropdown from "@/interface/components/AppDropdown.vue";
 import AppDateInput from "@/interface/components/AppDateInput.vue";
@@ -21,6 +28,8 @@ import { Domain } from "@/interface/infrastructure/services";
 
 const transactionsStore = useTransactionsStore();
 const cuentasStore = useCuentasBancariasStore();
+const tasasStore = useTasasStore();
+const comisionesStore = useComisionesStore();
 
 const searchQuery = ref("");
 const statusFilter = ref<string>("todos");
@@ -153,6 +162,64 @@ function formatPen(value: number | null | undefined): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
+}
+
+/**
+ * Descuento de calculadora especial por transacción. El store ya entrega las
+ * transacciones enriquecidas con el meta local; el catálogo (tasas + comisiones)
+ * permite además inferirlo en operaciones antiguas sin `ESPECIAL` persistido.
+ */
+const specialDiscountByTransactionId = computed(() => {
+  const catalogs = {
+    commissions: comisionesStore.commissions,
+    taxRates: tasasStore.taxRates,
+  };
+  const map = new Map<string, TransactionSpecialDiscountInfo>();
+  for (const t of transactionsStore.transactions) {
+    if (!t.id) continue;
+    const info = getTransactionSpecialDiscountForDisplay(t, catalogs);
+    if (info) map.set(t.id, info);
+  }
+  return map;
+});
+
+function specialDiscount(t: Transaction): TransactionSpecialDiscountInfo | null {
+  if (!t.id) return null;
+  return specialDiscountByTransactionId.value.get(t.id) ?? null;
+}
+
+/** Monto descontado de la comisión por la calculadora especial (moneda origen). */
+function descuentoEspecialMonto(t: Transaction): number | undefined {
+  const info = specialDiscount(t);
+  if (!info) return undefined;
+  const n = Number(info.discountCommission);
+  if (!Number.isFinite(n) || Math.abs(n) <= 0.005) return undefined;
+  return n;
+}
+
+function descuentoEspecialLabel(t: Transaction): string {
+  const monto = descuentoEspecialMonto(t);
+  if (monto == null) return "—";
+  // Un descuento negativo (consignado en la calculadora) es un recargo.
+  return monto < 0
+    ? `+${formatPen(Math.abs(monto))}`
+    : `-${formatPen(monto)}`;
+}
+
+function descuentoEspecialTitle(t: Transaction): string {
+  const info = specialDiscount(t);
+  if (!info) return "Sin descuento de calculadora especial";
+  const parts = [
+    info.discountPercentage != null
+      ? `${SPECIAL_CALCULATOR_DISCOUNT_CODE} (${formatValue(info.discountPercentage)}%)`
+      : SPECIAL_CALCULATOR_DISCOUNT_CODE,
+    `Comisión base: ${formatPen(info.baseCommission)}`,
+    `Comisión aplicada: ${formatPen(info.finalCommission)}`,
+  ];
+  if (info.improvementReceive > 0.005) {
+    parts.push(`Mejora al recibir: +${formatValue(info.improvementReceive)}`);
+  }
+  return parts.join(" · ");
 }
 
 function comisionFinalInterna(t: Transaction): number | undefined {
@@ -355,6 +422,9 @@ onMounted(() => {
     cuentasStore.loadBankAccounts(),
     cuentasStore.loadClientUsers(),
     cuentasStore.loadBanks(),
+    // Catálogos necesarios para inferir el descuento especial en operaciones antiguas.
+    tasasStore.loadTaxRates(),
+    comisionesStore.loadCommissions(),
   ]);
 });
 </script>
@@ -487,7 +557,7 @@ onMounted(() => {
         </span>
       </div>
 
-      <table class="w-full min-w-[1300px] text-left text-sm">
+      <table class="w-full min-w-[1420px] text-left text-sm">
         <thead>
           <tr class="bg-[#dbeafe]">
             <th class="w-10 px-2 py-3" title="Verificada">
@@ -539,6 +609,12 @@ onMounted(() => {
               Tipo cambio
             </th>
             <th
+              class="whitespace-nowrap px-2 py-3 text-right text-xs font-semibold leading-tight text-brasper-indigoDark"
+              title="Descuento aplicado por la calculadora especial (ESPECIAL)"
+            >
+              Descuento<br />especial
+            </th>
+            <th
               class="whitespace-nowrap px-2 py-3 text-right text-[10px] font-bold uppercase leading-tight tracking-wide text-white bg-[#1e3a8a]"
             >
               Comisión<br />final interna
@@ -578,7 +654,7 @@ onMounted(() => {
             class="border-t border-[#e5e7eb]"
           >
             <td
-              colspan="16"
+              colspan="17"
               class="rounded-xl border border-[#dbe7fb] bg-[#fbfdff] px-6 py-12 text-center text-[#666]"
             >
               {{
@@ -659,6 +735,17 @@ onMounted(() => {
               :title="getTransactionExchangeTitle(t)"
             >
               {{ getTransactionExchangeLabel(t) }}
+            </td>
+            <td
+              class="whitespace-nowrap px-2 py-3 text-right tabular-nums"
+              :class="
+                descuentoEspecialMonto(t) != null
+                  ? 'font-medium text-rose-700'
+                  : 'text-[#9ca3af]'
+              "
+              :title="descuentoEspecialTitle(t)"
+            >
+              {{ descuentoEspecialLabel(t) }}
             </td>
             <td
               class="whitespace-nowrap bg-slate-50/80 px-2 py-3 text-right tabular-nums text-[#111827]"

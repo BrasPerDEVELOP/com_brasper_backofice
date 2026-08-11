@@ -20,8 +20,28 @@ export interface UpdateProfilePayload {
   code_phone?: string | null
 }
 
+/**
+ * Canje del `code` de Facebook por una sesión Brasper.
+ * `redirectUri` debe ser idéntico al usado en el diálogo OAuth (lo exige Facebook).
+ */
+export interface FacebookLoginPayload {
+  code: string
+  redirectUri: string
+}
+
+/**
+ * Canje del `code` de Google por una sesión Brasper.
+ * `redirectUri` debe ser idéntico al usado en el diálogo OAuth (lo exige Google).
+ */
+export interface GoogleLoginPayload {
+  code: string
+  redirectUri: string
+}
+
 export interface AuthRepository {
   login(username: string, password: string): Promise<LoginResponse>
+  loginWithFacebook(payload: FacebookLoginPayload): Promise<LoginResponse>
+  loginWithGoogle(payload: GoogleLoginPayload): Promise<LoginResponse>
   logout(): Promise<void>
   getCurrentUser(userId: string): Promise<User | null>
   updateProfile(payload: UpdateProfilePayload): Promise<User | null>

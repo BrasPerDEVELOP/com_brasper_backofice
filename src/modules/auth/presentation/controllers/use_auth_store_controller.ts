@@ -7,8 +7,12 @@ import {
   type PermissionKey,
   type User
 } from '../../domain/models'
-import type { UpdateProfilePayload } from '../../infrastructure/adapters/auth_repository'
-import { LoginUseCase } from '../../application/use_cases'
+import type {
+  FacebookLoginPayload,
+  GoogleLoginPayload,
+  UpdateProfilePayload
+} from '../../infrastructure/adapters/auth_repository'
+import { FacebookLoginUseCase, GoogleLoginUseCase, LoginUseCase } from '../../application/use_cases'
 import { AuthApiAdapter } from '../../infrastructure/adapters'
 import { refreshAccessToken } from '@/interface/api/client'
 
@@ -130,6 +134,44 @@ export const useAuthStore = defineStore('auth', {
         this.setSession(user, token)
       } catch (error) {
         this.error = error instanceof Error ? error.message : 'Error al iniciar sesión'
+        throw error
+      } finally {
+        this.isLoading = false
+      }
+    },
+
+    /** Abre sesión con el `code` que devolvió el diálogo OAuth de Facebook. */
+    async loginWithFacebook(payload: FacebookLoginPayload) {
+      this.isLoading = true
+      this.error = null
+
+      try {
+        const repository = new AuthApiAdapter()
+        const facebookLoginUseCase = new FacebookLoginUseCase(repository)
+        const { user, token } = await facebookLoginUseCase.execute(payload)
+
+        this.setSession(user, token)
+      } catch (error) {
+        this.error = error instanceof Error ? error.message : 'Error al iniciar sesión con Facebook'
+        throw error
+      } finally {
+        this.isLoading = false
+      }
+    },
+
+    /** Abre sesión con el `code` que devolvió el diálogo OAuth de Google. */
+    async loginWithGoogle(payload: GoogleLoginPayload) {
+      this.isLoading = true
+      this.error = null
+
+      try {
+        const repository = new AuthApiAdapter()
+        const googleLoginUseCase = new GoogleLoginUseCase(repository)
+        const { user, token } = await googleLoginUseCase.execute(payload)
+
+        this.setSession(user, token)
+      } catch (error) {
+        this.error = error instanceof Error ? error.message : 'Error al iniciar sesión con Google'
         throw error
       } finally {
         this.isLoading = false
