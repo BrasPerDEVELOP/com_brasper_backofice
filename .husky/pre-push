@@ -5,4 +5,29 @@ if [ "$SKIP_PREPUSH" = "1" ]; then
   echo "pre-push: omitido (SKIP_PREPUSH=1)"
   exit 0
 fi
+
+# Clientes GUI (GitHub Desktop, SourceTree, IDEs) no cargan el perfil del shell,
+# así que un node instalado con nvm/homebrew no está en el PATH del hook.
+if ! command -v npm >/dev/null 2>&1; then
+  # nvm: usa la versión del .nvmrc si existe, si no la default, si no la última.
+  export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+  if [ -s "$NVM_DIR/nvm.sh" ]; then
+    # shellcheck disable=SC1091
+    . "$NVM_DIR/nvm.sh" >/dev/null 2>&1
+    nvm use --silent >/dev/null 2>&1 || nvm use --silent default >/dev/null 2>&1
+  fi
+  # Homebrew (Apple Silicon e Intel) y node del sistema.
+  for dir in /opt/homebrew/bin /usr/local/bin; do
+    [ -x "$dir/npm" ] && PATH="$dir:$PATH"
+  done
+  export PATH
+fi
+
+if ! command -v npm >/dev/null 2>&1; then
+  echo "pre-push: no encuentro npm en el PATH."
+  echo "  PATH=$PATH"
+  echo "  Haz el push desde la terminal, o usa SKIP_PREPUSH=1 git push."
+  exit 1
+fi
+
 npm run check

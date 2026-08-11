@@ -1,0 +1,702 @@
+[
+ {
+  "method": "GET",
+  "path": "/",
+  "permissions": []
+ },
+ {
+  "method": "GET",
+  "path": "/audit/events",
+  "permissions": [
+   "audit.view"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/audit/events/{event_id}",
+  "permissions": [
+   "audit.view"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/audit/logins",
+  "permissions": [
+   "audit.view"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/auth/change-password",
+  "permissions": [
+   "profile.change_password"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/auth/login",
+  "permissions": []
+ },
+ {
+  "method": "POST",
+  "path": "/auth/logout",
+  "permissions": []
+ },
+ {
+  "method": "GET",
+  "path": "/auth/me",
+  "permissions": []
+ },
+ {
+  "method": "POST",
+  "path": "/auth/me",
+  "permissions": [
+   "profile.update"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/auth/me",
+  "permissions": [
+   "profile.update"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/auth/me/profile-image",
+  "permissions": [
+   "profile.update"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/auth/refresh",
+  "permissions": []
+ },
+ {
+  "method": "POST",
+  "path": "/auth/reset-password",
+  "permissions": []
+ },
+ {
+  "method": "POST",
+  "path": "/auth/reset-password/confirm",
+  "permissions": []
+ },
+ {
+  "method": "GET",
+  "path": "/blog",
+  "permissions": []
+ },
+ {
+  "method": "POST",
+  "path": "/blog",
+  "permissions": [
+   "blog.create"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/blog",
+  "permissions": [
+   "blog.update"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/blog/slug/{slug}",
+  "permissions": []
+ },
+ {
+  "method": "DELETE",
+  "path": "/blog/{blog_id}",
+  "permissions": [
+   "blog.delete"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/blog/{blog_id}",
+  "permissions": [
+   "blog.view"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/brasper/ai/clients/lookup",
+  "permissions": []
+ },
+ {
+  "method": "POST",
+  "path": "/brasper/ai/clients/upsert",
+  "permissions": []
+ },
+ {
+  "method": "GET",
+  "path": "/brasper/ai/deposit-accounts",
+  "permissions": []
+ },
+ {
+  "method": "GET",
+  "path": "/brasper/contact-form",
+  "permissions": [
+   "contact_forms.view"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/brasper/contact-form",
+  "permissions": []
+ },
+ {
+  "method": "GET",
+  "path": "/coin/commission",
+  "permissions": []
+ },
+ {
+  "method": "POST",
+  "path": "/coin/commission",
+  "permissions": [
+   "commissions.create"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/coin/commission",
+  "permissions": [
+   "commissions.update"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/coin/commission-trial",
+  "permissions": [
+   "commissions.view"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/coin/commission-trial",
+  "permissions": [
+   "commissions.create"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/coin/commission-trial",
+  "permissions": [
+   "commissions.update"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/coin/commission-trial/{commission_trial_id}",
+  "permissions": [
+   "commissions.delete"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/coin/commission-trial/{commission_trial_id}",
+  "permissions": [
+   "commissions.view"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/coin/commission/{commission_id}",
+  "permissions": [
+   "commissions.delete"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/coin/commission/{commission_id}",
+  "permissions": [
+   "commissions.view"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/coin/currencies",
+  "permissions": []
+ },
+ {
+  "method": "GET",
+  "path": "/coin/tax-rate",
+  "permissions": []
+ },
+ {
+  "method": "POST",
+  "path": "/coin/tax-rate",
+  "permissions": [
+   "rates.create"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/coin/tax-rate",
+  "permissions": [
+   "rates.update"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/coin/tax-rate-trial",
+  "permissions": [
+   "rates.view"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/coin/tax-rate-trial",
+  "permissions": [
+   "rates.create"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/coin/tax-rate-trial",
+  "permissions": [
+   "rates.update"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/coin/tax-rate-trial/{tax_rate_trial_id}",
+  "permissions": [
+   "rates.delete"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/coin/tax-rate-trial/{tax_rate_trial_id}",
+  "permissions": [
+   "rates.view"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/coin/tax-rate/{tax_rate_id}",
+  "permissions": [
+   "rates.delete"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/coin/tax-rate/{tax_rate_id}",
+  "permissions": [
+   "rates.view"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/docs",
+  "permissions": []
+ },
+ {
+  "method": "GET",
+  "path": "/docs/oauth2-redirect",
+  "permissions": []
+ },
+ {
+  "method": "GET",
+  "path": "/health",
+  "permissions": []
+ },
+ {
+  "method": "GET",
+  "path": "/home-banner/home-image",
+  "permissions": []
+ },
+ {
+  "method": "POST",
+  "path": "/home-banner/home-image",
+  "permissions": [
+   "home_banner.update"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/home-banner/home-image",
+  "permissions": [
+   "home_banner.update"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/home-banner/home-image/{home_banner_id}",
+  "permissions": []
+ },
+ {
+  "method": "GET",
+  "path": "/home-banner/home-popup",
+  "permissions": []
+ },
+ {
+  "method": "POST",
+  "path": "/home-banner/home-popup",
+  "permissions": [
+   "home_banner.update"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/home-banner/home-popup",
+  "permissions": [
+   "home_banner.update"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/home-banner/home-popup/{home_popup_id}",
+  "permissions": []
+ },
+ {
+  "method": "GET",
+  "path": "/integraciones/integration",
+  "permissions": [
+   "integrations.view"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/integraciones/integration",
+  "permissions": [
+   "integrations.create"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/integraciones/integration",
+  "permissions": [
+   "integrations.update"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/integraciones/integration/{integration_id}",
+  "permissions": [
+   "integrations.delete"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/integraciones/integration/{integration_id}",
+  "permissions": [
+   "integrations.view"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/integraciones/oauth/facebook",
+  "permissions": []
+ },
+ {
+  "method": "GET",
+  "path": "/integraciones/oauth/facebook/callback",
+  "permissions": []
+ },
+ {
+  "method": "GET",
+  "path": "/integraciones/oauth/google",
+  "permissions": []
+ },
+ {
+  "method": "GET",
+  "path": "/integraciones/oauth/google/callback",
+  "permissions": []
+ },
+ {
+  "method": "GET",
+  "path": "/media/{file_path:path}",
+  "permissions": []
+ },
+ {
+  "method": "GET",
+  "path": "/metrics/weekly",
+  "permissions": [
+   "metrics.view"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/openapi.json",
+  "permissions": []
+ },
+ {
+  "method": "GET",
+  "path": "/redoc",
+  "permissions": []
+ },
+ {
+  "method": "GET",
+  "path": "/roles/permissions",
+  "permissions": [
+   "roles.permissions.view"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/roles/{role}/permissions",
+  "permissions": [
+   "roles.permissions.update"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/transactions",
+  "permissions": []
+ },
+ {
+  "method": "POST",
+  "path": "/transactions",
+  "permissions": []
+ },
+ {
+  "method": "PUT",
+  "path": "/transactions",
+  "permissions": [
+   "transactions.update"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/transactions/bank-accounts",
+  "permissions": []
+ },
+ {
+  "method": "POST",
+  "path": "/transactions/bank-accounts",
+  "permissions": []
+ },
+ {
+  "method": "PUT",
+  "path": "/transactions/bank-accounts",
+  "permissions": []
+ },
+ {
+  "method": "DELETE",
+  "path": "/transactions/bank-accounts/{bank_account_id}",
+  "permissions": []
+ },
+ {
+  "method": "GET",
+  "path": "/transactions/bank-accounts/{bank_account_id}",
+  "permissions": []
+ },
+ {
+  "method": "GET",
+  "path": "/transactions/banks",
+  "permissions": []
+ },
+ {
+  "method": "POST",
+  "path": "/transactions/banks",
+  "permissions": [
+   "company_bank_accounts.create"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/transactions/banks",
+  "permissions": [
+   "company_bank_accounts.update"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/transactions/banks/by-country-currency",
+  "permissions": []
+ },
+ {
+  "method": "GET",
+  "path": "/transactions/banks/names",
+  "permissions": []
+ },
+ {
+  "method": "DELETE",
+  "path": "/transactions/banks/{bank_id}",
+  "permissions": [
+   "company_bank_accounts.delete"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/transactions/banks/{bank_id}",
+  "permissions": []
+ },
+ {
+  "method": "GET",
+  "path": "/transactions/coupons",
+  "permissions": [
+   "coupons.view"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/transactions/coupons",
+  "permissions": [
+   "coupons.create"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/transactions/coupons",
+  "permissions": [
+   "coupons.update"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/transactions/coupons/automatic",
+  "permissions": []
+ },
+ {
+  "method": "DELETE",
+  "path": "/transactions/coupons/{coupon_id}",
+  "permissions": [
+   "coupons.delete"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/transactions/coupons/{coupon_id}",
+  "permissions": [
+   "coupons.view"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/transactions/import",
+  "permissions": [
+   "transactions.create"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/transactions/metrics",
+  "permissions": [
+   "metrics.view"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/transactions/tags",
+  "permissions": [
+   "tags.view"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/transactions/tags",
+  "permissions": [
+   "tags.create"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/transactions/tags",
+  "permissions": [
+   "tags.update"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/transactions/tags/{tag_id}",
+  "permissions": [
+   "tags.delete"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/transactions/tags/{tag_id}",
+  "permissions": [
+   "tags.view"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/transactions/{transaction_id}",
+  "permissions": [
+   "transactions.delete"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/transactions/{transaction_id}",
+  "permissions": []
+ },
+ {
+  "method": "GET",
+  "path": "/user",
+  "permissions": [
+   "users.view"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/user",
+  "permissions": []
+ },
+ {
+  "method": "PUT",
+  "path": "/user",
+  "permissions": [
+   "users.update"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/user/auth-id/{auth_id}",
+  "permissions": [
+   "users.view"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/user/detail",
+  "permissions": [
+   "users.view"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/user/email/{email}",
+  "permissions": [
+   "users.view"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/user/name-list",
+  "permissions": [
+   "transactions.create",
+   "transactions.view",
+   "users.view"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/user/sales-ids",
+  "permissions": [
+   "transactions.create",
+   "transactions.view",
+   "users.view"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/user/{user_id}",
+  "permissions": [
+   "users.delete"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/user/{user_id}/reset-password",
+  "permissions": [
+   "users.reset_password"
+  ]
+ }
+]
