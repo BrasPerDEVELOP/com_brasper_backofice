@@ -34,6 +34,16 @@
  },
  {
   "method": "POST",
+  "path": "/auth/facebook",
+  "permissions": []
+ },
+ {
+  "method": "POST",
+  "path": "/auth/google",
+  "permissions": []
+ },
+ {
+  "method": "POST",
   "path": "/auth/login",
   "permissions": []
  },

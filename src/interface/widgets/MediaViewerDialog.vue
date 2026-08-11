@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, shallowRef, useTemplateRef, watch } from 'vue'
-import { apiClient } from '@/interface/api/client'
+import { apiClient, getApiBaseUrl } from '@/interface/api/client'
 import AppSpinner from './AppSpinner.vue'
 import { mediaViewerMimeType, resolveMediaViewerKind, type MediaViewerKind } from './media_viewer'
 
@@ -35,8 +35,21 @@ function onKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape' && open.value) close()
 }
 
+/** `true` si la URL apunta fuera del API (el CDN de media, que firma las suyas). */
+function isExternalUrl(source: string): boolean {
+  if (!/^https?:\/\//i.test(source)) return false
+  try {
+    return new URL(source).origin !== new URL(getApiBaseUrl()).origin
+  } catch {
+    return false
+  }
+}
+
 async function fetchMedia(source: string, signal: AbortSignal): Promise<Blob> {
-  if (/^(?:blob:|data:)/i.test(source)) {
+  // El interceptor de apiClient reescribe cualquier URL al origen del API, así
+  // que las del CDN hay que pedirlas con fetch: ya llevan su firma en la query
+  // y no necesitan (ni deben recibir) la cabecera Authorization.
+  if (/^(?:blob:|data:)/i.test(source) || isExternalUrl(source)) {
     const response = await fetch(source, { signal })
     if (!response.ok) throw new Error('No se pudo cargar el archivo seleccionado.')
     return response.blob()

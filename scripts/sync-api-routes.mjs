@@ -23,9 +23,14 @@ if (!existsSync(apiRepo)) {
   process.exit(1)
 }
 
-const python = ['venv/bin/python', '.venv/bin/python', 'python3']
-  .map((candidate) => (candidate.includes('/') ? join(apiRepo, candidate) : candidate))
-  .find((candidate) => candidate === 'python3' || existsSync(candidate))
+// API_PYTHON tiene prioridad: el venv del repo puede existir pero estar
+// incompleto (le faltan dependencias del API), y entonces el intérprete de
+// sistema es el único que puede importar la app.
+const python =
+  process.env.API_PYTHON ??
+  ['venv/bin/python', '.venv/bin/python', 'python3']
+    .map((candidate) => (candidate.includes('/') ? join(apiRepo, candidate) : candidate))
+    .find((candidate) => candidate === 'python3' || existsSync(candidate))
 
 // Se ejecuta dentro del repo del API porque su Settings lee el `.env` de ahí.
 // AUTH_REQUIRED=false solo afecta a este proceso de inspección.
@@ -78,7 +83,9 @@ print(len(rows))
 
 const stdout = execFileSync(python, ['-c', script], {
   cwd: apiRepo,
-  env: { ...process.env, AUTH_REQUIRED: 'false' },
+  // ENVIRONMENT=development acompaña a AUTH_REQUIRED=false: fuera de desarrollo
+  // el Settings del API exige AUTH_REQUIRED=True y aborta antes de listar rutas.
+  env: { ...process.env, AUTH_REQUIRED: 'false', ENVIRONMENT: 'development' },
   encoding: 'utf8'
 })
 

@@ -227,8 +227,6 @@ import { computed, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { env } from '@/interface/config/env'
 import { useAuthStore } from '../controllers/use_auth_store_controller'
-import { useAdminSso } from '../composables/use_admin_sso'
-import { useFacebookLogin } from '../composables/use_facebook_login'
 import { useGoogleLogin } from '../composables/use_google_login'
 
 const route = useRoute()
@@ -263,14 +261,15 @@ const supportMailto = 'mailto:soporte@brasper.com?subject=Ayuda%20para%20acceder
 /** Versión (commit) para soporte: qué build está corriendo el usuario. */
 const appVersion = env.appVersion.flavor
 
-async function tryAdminSsoLogin() {
+/** Cierra el flujo de Google: la vuelta del diálogo trae el `code` en la query. */
+async function tryGoogleCallback() {
   const query = new URLSearchParams(window.location.search)
-  if (!hasFacebookCallback(query)) return
+  if (!hasGoogleCallback(query)) return
 
-  isFacebookProcessing.value = true
+  isGoogleProcessing.value = true
   authStore.setError(null)
   try {
-    const success = await processFromQuery(query)
+    const success = await processGoogleCallback(query)
     if (success) {
       await router.replace('/app/transacciones')
       return
