@@ -139,8 +139,8 @@ function close() {
 }
 
 async function handleSubmit() {
-  // Evita guardar con la colección parcial mientras aún llega el detalle.
-  if (loadingDetail.value) return
+  // Evita guardar con la colección parcial mientras aún llega el detalle o si ya hay un envío en curso.
+  if (creating.value || loadingDetail.value) return
   if (isQuick.value && !form.value.names?.trim()) {
     error.value = 'El nombre es obligatorio.'
     return
