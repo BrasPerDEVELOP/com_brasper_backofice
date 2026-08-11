@@ -1,8 +1,17 @@
 <script setup lang="ts">
+import { onBeforeUnmount, onMounted } from 'vue'
 import type { AuditEvent } from '../../domain/models'
 
-defineProps<{ event: AuditEvent | null }>()
+const props = defineProps<{ event: AuditEvent | null }>()
 const emit = defineEmits<{ close: [] }>()
+
+/** Esc cierra el panel: es la salida que se espera de cualquier modal. */
+function onKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape' && props.event) emit('close')
+}
+
+onMounted(() => window.addEventListener('keydown', onKeydown))
+onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
 function pretty(value: Record<string, unknown> | null): string {
   return value ? JSON.stringify(value, null, 2) : 'Sin datos'
