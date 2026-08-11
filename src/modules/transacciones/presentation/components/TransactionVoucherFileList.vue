@@ -17,7 +17,10 @@ defineProps<{
   emptyLabel?: string;
 }>();
 
-defineEmits<{ remove: [index: number] }>();
+defineEmits<{
+  remove: [index: number];
+  preview: [entry: TransactionVoucherFileEntry];
+}>();
 </script>
 
 <template>
@@ -27,13 +30,12 @@ defineEmits<{ remove: [index: number] }>();
       :key="entry.id"
       class="overflow-hidden rounded-lg border border-[#e8eef8] bg-[#fbfdff]"
     >
-      <a
+      <button
         v-if="entry.thumbSrc"
-        :href="entry.href || entry.thumbSrc"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="block cursor-pointer bg-[#f3f6fb] transition hover:opacity-90"
+        type="button"
+        class="block w-full cursor-pointer bg-[#f3f6fb] transition hover:opacity-90"
         :title="`Abrir ${entry.label}`"
+        @click="$emit('preview', entry)"
       >
         <img
           :src="entry.thumbSrc"
@@ -41,18 +43,17 @@ defineEmits<{ remove: [index: number] }>();
           loading="lazy"
           class="max-h-28 w-full object-contain"
         />
-      </a>
+      </button>
       <div class="flex items-center justify-between gap-2 px-3 py-2">
-        <a
+        <button
           v-if="entry.href"
-          :href="entry.href"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="min-w-0 truncate text-xs font-medium text-brasper-indigoStrong hover:underline"
+          type="button"
+          class="min-w-0 truncate text-left text-xs font-medium text-brasper-indigoStrong hover:underline"
           :title="entry.label"
+          @click="$emit('preview', entry)"
         >
           {{ entry.label }}
-        </a>
+        </button>
         <span
           v-else
           class="min-w-0 truncate text-xs font-medium text-[#374151]"
