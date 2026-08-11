@@ -92,6 +92,7 @@ defensivos en los handlers).
 | AppSpinner | `interface/widgets/AppSpinner.vue` | A ✅ (adoptado en blog) |
 | ConfirmDialog | `interface/widgets/ConfirmDialog.vue` | A ✅ (adoptado en 5 módulos) |
 | DataTable | `interface/widgets/DataTable.vue` | C ✅ (implementado; adopción en transacciones pendiente) |
+| MediaViewerDialog | `interface/widgets/MediaViewerDialog.vue` | Visor autenticado de imágenes/PDF en transacciones y contabilidad |
 
 ---
 

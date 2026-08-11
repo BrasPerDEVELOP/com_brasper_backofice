@@ -8,6 +8,7 @@ import {
   reactive,
   watch,
   nextTick,
+  shallowRef,
 } from "vue";
 import { useTransactionPageContext } from "../composables/use_transaction_page_context";
 import { useTableDragScroll } from "../composables/use_table_drag_scroll";
@@ -57,7 +58,7 @@ import { blockNumberInputWheel } from "@/interface/helpers/block_number_input_wh
 import UsuarioCreateFormModal from "@/interface/components/UsuarioCreateFormModal.vue";
 import CuentaBancariaCreateFormModal from "@/interface/components/CuentaBancariaCreateFormModal.vue";
 import BancoCrudModal from "@/interface/components/BancoCrudModal.vue";
-import { ConfirmDialog } from "@interface/widgets";
+import { ConfirmDialog, MediaViewerDialog } from "@interface/widgets";
 import type { BankOption } from "@modules/cuentas-bancarias/infrastructure/adapters/banks_api_adapter";
 import type { UserListItem } from "@modules/auth/infrastructure/adapters/users_management_api_adapter";
 import CalculatorConversionCard from "@modules/calculator/presentation/components/CalculatorConversionCard.vue";
@@ -113,6 +114,9 @@ const fileInputSimple = ref<HTMLInputElement | null>(null);
 const importingSimple = ref(false);
 const importSimpleError = ref("");
 const showPreviewModal = ref(false);
+const showMediaViewer = shallowRef(false);
+const mediaViewerSource = shallowRef("");
+const mediaViewerTitle = shallowRef("Comprobante");
 const showTransactionClientModal = ref(false);
 const showBankAccountCreateModal = ref(false);
 const showBancoCrudModal = ref(false);
@@ -129,6 +133,14 @@ const menuTriggerEl = ref<HTMLElement | null>(null);
 const menuPosition = reactive({ top: 0, left: 0 });
 /** Coordenadas del cursor cuando el menú se abre con clic derecho. */
 const menuAnchorPoint = ref<{ x: number; y: number } | null>(null);
+
+function openMediaViewer(source: string, title = "Comprobante") {
+  const normalizedSource = source.trim();
+  if (!normalizedSource) return;
+  mediaViewerSource.value = normalizedSource;
+  mediaViewerTitle.value = title;
+  showMediaViewer.value = true;
+}
 
 const tagsStore = useTagsStore();
 
@@ -3986,12 +3998,11 @@ onActivated(() => {
             </td>
             <td class="px-2 py-2 align-middle text-center">
               <template v-if="voucherMediaHref(t.send_voucher)">
-                <a
-                  :href="voucherMediaHref(t.send_voucher)"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  type="button"
                   class="inline-flex max-w-[5rem] flex-col items-center gap-1"
-                  :title="'Abrir comprobante de envío en nueva pestaña'"
+                  title="Ver comprobante de envío"
+                  @click="openMediaViewer(voucherMediaHref(t.send_voucher), 'Comprobante de envío')"
                 >
                   <img
                     :src="voucherMediaHref(t.send_voucher)"
@@ -4007,18 +4018,17 @@ onActivated(() => {
                   >
                     Abrir
                   </span>
-                </a>
+                </button>
               </template>
               <span v-else class="text-[#9ca3af]">—</span>
             </td>
             <td class="px-2 py-2 align-middle text-center">
               <template v-if="voucherMediaHref(t.payment_voucher)">
-                <a
-                  :href="voucherMediaHref(t.payment_voucher)"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  type="button"
                   class="inline-flex max-w-[5rem] flex-col items-center gap-1"
-                  :title="'Abrir comprobante de pago en nueva pestaña'"
+                  title="Ver comprobante de pago"
+                  @click="openMediaViewer(voucherMediaHref(t.payment_voucher), 'Comprobante de pago')"
                 >
                   <img
                     :src="voucherMediaHref(t.payment_voucher)"
@@ -4034,7 +4044,7 @@ onActivated(() => {
                   >
                     Abrir
                   </span>
-                </a>
+                </button>
               </template>
               <span v-else class="text-[#9ca3af]">—</span>
             </td>
@@ -4534,14 +4544,13 @@ onActivated(() => {
                       </span>
                     </div>
                     <div class="flex-1 space-y-2 p-2">
-                      <a
+                      <button
                         v-for="(entry, entryIdx) in group.entries"
                         :key="`${group.key}-${entryIdx}-${entry.href}`"
-                        :href="entry.href"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="group/voucher block cursor-pointer overflow-hidden rounded-lg border border-[#e5e7eb] bg-white transition hover:border-brasper-indigoStrong/40 hover:shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-brasper-indigoStrong"
+                        type="button"
+                        class="group/voucher block w-full cursor-pointer overflow-hidden rounded-lg border border-[#e5e7eb] bg-white text-left transition hover:border-brasper-indigoStrong/40 hover:shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-brasper-indigoStrong"
                         :title="entry.label"
+                        @click="openMediaViewer(entry.href, `${group.title} · ${entry.label}`)"
                       >
                         <img
                           v-if="entry.isImage"
@@ -4581,7 +4590,7 @@ onActivated(() => {
                             Abrir
                           </span>
                         </span>
-                      </a>
+                      </button>
                     </div>
                   </section>
                 </div>
@@ -5223,29 +5232,27 @@ onActivated(() => {
                                   <span class="text-sm font-medium text-[#374151]">
                                     Ver imagen de envío
                                   </span>
-                                  <a
+                                  <button
                                     v-if="activeSendVoucherPreviewSrc"
-                                    :href="activeSendVoucherPreviewSrc"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
+                                    type="button"
                                     class="text-xs font-semibold text-brasper-indigoStrong underline decoration-transparent hover:decoration-current"
+                                    @click="openMediaViewer(activeSendVoucherPreviewSrc, 'Comprobante de envío')"
                                   >
                                     Abrir
-                                  </a>
+                                  </button>
                                 </div>
-                                <a
+                                <button
                                   v-if="activeSendVoucherPreviewSrc"
-                                  :href="activeSendVoucherPreviewSrc"
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  class="block overflow-hidden rounded-xl border border-[#dce3ef] bg-white"
+                                  type="button"
+                                  class="block w-full overflow-hidden rounded-xl border border-[#dce3ef] bg-white"
+                                  @click="openMediaViewer(activeSendVoucherPreviewSrc, 'Comprobante de envío')"
                                 >
                                   <img
                                     :src="activeSendVoucherPreviewSrc"
                                     alt="Imagen de envío"
                                     class="h-28 w-full object-contain"
                                   />
-                                </a>
+                                </button>
                                 <div
                                   v-else
                                   class="flex h-28 items-center justify-center rounded-xl border border-dashed border-[#dce3ef] bg-white px-3 text-center text-xs text-[#9ca3af]"
@@ -5328,6 +5335,7 @@ onActivated(() => {
                                 :entries="voucherDisplayEntries('send_voucher')"
                                 empty-label="Sin comprobantes de envío"
                                 @remove="removeDisplayedVoucher('send_voucher', $event)"
+                                @preview="openMediaViewer($event.href || $event.thumbSrc, $event.label)"
                               />
                             </div>
 
@@ -5364,6 +5372,7 @@ onActivated(() => {
                                 :entries="voucherDisplayEntries('payment_voucher')"
                                 empty-label="Sin comprobantes de pago"
                                 @remove="removeDisplayedVoucher('payment_voucher', $event)"
+                                @preview="openMediaViewer($event.href || $event.thumbSrc, $event.label)"
                               />
                             </div>
 
@@ -5402,6 +5411,7 @@ onActivated(() => {
                                 :entries="voucherDisplayEntries('checked_image')"
                                 empty-label="Sin imagen de verificación"
                                 @remove="removeDisplayedVoucher('checked_image', $event)"
+                                @preview="openMediaViewer($event.href || $event.thumbSrc, $event.label)"
                               />
                             </div>
                           </div>
@@ -5986,6 +5996,7 @@ onActivated(() => {
                   <TransactionVoucherFileList
                     :entries="voucherDisplayEntries('send_voucher')"
                     @remove="removeDisplayedVoucher('send_voucher', $event)"
+                    @preview="openMediaViewer($event.href || $event.thumbSrc, $event.label)"
                   />
                 </div>
 
@@ -6041,6 +6052,7 @@ onActivated(() => {
                   <TransactionVoucherFileList
                     :entries="voucherDisplayEntries('payment_voucher')"
                     @remove="removeDisplayedVoucher('payment_voucher', $event)"
+                    @preview="openMediaViewer($event.href || $event.thumbSrc, $event.label)"
                   />
                 </div>
 
@@ -6118,6 +6130,7 @@ onActivated(() => {
                   <TransactionVoucherFileList
                     :entries="voucherDisplayEntries('checked_image')"
                     @remove="removeDisplayedVoucher('checked_image', $event)"
+                    @preview="openMediaViewer($event.href || $event.thumbSrc, $event.label)"
                   />
                 </div>
               </div>
@@ -6394,6 +6407,12 @@ onActivated(() => {
       :hint-country="bancoCrudHintCountry"
       :start-on-create-form="bancoCrudOpenForCreate"
       @saved="onBancoCrudSaved"
+    />
+
+    <MediaViewerDialog
+      v-model="showMediaViewer"
+      :source="mediaViewerSource"
+      :title="mediaViewerTitle"
     />
 
     <ConfirmDialog

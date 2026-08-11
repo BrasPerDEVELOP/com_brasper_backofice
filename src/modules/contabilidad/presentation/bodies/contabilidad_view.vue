@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from "vue";
+import { ref, computed, onMounted, shallowRef, watch } from "vue";
 import { useTransactionsStore } from "@modules/transacciones/presentation/controllers/use_transactions_store_controller";
 import { useCuentasBancariasStore } from "@modules/cuentas-bancarias/presentation/controllers/use_cuentas_bancarias_store_controller";
 import type { BankAccount } from "@modules/cuentas-bancarias/domain/models";
@@ -24,6 +24,7 @@ import {
 } from "@modules/transacciones/domain/models";
 import AppDropdown from "@/interface/components/AppDropdown.vue";
 import AppDateInput from "@/interface/components/AppDateInput.vue";
+import { MediaViewerDialog } from "@interface/widgets";
 import { Domain } from "@/interface/infrastructure/services";
 
 const transactionsStore = useTransactionsStore();
@@ -40,6 +41,17 @@ const createdAtTo = ref<string>("");
 const perPage = ref(10);
 const currentPage = ref(1);
 const updatingCheckedId = ref<string | null>(null);
+const showMediaViewer = shallowRef(false);
+const mediaViewerSource = shallowRef("");
+const mediaViewerTitle = shallowRef("Comprobante");
+
+function openMediaViewer(source: string, title = "Comprobante") {
+  const normalizedSource = source.trim();
+  if (!normalizedSource) return;
+  mediaViewerSource.value = normalizedSource;
+  mediaViewerTitle.value = title;
+  showMediaViewer.value = true;
+}
 
 const statusOptions = computed(() => [
   { value: "todos", label: "Todos" },
@@ -780,12 +792,11 @@ onMounted(() => {
             </td>
             <td class="px-2 py-2 align-middle text-center">
               <template v-if="voucherMediaHref(t.send_voucher)">
-                <a
-                  :href="voucherMediaHref(t.send_voucher)"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  type="button"
                   class="inline-flex max-w-[5rem] flex-col items-center gap-1"
-                  :title="'Abrir comprobante de envío en nueva pestaña'"
+                  title="Ver comprobante de envío"
+                  @click="openMediaViewer(voucherMediaHref(t.send_voucher), 'Comprobante de envío')"
                 >
                   <img
                     :src="voucherMediaHref(t.send_voucher)"
@@ -802,18 +813,17 @@ onMounted(() => {
                   >
                     Abrir
                   </span>
-                </a>
+                </button>
               </template>
               <span v-else class="text-[#9ca3af]">—</span>
             </td>
             <td class="px-2 py-2 align-middle text-center">
               <template v-if="voucherMediaHref(t.payment_voucher)">
-                <a
-                  :href="voucherMediaHref(t.payment_voucher)"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  type="button"
                   class="inline-flex max-w-[5rem] flex-col items-center gap-1"
-                  :title="'Abrir comprobante de pago en nueva pestaña'"
+                  title="Ver comprobante de pago"
+                  @click="openMediaViewer(voucherMediaHref(t.payment_voucher), 'Comprobante de pago')"
                 >
                   <img
                     :src="voucherMediaHref(t.payment_voucher)"
@@ -830,7 +840,7 @@ onMounted(() => {
                   >
                     Abrir
                   </span>
-                </a>
+                </button>
               </template>
               <span v-else class="text-[#9ca3af]">—</span>
             </td>
@@ -892,5 +902,11 @@ onMounted(() => {
         </div>
       </div>
     </div>
+
+    <MediaViewerDialog
+      v-model="showMediaViewer"
+      :source="mediaViewerSource"
+      :title="mediaViewerTitle"
+    />
   </div>
 </template>
