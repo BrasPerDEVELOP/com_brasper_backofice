@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  clearTransactionDestinationAccounts,
   formatDestinationAccountOptionLabel,
   validateTransactionDestinations
 } from './use_transaction_destinations'
@@ -57,5 +58,23 @@ describe('validateTransactionDestinations', () => {
     expect(validateTransactionDestinations([
       { bank_account_id: 'a', amount: 20 }
     ], 30)).toMatchObject({ difference: 10 })
+  })
+})
+
+describe('clearTransactionDestinationAccounts', () => {
+  it('quita las cuentas del cliente anterior y conserva la distribución de montos', () => {
+    expect(clearTransactionDestinationAccounts([
+      { bank_account_id: 'bcp', amount: 300 },
+      { bank_account_id: 'interbank', amount: 330 }
+    ])).toEqual([
+      { bank_account_id: '', amount: 300 },
+      { bank_account_id: '', amount: 330 }
+    ])
+  })
+
+  it('mantiene al menos una fila vacía', () => {
+    expect(clearTransactionDestinationAccounts([])).toEqual([
+      { bank_account_id: '', amount: null }
+    ])
   })
 })

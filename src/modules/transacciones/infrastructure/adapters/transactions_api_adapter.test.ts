@@ -94,6 +94,29 @@ describe('TransactionsApiAdapter social_reason_bank_id', () => {
     })
   })
 
+  it('envía el nuevo cliente, sus cuentas y una lista vacía para quitar etiquetas', async () => {
+    putMock.mockResolvedValue({ data: { id: 'tx-1' } })
+    const destinations = [
+      { bank_account_id: 'account-new', amount: 630 }
+    ]
+
+    await adapter.updateTransaction('tx-1', {
+      user_id: 'client-new',
+      bank_account_destination: 'account-new',
+      destinations,
+      tag_ids: [],
+      agent_id: undefined
+    })
+
+    expect(putMock).toHaveBeenCalledWith('transactions', {
+      id: 'tx-1',
+      user_id: 'client-new',
+      bank_account_destination: 'account-new',
+      destinations,
+      tag_ids: []
+    })
+  })
+
   it('elimina sin barra final para evitar la redirección 307 hacia HTTP', async () => {
     deleteMock.mockResolvedValue({ data: null })
 

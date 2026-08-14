@@ -55,6 +55,22 @@ export function emptyTransactionDestination(): TransactionDestinationDraft {
   return { bank_account_id: '', amount: null }
 }
 
+/**
+ * Al cambiar de cliente, ninguna cuenta del cliente anterior puede conservarse.
+ * Los montos sí se mantienen para que solo sea necesario reasignar las cuentas.
+ */
+export function clearTransactionDestinationAccounts(
+  destinations: TransactionDestinationDraft[]
+): TransactionDestinationDraft[] {
+  const rows = destinations.length > 0
+    ? destinations
+    : [emptyTransactionDestination()]
+  return rows.map((destination) => ({
+    bank_account_id: '',
+    amount: destination.amount
+  }))
+}
+
 export function validateTransactionDestinations(
   destinations: TransactionDestinationDraft[],
   expectedTotal: number
