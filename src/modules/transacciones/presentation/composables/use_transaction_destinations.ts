@@ -11,6 +11,13 @@ export interface TransactionDestinationsValidation {
   error: string | null
 }
 
+export interface CreateTransactionAssociationsInput {
+  userId: string
+  socialReasonBankId: string
+  destinations: TransactionDestinationDraft[]
+  expectedTotal: number
+}
+
 export interface DestinationAccountLabelData {
   account_holder_type?: string | null
   holder_names?: string | null
@@ -22,10 +29,9 @@ export interface DestinationAccountLabelData {
 }
 
 function destinationAccountHolder(account: DestinationAccountLabelData): string {
-  const holderType = (account.account_holder_type ?? '')
-    .trim()
-    .toLocaleLowerCase('es')
-  const isBusiness = holderType.includes('juridica') ||
+  const holderType = (account.account_holder_type ?? '').trim().toLocaleLowerCase('es')
+  const isBusiness =
+    holderType.includes('juridica') ||
     holderType.includes('jurídica') ||
     holderType.includes('legal')
 
@@ -62,9 +68,7 @@ export function emptyTransactionDestination(): TransactionDestinationDraft {
 export function clearTransactionDestinationAccounts(
   destinations: TransactionDestinationDraft[]
 ): TransactionDestinationDraft[] {
-  const rows = destinations.length > 0
-    ? destinations
-    : [emptyTransactionDestination()]
+  const rows = destinations.length > 0 ? destinations : [emptyTransactionDestination()]
   return rows.map((destination) => ({
     bank_account_id: '',
     amount: destination.amount
@@ -89,17 +93,37 @@ export function validateTransactionDestinations(
   if (new Set(ids).size !== ids.length) {
     return { total, difference, error: 'No se puede repetir una cuenta destino.' }
   }
-  if (destinations.some((item) => !Number.isFinite(Number(item.amount)) || Number(item.amount) <= 0)) {
+  if (
+    destinations.some((item) => !Number.isFinite(Number(item.amount)) || Number(item.amount) <= 0)
+  ) {
     return { total, difference, error: 'Cada cuenta debe tener un monto mayor que cero.' }
   }
   if (difference !== 0) {
     return {
       total,
       difference,
-      error: difference > 0
-        ? 'Todavía falta distribuir parte del monto a recibir.'
-        : 'Los montos distribuidos superan el monto a recibir.'
+      error:
+        difference > 0
+          ? 'Todavía falta distribuir parte del monto a recibir.'
+          : 'Los montos distribuidos superan el monto a recibir.'
     }
   }
   return { total, difference, error: null }
+}
+
+/**
+ * Campos relacionales obligatorios únicamente en el alta de una transacción.
+ * La edición de registros históricos no debe quedar bloqueada por datos que
+ * antes eran opcionales, especialmente la razón social exacta.
+ */
+export function validateCreateTransactionAssociations(
+  input: CreateTransactionAssociationsInput
+): TransactionDestinationsValidation {
+  if (!input.userId.trim()) {
+    return { total: 0, difference: 0, error: 'Selecciona el cliente.' }
+  }
+  if (!input.socialReasonBankId.trim()) {
+    return { total: 0, difference: 0, error: 'Selecciona la razón social.' }
+  }
+  return validateTransactionDestinations(input.destinations, input.expectedTotal)
 }

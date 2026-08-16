@@ -22,7 +22,6 @@ import {
   buildTransactionExportRows,
   transactionExportFilename
 } from '../../infrastructure/utils/transactions_export'
-import { isClientProfileIncomplete } from '@modules/auth/infrastructure/parse_user'
 import { useAuthStore } from '@modules/auth/presentation/controllers/use_auth_store_controller'
 import type { BankAccount } from '@modules/cuentas-bancarias/domain/models'
 import type { Transaction } from '../../domain/models'
@@ -80,6 +79,7 @@ import {
   clearTransactionDestinationAccounts,
   emptyTransactionDestination,
   formatDestinationAccountOptionLabel,
+  validateCreateTransactionAssociations,
   validateTransactionDestinations,
   type TransactionDestinationDraft
 } from '../composables/use_transaction_destinations'
@@ -782,8 +782,14 @@ function goCreateNext() {
     return
   }
   if (i === 1) {
-    if (!form.user_id?.trim() || !form.bank_account_destination_id?.trim()) {
-      transactionsStore.error = 'Indica cliente y cuenta destino para continuar.'
+    const associationsValidation = validateCreateTransactionAssociations({
+      userId: form.user_id,
+      socialReasonBankId: destinationBankFilterId.value,
+      destinations: form.destinations,
+      expectedTotal: form.destination_amount
+    })
+    if (associationsValidation.error) {
+      transactionsStore.error = associationsValidation.error
       return
     }
     transactionsStore.error = null
@@ -2055,11 +2061,18 @@ async function submitForm() {
     transactionsStore.error = calculatorError
     return
   }
-  if (!form.bank_account_destination_id || !form.user_id) {
-    transactionsStore.error = 'Cuenta destino y cliente son obligatorios'
-    return
-  }
-  if (destinationDistributionValidation.value.error) {
+  if (!editingId.value) {
+    const associationsValidation = validateCreateTransactionAssociations({
+      userId: form.user_id,
+      socialReasonBankId: destinationBankFilterId.value,
+      destinations: form.destinations,
+      expectedTotal: form.destination_amount
+    })
+    if (associationsValidation.error) {
+      transactionsStore.error = associationsValidation.error
+      return
+    }
+  } else if (destinationsChangedForUpdate() && destinationDistributionValidation.value.error) {
     transactionsStore.error = destinationDistributionValidation.value.error
     return
   }
@@ -2067,10 +2080,6 @@ async function submitForm() {
     transactionsStore.error = editingId.value
       ? 'La transacción debe conservar tasa y comisión válidas para guardar'
       : 'Tasa y comisión son obligatorios (usa la calculadora primero)'
-    return
-  }
-  if (!editingId.value && !form.operation_number.trim()) {
-    transactionsStore.error = 'Indica el número de operación antes de guardar.'
     return
   }
   const bankMeta = resolveTransactionBankMeta()
@@ -2820,18 +2829,6 @@ async function resolveMissingClientNames(rows: Transaction[]) {
   if (!pending.size) return
   for (const id of pending) attemptedClientLookups.add(id)
   await Promise.all(Array.from(pending).map((id) => cuentasStore.ensureTransactionFormUser(id)))
-}
-
-/**
- * Cliente dado de alta a la rápida (solo nombre). Se marca en la fila para que
- * alguien complete el perfil después, sin frenar la operación del día.
- */
-function isClientIncomplete(id: string | undefined): boolean {
-  if (!id) return false
-  const u =
-    cuentasStore.transactionFormUsers.find((u) => u.id === id) ??
-    cuentasStore.clientUsers.find((u) => u.id === id)
-  return u ? isClientProfileIncomplete(u) : false
 }
 
 function getSalesAdvisorLabel(id: string | undefined): string {
@@ -3782,13 +3779,6 @@ onActivated(() => {
             <td class="overflow-hidden px-4 py-3 text-[#374151]">
               <span class="block truncate" :title="getClientLabel(t.user_id)">
                 {{ getClientLabel(t.user_id) }}
-                <span
-                  v-if="isClientIncomplete(t.user_id)"
-                  class="ml-1 inline-flex items-center rounded-full border border-[#fed7aa] bg-[#fff7ed] px-1.5 text-[10px] font-semibold text-[#9a3412]"
-                  title="Alta rápida sin completar: falta email y documento"
-                >
-                  por completar
-                </span>
               </span>
               <span
                 v-if="transactionTags(t).length"
@@ -5010,7 +5000,7 @@ onActivated(() => {
                           <div class="grid gap-4 sm:grid-cols-2">
                             <div class="space-y-1.5">
                               <label class="block text-sm font-medium text-[#374151]"
-                                >Cliente *</label
+                                >Cliente</label
                               >
                               <div class="flex gap-2">
                                 <AppDropdown
@@ -5119,7 +5109,7 @@ onActivated(() => {
                             </div>
                             <div class="space-y-1.5 sm:col-span-2">
                               <label class="block text-sm font-medium text-[#374151]"
-                                >Cuentas destino *</label
+                                >Cuentas destino</label
                               >
                               <TransactionDestinationsEditor
                                 v-model="destinationDraftsModel"
@@ -5512,7 +5502,7 @@ onActivated(() => {
                     />
                   </div>
                   <div class="space-y-1.5 sm:col-span-2">
-                    <label class="block text-sm font-medium text-[#374151]">Razón social</label>
+                    <label class="block text-sm font-medium text-[#374151]">Razón social *</label>
                     <p class="text-xs text-[#6b7280]">
                       Nombre en tabla (moneda de envío
                       <template v-if="selectedAccountCurrencies.origin">
@@ -5524,7 +5514,7 @@ onActivated(() => {
                       <AppDropdown
                         v-model="destinationBankSelectionModel"
                         :options="destinationBankFilterOptions"
-                        placeholder="Todos"
+                        placeholder="Seleccionar razón social"
                         :searchable="destinationBankFilterOptions.length > 8"
                         class="min-w-0 flex-1"
                       />

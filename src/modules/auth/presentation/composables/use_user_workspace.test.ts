@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeUserWorkspaceTab, queryString } from './use_user_workspace'
+import {
+  normalizeUserWorkspaceTab,
+  queryString,
+  shouldShowUserRoleField
+} from './use_user_workspace'
 
 describe('user workspace query helpers', () => {
   it('normalizes the supported account tab', () => {
@@ -13,5 +17,27 @@ describe('user workspace query helpers', () => {
     expect(queryString(['user-2', 'ignored'])).toBe('user-2')
     expect(queryString('')).toBeNull()
     expect(queryString(undefined)).toBeNull()
+  })
+})
+
+describe('user role field visibility', () => {
+  it('siempre permite cambiar el rol al editar con permiso', () => {
+    expect(
+      shouldShowUserRoleField({
+        canUpdateUsers: true,
+        isEditing: true,
+        roleFilter: 'client'
+      })
+    ).toBe(true)
+  })
+
+  it('mantiene el selector oculto sin permiso de actualización', () => {
+    expect(
+      shouldShowUserRoleField({
+        canUpdateUsers: false,
+        isEditing: true,
+        roleFilter: 'todos'
+      })
+    ).toBe(false)
   })
 })

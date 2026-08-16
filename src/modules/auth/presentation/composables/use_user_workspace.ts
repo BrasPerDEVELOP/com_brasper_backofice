@@ -11,10 +11,16 @@ export function queryString(value: unknown): string | null {
   return typeof candidate === 'string' && candidate.trim() ? candidate.trim() : null
 }
 
-export function useUserWorkspace(options: {
-  query: Ref<LocationQuery>
-  router: Router
-}) {
+export function shouldShowUserRoleField(options: {
+  canUpdateUsers: boolean
+  isEditing: boolean
+  roleFilter: string
+}): boolean {
+  if (!options.canUpdateUsers) return false
+  return options.isEditing || options.roleFilter.trim().toLowerCase() === 'todos'
+}
+
+export function useUserWorkspace(options: { query: Ref<LocationQuery>; router: Router }) {
   const selectedUserId = shallowRef<string | null>(queryString(options.query.value.user))
   const activeTab = shallowRef<UserWorkspaceTab>(
     normalizeUserWorkspaceTab(queryString(options.query.value.tab))

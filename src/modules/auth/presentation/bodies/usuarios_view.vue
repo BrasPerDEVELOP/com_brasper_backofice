@@ -8,7 +8,6 @@ import {
   type UserListItem
 } from '../../infrastructure/adapters/users_management_api_adapter'
 import { USER_ROLE_LABELS } from '../../domain/models'
-import { isClientProfileIncomplete } from '../../infrastructure/parse_user'
 import * as XLSX from 'xlsx'
 import UsuarioCreateFormModal from '@/interface/components/UsuarioCreateFormModal.vue'
 import CuentaBancariaCreateFormModal from '@/interface/components/CuentaBancariaCreateFormModal.vue'
@@ -19,7 +18,11 @@ import UserFiltersBar from '../components/UserFiltersBar.vue'
 import UserDirectoryTable from '../components/UserDirectoryTable.vue'
 import UserResetPasswordModal from '../components/UserResetPasswordModal.vue'
 import UserImportExcelModal from '../components/UserImportExcelModal.vue'
-import { queryString, useUserWorkspace } from '../composables/use_user_workspace'
+import {
+  queryString,
+  shouldShowUserRoleField,
+  useUserWorkspace
+} from '../composables/use_user_workspace'
 import { useCuentasBancariasStore } from '@/modules/cuentas-bancarias/presentation/controllers/use_cuentas_bancarias_store_controller'
 import type { BankAccount } from '@/modules/cuentas-bancarias/domain/models'
 import { useAuthStore } from '../controllers/use_auth_store_controller'
@@ -85,9 +88,10 @@ const currentPage = ref(Number.isInteger(requestedPage) && requestedPage > 0 ? r
 
 const roleOptions = computed(() => [
   ...(canViewUsers.value ? [{ value: 'todos', label: 'Todos' }] : []),
-  ...USER_ROLES
-    .filter((role) => canViewUsers.value || role === 'client')
-    .map((r) => ({ value: r, label: USER_ROLE_LABELS[r] }))
+  ...USER_ROLES.filter((role) => canViewUsers.value || role === 'client').map((r) => ({
+    value: r,
+    label: USER_ROLE_LABELS[r]
+  }))
 ])
 
 const perPageStr = computed({
@@ -100,17 +104,26 @@ const perPageStr = computed({
 const createModalDefaultRole = computed(() =>
   roleSelectFilter.value.toLowerCase() === 'todos' ? 'client' : roleSelectFilter.value
 )
+const showUserRoleField = computed(() =>
+  shouldShowUserRoleField({
+    canUpdateUsers: canUpdateUsers.value,
+    isEditing: selectedUser.value !== null,
+    roleFilter: roleSelectFilter.value
+  })
+)
 
 const debouncedSearch = ref('')
 let searchDebounceId: ReturnType<typeof setTimeout>
-watch(searchQuery, (q) => {
-  clearTimeout(searchDebounceId)
-  searchDebounceId = setTimeout(() => {
-    debouncedSearch.value = q
-  }, 150)
-}, { immediate: true })
-
-const onlyIncomplete = ref(false)
+watch(
+  searchQuery,
+  (q) => {
+    clearTimeout(searchDebounceId)
+    searchDebounceId = setTimeout(() => {
+      debouncedSearch.value = q
+    }, 150)
+  },
+  { immediate: true }
+)
 
 const filteredByRole = computed(() => {
   const role = roleSelectFilter.value.toLowerCase()
@@ -118,20 +131,8 @@ const filteredByRole = computed(() => {
   return users.value.filter((u) => (u.role ?? '').toLowerCase() === role)
 })
 
-/**
- * Clientes dados de alta a la rápida (solo nombre). El conteo se hace sobre
- * `users`, no sobre la lista filtrada: es un pendiente global, no del filtro.
- */
-const incompleteClients = computed(() =>
-  users.value.filter(
-    (u) =>
-      ['client', 'cliente'].includes((u.role ?? '').toLowerCase()) &&
-      isClientProfileIncomplete(u)
-  )
-)
-
 const searchedUsers = computed(() => {
-  const list = onlyIncomplete.value ? incompleteClients.value : filteredByRole.value
+  const list = filteredByRole.value
   const q = debouncedSearch.value.trim().toLowerCase()
   if (!q) return list
   return list.filter((u) => {
@@ -276,7 +277,9 @@ const deletingId = ref<string | null>(null)
 const pendingDelete = ref<UserListItem | null>(null)
 const showDeleteConfirm = ref(false)
 const deleteConfirmMessage = computed(() =>
-  pendingDelete.value ? `¿Eliminar a ${pendingDelete.value.name} (${pendingDelete.value.email})?` : ''
+  pendingDelete.value
+    ? `¿Eliminar a ${pendingDelete.value.name} (${pendingDelete.value.email})?`
+    : ''
 )
 
 function toggleMenu(id: string) {
@@ -362,10 +365,7 @@ watch(
     const userId = user?.id ?? null
     if (!userId || tab !== 'accounts' || !canView || !isClient(user)) return
     accountSuccessMessage.value = ''
-    await Promise.all([
-      cuentasStore.loadBankAccounts({ userId }),
-      cuentasStore.loadBanks()
-    ])
+    await Promise.all([cuentasStore.loadBankAccounts({ userId }), cuentasStore.loadBanks()])
   },
   { immediate: true }
 )
@@ -395,7 +395,7 @@ function exportUsersToExcel() {
       u.email ?? '',
       documentType === '-' ? '' : documentType,
       documentNumber === '-' ? '' : documentNumber,
-      USER_ROLE_LABELS[u.role as keyof typeof USER_ROLE_LABELS] ?? (u.role ?? '')
+      USER_ROLE_LABELS[u.role as keyof typeof USER_ROLE_LABELS] ?? u.role ?? ''
     ]
   })
   const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
@@ -415,18 +415,37 @@ onMounted(async () => {
 </script>
 
 <template>
-  <UserManagementHeader :can-create="canCreateUsers" :can-export="canViewUsers" @create="openCreateModal" @import="showImportModal = true" @export="exportUsersToExcel" />
-  <UserFiltersBar v-model:search="searchQuery" v-model:role="roleSelectFilter" v-model:only-incomplete="onlyIncomplete" :role-options="roleOptions" :total="searchedUsers.length" :incomplete-count="incompleteClients.length" />
+  <UserManagementHeader
+    :can-create="canCreateUsers"
+    :can-export="canViewUsers"
+    @create="openCreateModal"
+    @import="showImportModal = true"
+    @export="exportUsersToExcel"
+  />
+  <UserFiltersBar
+    v-model:search="searchQuery"
+    v-model:role="roleSelectFilter"
+    :role-options="roleOptions"
+    :total="searchedUsers.length"
+  />
 
   <!-- Content -->
   <p v-if="error" class="mb-4 rounded-lg bg-[#dc3545]/10 px-4 py-3 text-sm text-[#dc3545]">
     {{ error }}
   </p>
-  <p v-if="successMessage" class="mb-4 rounded-lg bg-brasper-cyanLight/15 px-4 py-3 text-sm text-brasper-indigoDark">
+  <p
+    v-if="successMessage"
+    class="mb-4 rounded-lg bg-brasper-cyanLight/15 px-4 py-3 text-sm text-brasper-indigoDark"
+  >
     {{ successMessage }}
   </p>
 
-  <p v-if="accountSuccessMessage" class="mb-4 rounded-lg bg-[#dcfce7] px-4 py-3 text-sm font-medium text-[#166534]">{{ accountSuccessMessage }}</p>
+  <p
+    v-if="accountSuccessMessage"
+    class="mb-4 rounded-lg bg-[#dcfce7] px-4 py-3 text-sm font-medium text-[#166534]"
+  >
+    {{ accountSuccessMessage }}
+  </p>
 
   <div class="grid items-start gap-5 xl:grid-cols-[minmax(0,3fr)_minmax(340px,2fr)]">
     <UserDirectoryTable
@@ -477,7 +496,7 @@ onMounted(async () => {
 
   <UsuarioCreateFormModal
     v-model="showCreateModal"
-    :show-role-field="roleSelectFilter.toLowerCase() === 'todos' && canUpdateUsers"
+    :show-role-field="showUserRoleField"
     :default-role="createModalDefaultRole"
     :user="selectedUser"
     @created="onUserSaved"
@@ -499,8 +518,16 @@ onMounted(async () => {
     @saved="onBankAccountUpdated"
   />
 
-  <UserResetPasswordModal :user="resetPasswordUser" @close="closeResetPasswordModal" @saved="successMessage = 'Contraseña temporal actualizada correctamente'" />
-  <UserImportExcelModal v-model="showImportModal" :default-role="createModalDefaultRole" @imported="onUsersImported" />
+  <UserResetPasswordModal
+    :user="resetPasswordUser"
+    @close="closeResetPasswordModal"
+    @saved="successMessage = 'Contraseña temporal actualizada correctamente'"
+  />
+  <UserImportExcelModal
+    v-model="showImportModal"
+    :default-role="createModalDefaultRole"
+    @imported="onUsersImported"
+  />
 
   <ConfirmDialog
     v-model="showDeleteConfirm"
@@ -519,7 +546,10 @@ onMounted(async () => {
     @confirm="confirmDeleteBankAccount"
     @cancel="cancelDeleteBankAccount"
   >
-    <p v-if="bankAccountDeleteError" class="mt-4 rounded-lg bg-[#fee2e2] px-4 py-3 text-sm text-[#991b1b]">
+    <p
+      v-if="bankAccountDeleteError"
+      class="mt-4 rounded-lg bg-[#fee2e2] px-4 py-3 text-sm text-[#991b1b]"
+    >
       {{ bankAccountDeleteError }}
     </p>
   </ConfirmDialog>

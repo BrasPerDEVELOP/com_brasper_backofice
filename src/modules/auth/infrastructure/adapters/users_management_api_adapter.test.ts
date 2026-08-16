@@ -14,7 +14,7 @@ vi.mock('@/interface/infrastructure/services', () => ({
 }))
 
 import { apiClient } from '@/interface/api/client'
-import { createUser, fetchUsers } from './users_management_api_adapter'
+import { createUser, fetchUsers, updateUser } from './users_management_api_adapter'
 
 const get = vi.mocked(apiClient.get)
 const post = vi.mocked(apiClient.post)
@@ -63,9 +63,10 @@ describe('users management api adapter', () => {
   it('comparte un único POST entre creaciones idénticas concurrentes', async () => {
     let resolvePost!: (value: { data: unknown }) => void
     post.mockImplementation(
-      () => new Promise((resolve) => {
-        resolvePost = resolve
-      })
+      () =>
+        new Promise((resolve) => {
+          resolvePost = resolve
+        })
     )
     const payload = {
       names: 'Rubén Moreno',
@@ -125,5 +126,17 @@ describe('users management api adapter', () => {
     ).rejects.toThrow('más de un cliente incompleto')
     expect(post).not.toHaveBeenCalled()
     expect(put).not.toHaveBeenCalled()
+  })
+
+  it('envía el rol seleccionado al editar un usuario', async () => {
+    put.mockResolvedValue({
+      data: { id: 'u1', names: 'Ana', role: 'sales' }
+    })
+
+    await updateUser({ id: 'u1', role: 'sales' })
+
+    const form = put.mock.calls[0]?.[1] as FormData
+    expect(form.get('id')).toBe('u1')
+    expect(form.get('role')).toBe('sales')
   })
 })
