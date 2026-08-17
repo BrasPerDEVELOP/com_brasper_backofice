@@ -4,7 +4,10 @@ import { useTransactionsStore } from "@modules/transacciones/presentation/contro
 import { useCuentasBancariasStore } from "@modules/cuentas-bancarias/presentation/controllers/use_cuentas_bancarias_store_controller";
 import type { BankAccount } from "@modules/cuentas-bancarias/domain/models";
 import { useTasasStore } from "@modules/tasas/presentation/controllers/use_tasas_store_controller";
-import { useComisionesStore } from "@modules/comisiones/presentation/controllers/use_comisiones_store_controller";
+import {
+  useComisionesStore,
+  useComisionesContabilidadStore,
+} from "@modules/comisiones/presentation/controllers/use_comisiones_store_controller";
 import type {
   Transaction,
   TransactionSpecialDiscountInfo,
@@ -26,11 +29,17 @@ import AppDropdown from "@/interface/components/AppDropdown.vue";
 import AppDateInput from "@/interface/components/AppDateInput.vue";
 import { MediaViewerDialog } from "@interface/widgets";
 import { Domain } from "@/interface/infrastructure/services";
+import { downloadTransactionAccountingPdf } from "../../infrastructure/pdf/download_transaction_accounting_pdf";
+import {
+  resolveAccountingCommission,
+  type AccountingCommissionMatch,
+} from "../../domain/accounting_commission";
 
 const transactionsStore = useTransactionsStore();
 const cuentasStore = useCuentasBancariasStore();
 const tasasStore = useTasasStore();
 const comisionesStore = useComisionesStore();
+const comisionesContabilidadStore = useComisionesContabilidadStore();
 
 const searchQuery = ref("");
 const statusFilter = ref<string>("todos");
@@ -234,6 +243,63 @@ function descuentoEspecialTitle(t: Transaction): string {
   return parts.join(" · ");
 }
 
+/** Contabilidad: porcentaje con dos decimales (3.50%). */
+function formatPercent(value: number | null | undefined): string {
+  if (value == null || Number.isNaN(Number(value))) return "—";
+  const n = Number(value).toLocaleString("es-PE", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return `${n}%`;
+}
+
+/**
+ * Descuento variable: porcentaje de la comisión de contabilidad
+ * (`/coin/commission-accounting`) que aplica a cada operación, resuelto por par
+ * de monedas y tramo de monto. Es informativo — no altera la comisión final
+ * interna, que sigue viniendo del API.
+ */
+const descuentoVariableByTransactionId = computed(() => {
+  const commissions = comisionesContabilidadStore.commissions;
+  const map = new Map<string, AccountingCommissionMatch>();
+  for (const t of transactionsStore.transactions) {
+    if (!t.id) continue;
+    const { origin, destination } = getTransactionCurrencies(t);
+    const match = resolveAccountingCommission({
+      originCurrency: origin,
+      destinationCurrency: destination,
+      originAmount: t.origin_amount,
+      commissions,
+    });
+    if (match) map.set(t.id, match);
+  }
+  return map;
+});
+
+function descuentoVariable(t: Transaction): AccountingCommissionMatch | null {
+  if (!t.id) return null;
+  return descuentoVariableByTransactionId.value.get(t.id) ?? null;
+}
+
+function descuentoVariableLabel(t: Transaction): string {
+  const match = descuentoVariable(t);
+  return match ? formatPercent(match.percentage) : "—";
+}
+
+function descuentoVariableTitle(t: Transaction): string {
+  const match = descuentoVariable(t);
+  if (!match) return "Sin comisión de contabilidad para este par y monto";
+  const parts = [
+    `Comisión de contabilidad ${match.coinA} → ${match.coinB}`,
+    `Tramo ${formatValue(match.minAmount)} – ${formatValue(match.maxAmount)}`,
+    formatPercent(match.percentage),
+  ];
+  if (!match.withinBracket) {
+    parts.push("Ningún tramo cubre el monto: se muestra el último del par");
+  }
+  return parts.join(" · ");
+}
+
 function comisionFinalInterna(t: Transaction): number | undefined {
   const v =
     t.comision_final_interna ??
@@ -386,6 +452,46 @@ function getTransactionExchangeTitle(t: Transaction): string {
   return "—";
 }
 
+const downloadingPdfId = ref<string | null>(null);
+const pdfError = ref<string | null>(null);
+
+/**
+ * PDF de una fila: se arma con los mismos valores que muestra la tabla, así el
+ * documento y la pantalla nunca discrepan.
+ */
+async function downloadPdf(t: Transaction) {
+  if (downloadingPdfId.value) return;
+  downloadingPdfId.value = t.id ?? "";
+  pdfError.value = null;
+  try {
+    await downloadTransactionAccountingPdf({
+      code: formatTransactionCodeForDisplay(t.code),
+      sendDate: formatDate(t.send_date),
+      operationNumber: t.operation_number ? String(t.operation_number) : "",
+      client: getClientLabel(t.user_id),
+      destinationAccount: getBankCurrencyTableLabel(t.bank_account_destination_id),
+      companyName: transactionCompanyNameTable(t),
+      originAmount: formatValue(t.origin_amount),
+      destinationAmount: formatValue(t.destination_amount),
+      exchangeRate: getTransactionExchangeLabel(t),
+      exchangeDetail: getTransactionExchangeTitle(t),
+      variableDiscount: descuentoVariableLabel(t),
+      specialDiscount: descuentoEspecialLabel(t),
+      internalCommission: formatPen(comisionFinalInterna(t)),
+      internalTax: formatPen(impuestoFinalInterno(t)),
+      finalSale: formatPen(ventaFinalMonto(t)),
+      status: getStatusLabel(resolveTransactionStatusForDisplay(t) ?? t.status),
+      checked: isTransactionChecked(t),
+      generatedAt: new Date(),
+    });
+  } catch (e) {
+    pdfError.value =
+      e instanceof Error ? e.message : "No se pudo generar el PDF de la operación.";
+  } finally {
+    downloadingPdfId.value = null;
+  }
+}
+
 async function toggleChecked(t: Transaction) {
   if (!t.id || updatingCheckedId.value) return;
   const newChecked = !isTransactionChecked(t);
@@ -437,6 +543,8 @@ onMounted(() => {
     // Catálogos necesarios para inferir el descuento especial en operaciones antiguas.
     tasasStore.loadTaxRates(),
     comisionesStore.loadCommissions(),
+    // Catálogo del descuento variable (porcentaje de comisión de contabilidad).
+    comisionesContabilidadStore.loadCommissions(),
   ]);
 });
 </script>
@@ -543,6 +651,13 @@ onMounted(() => {
       {{ transactionsStore.error }}
     </p>
 
+    <p
+      v-if="pdfError"
+      class="rounded-lg bg-[#dc3545]/10 px-4 py-3 text-sm text-[#dc3545]"
+    >
+      {{ pdfError }}
+    </p>
+
     <div
       class="relative overflow-x-auto rounded-xl border border-[#e5e7eb] bg-white"
     >
@@ -569,7 +684,7 @@ onMounted(() => {
         </span>
       </div>
 
-      <table class="w-full min-w-[1420px] text-left text-sm">
+      <table class="w-full min-w-[1520px] text-left text-sm">
         <thead>
           <tr class="bg-[#dbeafe]">
             <th class="w-10 px-2 py-3" title="Verificada">
@@ -622,6 +737,12 @@ onMounted(() => {
             </th>
             <th
               class="whitespace-nowrap px-2 py-3 text-right text-xs font-semibold leading-tight text-brasper-indigoDark"
+              title="Porcentaje de la comisión de contabilidad aplicable a la operación"
+            >
+              Descuento<br />variable
+            </th>
+            <th
+              class="whitespace-nowrap px-2 py-3 text-right text-xs font-semibold leading-tight text-brasper-indigoDark"
               title="Descuento aplicado por la calculadora especial (ESPECIAL)"
             >
               Descuento<br />especial
@@ -658,6 +779,12 @@ onMounted(() => {
             >
               Comp.<br />pago
             </th>
+            <th
+              class="whitespace-nowrap px-2 py-3 text-center text-xs font-semibold leading-tight text-brasper-indigoDark"
+              title="Descargar el detalle contable en PDF"
+            >
+              PDF
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -666,7 +793,7 @@ onMounted(() => {
             class="border-t border-[#e5e7eb]"
           >
             <td
-              colspan="17"
+              colspan="19"
               class="rounded-xl border border-[#dbe7fb] bg-[#fbfdff] px-6 py-12 text-center text-[#666]"
             >
               {{
@@ -747,6 +874,17 @@ onMounted(() => {
               :title="getTransactionExchangeTitle(t)"
             >
               {{ getTransactionExchangeLabel(t) }}
+            </td>
+            <td
+              class="whitespace-nowrap px-2 py-3 text-right tabular-nums"
+              :class="
+                descuentoVariable(t) != null
+                  ? 'font-medium text-[#374151]'
+                  : 'text-[#9ca3af]'
+              "
+              :title="descuentoVariableTitle(t)"
+            >
+              {{ descuentoVariableLabel(t) }}
             </td>
             <td
               class="whitespace-nowrap px-2 py-3 text-right tabular-nums"
@@ -843,6 +981,31 @@ onMounted(() => {
                 </button>
               </template>
               <span v-else class="text-[#9ca3af]">—</span>
+            </td>
+            <td class="px-2 py-2 align-middle text-center">
+              <button
+                type="button"
+                class="inline-flex items-center gap-1 rounded-lg border border-[#bcd7ff] bg-[#eef5ff] px-2.5 py-1.5 text-[11px] font-medium text-brasper-indigoStrong transition hover:bg-[#e2eeff] disabled:cursor-not-allowed disabled:opacity-60"
+                :disabled="downloadingPdfId !== null"
+                :title="`Descargar PDF de ${formatTransactionCodeForDisplay(t.code)}`"
+                @click.stop="downloadPdf(t)"
+              >
+                <svg
+                  class="h-3.5 w-3.5"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"
+                  />
+                </svg>
+                {{ downloadingPdfId === (t.id ?? "") ? "Generando…" : "PDF" }}
+              </button>
             </td>
           </tr>
         </tbody>

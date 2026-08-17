@@ -110,6 +110,8 @@ Corporate Brasper accounts are managed separately at `/app/cuentas-brasper`. Thi
 
 The `calculator` module exports two Pinia stores from the same factory: `useCalculatorStore` (id: `calculator`) and `useCalculatorDemoStore` (id: `calculator-demo`). The demo store renders the public-facing embed without backend calls. The `calculationMode` field (`'normal'` | `'special'`) controls whether `localTaxRateOverrides` are applied to `effectiveTaxRates`.
 
+The `comisiones` module exports two Pinia stores from the same factory: `useComisionesStore` (id: `comisiones`, `/coin/commission`) para las comisiones de venta y `useComisionesContabilidadStore` (id: `comisiones-contabilidad`, `/coin/commission-accounting`) para las de contabilidad. Ambos recursos tienen la misma estructura y los mismos permisos `commissions.*` en el API; la vista `/app/comisiones` los muestra en pestañas y solo enseña la de contabilidad a quien tiene `accounting.view`. `/coin/commission-accounting` no expone historial, así que ese panel oculta el botón.
+
 Domain helper functions (pure, no store dependencies) live in `transaction_domain.ts` alongside the models — e.g., `normalizeTransactionStatus`, `resolveTransactionStatusForDisplay`, `roundMoneyAmount`. New pure transaction logic belongs here, not in the adapter or store.
 
 ## Naming conventions

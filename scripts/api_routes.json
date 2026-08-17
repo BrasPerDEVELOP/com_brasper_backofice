@@ -179,6 +179,41 @@
  },
  {
   "method": "GET",
+  "path": "/coin/commission-accounting",
+  "permissions": [
+   "commissions.view"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/coin/commission-accounting",
+  "permissions": [
+   "commissions.create"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/coin/commission-accounting",
+  "permissions": [
+   "commissions.update"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/coin/commission-accounting/{commission_accounting_id}",
+  "permissions": [
+   "commissions.delete"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/coin/commission-accounting/{commission_accounting_id}",
+  "permissions": [
+   "commissions.view"
+  ]
+ },
+ {
+  "method": "GET",
   "path": "/coin/commission-trial",
   "permissions": [
    "commissions.view"
@@ -468,6 +503,13 @@
   "path": "/transactions",
   "permissions": [
    "transactions.update"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/transactions/accounting",
+  "permissions": [
+   "accounting.view"
   ]
  },
  {

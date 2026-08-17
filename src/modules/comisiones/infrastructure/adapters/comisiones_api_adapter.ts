@@ -1,7 +1,7 @@
 import { apiClient } from '@/interface/api/client'
 import { Domain } from '@/interface/infrastructure/services'
 import type { ComisionesRepository } from './comisiones_repository'
-import type { Commission, CommissionHistoryEntry } from '../../domain/models'
+import type { Commission, CommissionHistoryEntry, CommissionResource } from '../../domain/models'
 
 function parseCommission(item: Record<string, unknown>): Commission {
   const percentage = Number(item.percentage ?? 0)
@@ -40,13 +40,20 @@ function parseCommissionHistory(data: unknown): CommissionHistoryEntry[] {
 }
 
 export class ComisionesApiAdapter implements ComisionesRepository {
-  private endpoint(path: string): string {
-    const p = path.replace(/^\/+/, '')
-    return Domain.apiPath(p ? `coin/${p}` : 'coin')
+  /**
+   * @param resource recurso de comisiones al que apunta este adapter. Por
+   * defecto las comisiones de venta, para no cambiar a los llamadores previos.
+   */
+  constructor(private readonly resource: CommissionResource = 'commission') {}
+
+  /** `''` → `coin/<recurso>`; `'<id>/history'` → `coin/<recurso>/<id>/history`. */
+  private endpoint(path = ''): string {
+    const suffix = path.replace(/^\/+/, '')
+    return Domain.apiPath(suffix ? `coin/${this.resource}/${suffix}` : `coin/${this.resource}`)
   }
 
   async getCommissions(): Promise<Commission[]> {
-    const url = this.endpoint('commission')
+    const url = this.endpoint()
     const response = await apiClient.get<unknown>(url)
     const data = Array.isArray(response.data) ? response.data : []
     return parseCommissions(data)
@@ -60,7 +67,7 @@ export class ComisionesApiAdapter implements ComisionesRepository {
     min_amount: string
     max_amount: string
   }): Promise<Commission> {
-    const url = this.endpoint('commission')
+    const url = this.endpoint()
     const response = await apiClient.post<unknown>(url, payload)
     return parseCommission(
       response.data != null && typeof response.data === 'object'
@@ -76,7 +83,7 @@ export class ComisionesApiAdapter implements ComisionesRepository {
     id: string,
     body: import('./comisiones_repository').CommissionUpdateBody
   ): Promise<Commission> {
-    const url = this.endpoint('commission')
+    const url = this.endpoint()
     const requestBody: import('./comisiones_repository').CommissionUpdateBody = { ...body }
     requestBody.id = id
     const response = await apiClient.put<unknown>(url, requestBody)
@@ -88,12 +95,12 @@ export class ComisionesApiAdapter implements ComisionesRepository {
   }
 
   async deleteCommission(id: string): Promise<void> {
-    const url = this.endpoint(`commission/${id}`)
+    const url = this.endpoint(id)
     await apiClient.delete(url)
   }
 
   async getCommissionHistory(id: string): Promise<CommissionHistoryEntry[]> {
-    const url = this.endpoint(`commission/${id}/history`)
+    const url = this.endpoint(`${id}/history`)
     const response = await apiClient.get<unknown>(url)
     return parseCommissionHistory(response.data)
   }

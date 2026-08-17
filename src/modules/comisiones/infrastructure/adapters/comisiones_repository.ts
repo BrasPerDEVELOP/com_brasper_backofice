@@ -1,6 +1,6 @@
 import type { Commission, CommissionHistoryEntry } from '../../domain/models'
 
-/** Body completo que espera PUT /coin/commission */
+/** Body completo que espera PUT /coin/commission (y /coin/commission-accounting) */
 export interface CommissionUpdateBody {
   id: string
   coin_a: string

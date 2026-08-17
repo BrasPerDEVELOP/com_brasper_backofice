@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
-import type { Commission, CommissionHistoryEntry } from '../../domain/models'
+import { ref } from 'vue'
+import type { Commission, CommissionHistoryEntry, CommissionResource } from '../../domain/models'
 import type { ComisionesRepository, CommissionUpdateBody } from '../../infrastructure/adapters/comisiones_repository'
 import { ComisionesApiAdapter } from '../../infrastructure/adapters'
 import {
@@ -10,7 +11,23 @@ import {
   DeleteCommissionUseCase
 } from '../../application/use_cases'
 
-interface ComisionesState {
+/** Formulario de comisión: todos los campos como texto, tal cual los edita la vista. */
+export interface CommissionForm {
+  coin_a: string
+  coin_b: string
+  percentage: string
+  reverse: string
+  min_amount: string
+  max_amount: string
+}
+
+/**
+ * Contrato que consume la UI de comisiones. Lo cumplen tanto el store de venta
+ * como el de contabilidad: son la misma definición sobre recursos distintos,
+ * pero Pinia les da tipos distintos por el id, así que los componentes
+ * compartidos tipan contra esta interfaz.
+ */
+export interface ComisionesStoreLike {
   commissions: Commission[]
   isLoading: boolean
   error: string | null
@@ -18,129 +35,107 @@ interface ComisionesState {
   deletingId: string | null
   loadingHistoryId: string | null
   historyByCommissionId: Record<string, CommissionHistoryEntry[]>
+  loadCommissions(): Promise<void>
+  deleteCommission(id: string): Promise<void>
+  loadCommissionHistory(id: string, force?: boolean): Promise<void>
+  validateAndSaveCommission(id: string, form: CommissionForm): Promise<boolean>
 }
 
-function getRepository(): ComisionesRepository {
-  return new ComisionesApiAdapter()
-}
+/**
+ * Define el store de comisiones sobre un recurso del API. La lógica es idéntica
+ * para venta y contabilidad; lo único que cambia es a qué endpoint pega.
+ */
+function buildComisionesStore(resource: CommissionResource) {
+  return () => {
+    const repository: ComisionesRepository = new ComisionesApiAdapter(resource)
 
-export const useComisionesStore = defineStore('comisiones', {
-  state: (): ComisionesState => ({
-    commissions: [],
-    isLoading: false,
-    error: null,
-    savingId: null,
-    deletingId: null,
-    loadingHistoryId: null,
-    historyByCommissionId: {}
-  }),
+    const commissions = ref<Commission[]>([])
+    const isLoading = ref(false)
+    const error = ref<string | null>(null)
+    const savingId = ref<string | null>(null)
+    const deletingId = ref<string | null>(null)
+    const loadingHistoryId = ref<string | null>(null)
+    const historyByCommissionId = ref<Record<string, CommissionHistoryEntry[]>>({})
 
-  actions: {
-    async loadCommissions() {
-      this.isLoading = true
-      this.error = null
+    async function loadCommissions(): Promise<void> {
+      isLoading.value = true
+      error.value = null
       try {
-        const repo = getRepository()
-        const useCase = new GetCommissionsUseCase(repo)
-        this.commissions = await useCase.execute()
+        commissions.value = await new GetCommissionsUseCase(repository).execute()
       } catch (e) {
-        this.error = e instanceof Error ? e.message : 'Error al cargar comisiones'
+        error.value = e instanceof Error ? e.message : 'Error al cargar comisiones'
       } finally {
-        this.isLoading = false
+        isLoading.value = false
       }
-    },
+    }
 
-    async createCommission(payload: {
-      coin_a: string
-      coin_b: string
-      percentage: string
-      reverse: string
-      min_amount: string
-      max_amount: string
-    }) {
-      this.savingId = 'new'
-      this.error = null
+    async function createCommission(payload: CommissionForm): Promise<void> {
+      savingId.value = 'new'
+      error.value = null
       try {
-        const repo = getRepository()
-        const useCase = new CreateCommissionUseCase(repo)
-        const created = await useCase.execute(payload)
-        this.commissions.push(created)
+        const created = await new CreateCommissionUseCase(repository).execute(payload)
+        commissions.value.push(created)
       } catch (e) {
-        this.error = e instanceof Error ? e.message : 'Error al crear comisión'
+        error.value = e instanceof Error ? e.message : 'Error al crear comisión'
       } finally {
-        this.savingId = null
+        savingId.value = null
       }
-    },
+    }
 
-    async updateCommission(id: string, body: CommissionUpdateBody) {
-      this.savingId = id
-      this.error = null
+    async function updateCommission(id: string, body: CommissionUpdateBody): Promise<void> {
+      savingId.value = id
+      error.value = null
       try {
-        const repo = getRepository()
-        const useCase = new UpdateCommissionUseCase(repo)
-        const updated = await useCase.execute(id, body)
-        const idx = this.commissions.findIndex((c) => c.id === id)
-        if (idx >= 0) this.commissions[idx] = updated
+        const updated = await new UpdateCommissionUseCase(repository).execute(id, body)
+        const idx = commissions.value.findIndex((c) => c.id === id)
+        if (idx >= 0) commissions.value[idx] = updated
       } catch (e) {
-        this.error = e instanceof Error ? e.message : 'Error al actualizar comisión'
+        error.value = e instanceof Error ? e.message : 'Error al actualizar comisión'
       } finally {
-        this.savingId = null
+        savingId.value = null
       }
-    },
+    }
 
-    async deleteCommission(id: string) {
-      this.deletingId = id
-      this.error = null
+    async function deleteCommission(id: string): Promise<void> {
+      deletingId.value = id
+      error.value = null
       try {
-        const repo = getRepository()
-        const useCase = new DeleteCommissionUseCase(repo)
-        await useCase.execute(id)
-        this.commissions = this.commissions.filter((c) => c.id !== id)
+        await new DeleteCommissionUseCase(repository).execute(id)
+        commissions.value = commissions.value.filter((c) => c.id !== id)
       } catch (e) {
-        this.error = e instanceof Error ? e.message : 'Error al eliminar comisión'
+        error.value = e instanceof Error ? e.message : 'Error al eliminar comisión'
       } finally {
-        this.deletingId = null
+        deletingId.value = null
       }
-    },
+    }
 
-    async loadCommissionHistory(id: string, force = false) {
-      if (!force && this.historyByCommissionId[id]) return
-      this.loadingHistoryId = id
-      this.error = null
+    /**
+     * Solo el recurso de venta expone historial; la vista de contabilidad no
+     * muestra el botón, así que esta acción no debería llamarse ahí.
+     */
+    async function loadCommissionHistory(id: string, force = false): Promise<void> {
+      if (!force && historyByCommissionId.value[id]) return
+      loadingHistoryId.value = id
+      error.value = null
       try {
-        const repo = getRepository()
-        const useCase = new GetCommissionHistoryUseCase(repo)
-        const history = await useCase.execute(id)
-        this.historyByCommissionId = {
-          ...this.historyByCommissionId,
-          [id]: history
-        }
+        const history = await new GetCommissionHistoryUseCase(repository).execute(id)
+        historyByCommissionId.value = { ...historyByCommissionId.value, [id]: history }
       } catch (e) {
-        this.error = e instanceof Error ? e.message : 'Error al cargar historial de comisión'
+        error.value = e instanceof Error ? e.message : 'Error al cargar historial de comisión'
       } finally {
-        this.loadingHistoryId = null
+        loadingHistoryId.value = null
       }
-    },
+    }
 
     /**
      * Valida el formulario y actualiza la comisión. El controlador centraliza
      * la validación para evitar mutaciones directas del estado desde las vistas.
      * @returns true si se guardó correctamente (sin error)
      */
-    async validateAndSaveCommission(
-      id: string,
-      form: {
-        coin_a: string
-        coin_b: string
-        percentage: string
-        reverse: string
-        min_amount: string
-        max_amount: string
-      }
-    ): Promise<boolean> {
-      const current = this.commissions.find((c) => c.id === id)
+    async function validateAndSaveCommission(id: string, form: CommissionForm): Promise<boolean> {
+      const current = commissions.value.find((c) => c.id === id)
       if (!current) {
-        this.error = 'No se encontró la comisión a editar.'
+        error.value = 'No se encontró la comisión a editar.'
         return false
       }
 
@@ -151,16 +146,16 @@ export const useComisionesStore = defineStore('comisiones', {
       const maxAmount = Number(form.max_amount.trim()) || 0
 
       if (!coinA || !coinB) {
-        this.error = 'Monedas inválidas para la comisión.'
+        error.value = 'Monedas inválidas para la comisión.'
         return false
       }
 
       if (percentage < 0 || Number.isNaN(percentage)) {
-        this.error = 'El porcentaje debe ser un número válido.'
+        error.value = 'El porcentaje debe ser un número válido.'
         return false
       }
 
-      const body = {
+      await updateCommission(id, {
         id: current.id,
         coin_a: coinA,
         coin_b: coinB,
@@ -171,10 +166,33 @@ export const useComisionesStore = defineStore('comisiones', {
         created_at: current.created_at,
         created_by: current.created_by ?? null,
         updated_at: current.updated_at
-      }
+      })
+      return !error.value
+    }
 
-      await this.updateCommission(id, body)
-      return !this.error
+    return {
+      commissions,
+      isLoading,
+      error,
+      savingId,
+      deletingId,
+      loadingHistoryId,
+      historyByCommissionId,
+      loadCommissions,
+      createCommission,
+      updateCommission,
+      deleteCommission,
+      loadCommissionHistory,
+      validateAndSaveCommission
     }
   }
-})
+}
+
+/** Comisiones de venta (`/coin/commission`). */
+export const useComisionesStore = defineStore('comisiones', buildComisionesStore('commission'))
+
+/** Comisiones de contabilidad (`/coin/commission-accounting`). */
+export const useComisionesContabilidadStore = defineStore(
+  'comisiones-contabilidad',
+  buildComisionesStore('commission-accounting')
+)
