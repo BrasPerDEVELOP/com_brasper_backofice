@@ -286,6 +286,16 @@ export function useTransactionPreviewController() {
           ? [{ accountId: fallbackId, amount: total }]
           : [];
 
+    // Snapshot del banco destino que la transacción ya trae del API. Sirve de
+    // respaldo cuando este operador no tiene la cuenta en sus catálogos —caso
+    // típico de una fila recibida por WebSocket—, donde antes se mostraba el
+    // UUID de la cuenta. Sólo aplica a la cuenta única: con reparto entre varias
+    // el snapshot no distingue a cuál corresponde.
+    const snapshotBankName =
+      items.length === 1 && rec.bank_name != null
+        ? String(rec.bank_name).trim()
+        : "";
+
     const rows = items.map((item, index) => {
       const acc = cuentasStore.bankAccounts.find(
         (candidate) => candidate.id === item.accountId,
@@ -300,7 +310,9 @@ export function useTransactionPreviewController() {
           : null;
       return {
         position: index + 1,
-        bankLabel: acc ? bankAccountBankLabel(acc) : item.accountId || "—",
+        bankLabel: acc
+          ? bankAccountBankLabel(acc)
+          : snapshotBankName || "—",
         identifiers: acc
           ? [
               ...(acc.account_number?.trim()

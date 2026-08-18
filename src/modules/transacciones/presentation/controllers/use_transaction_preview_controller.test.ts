@@ -74,7 +74,10 @@ describe("useTransactionPreviewController.buildPreviewSections", () => {
     } as unknown as Transaction);
     expect(summary.rows).toHaveLength(1);
     expect(summary.rows[0]?.shareLabel).toBeNull();
-    expect(summary.rows[0]?.bankLabel).toBe("acc-legacy");
+    // Sin la cuenta en los catálogos, la etiqueta sale del snapshot `bank_name`
+    // de la transacción; el id nunca se muestra como nombre de banco.
+    expect(summary.rows[0]?.bankLabel).toBe("Banco do Brasil - 001");
+    expect(summary.rows[0]?.bankLabel).not.toBe("acc-legacy");
   });
 
   it("expone cuenta, CCI y PIX completos como identificadores separados", () => {
@@ -157,5 +160,80 @@ describe("useTransactionPreviewController.buildPreviewSections", () => {
     expect(extra?.items).toEqual([
       expect.objectContaining({ label: "campo_nuevo_api", value: "valor" }),
     ]);
+  });
+
+  describe("cuentas que este operador no tiene en sus catálogos", () => {
+    it("usa el bank_name de la transacción en vez de mostrar el UUID de la cuenta", () => {
+      // Escenario real: la fila llegó por WebSocket a un operador que nunca
+      // cargó esa cuenta, así que `bankAccounts` está vacío.
+      const { buildPreviewDestinations } = useTransactionPreviewController();
+      const summary = buildPreviewDestinations({
+        ...(baseTransaction as Record<string, unknown>),
+        destination_amount: 500,
+        destinations: [],
+        bank_account_destination_id: "c5ad991e-0010-4788-bdbe-6ad1a3ec1a9b",
+        bank_name: "C.C.P.Vale do Itajaí e Lit.Catarinense",
+      } as unknown as Transaction);
+
+      expect(summary.rows.length).toBe(1);
+      expect(summary.rows[0].bankLabel).toBe(
+        "C.C.P.Vale do Itajaí e Lit.Catarinense",
+      );
+      expect(summary.rows[0].bankLabel).not.toContain("c5ad991e");
+    });
+
+    it("nunca muestra un UUID: sin snapshot ni catálogo cae en raya", () => {
+      const { buildPreviewDestinations } = useTransactionPreviewController();
+      const summary = buildPreviewDestinations({
+        ...(baseTransaction as Record<string, unknown>),
+        destination_amount: 500,
+        destinations: [],
+        bank_account_destination_id: "c5ad991e-0010-4788-bdbe-6ad1a3ec1a9b",
+        bank_name: null,
+      } as unknown as Transaction);
+
+      expect(summary.rows[0].bankLabel).toBe("—");
+    });
+
+    it("no usa el snapshot cuando hay reparto entre varias cuentas", () => {
+      // El snapshot describe una sola cuenta destino: aplicarlo a un reparto
+      // etiquetaría cuentas distintas con el mismo banco.
+      const { buildPreviewDestinations } = useTransactionPreviewController();
+      const summary = buildPreviewDestinations({
+        ...(baseTransaction as Record<string, unknown>),
+        destination_amount: 500,
+        destinations: [
+          { bank_account_id: "acc-x", amount: 300, position: 0 },
+          { bank_account_id: "acc-y", amount: 200, position: 1 },
+        ],
+        bank_name: "Banco del snapshot",
+      } as unknown as Transaction);
+
+      expect(summary.rows.length).toBe(2);
+      for (const row of summary.rows) {
+        expect(row.bankLabel).not.toBe("Banco del snapshot");
+      }
+    });
+
+    it("prefiere la cuenta real del catálogo cuando sí está cargada", () => {
+      const cuentasStore = useCuentasBancariasStore();
+      cuentasStore.bankAccounts = [
+        { id: "acc-real", bank_id: "bank-1", account_number: "123-456" },
+      ] as never;
+      cuentasStore.banks = [
+        { id: "bank-1", bank: "Nubank", currency: "BRL", company: "BRASPER" },
+      ] as never;
+
+      const { buildPreviewDestinations } = useTransactionPreviewController();
+      const summary = buildPreviewDestinations({
+        ...(baseTransaction as Record<string, unknown>),
+        destination_amount: 500,
+        destinations: [],
+        bank_account_destination_id: "acc-real",
+        bank_name: "Nombre viejo del snapshot",
+      } as unknown as Transaction);
+
+      expect(summary.rows[0].bankLabel).not.toBe("Nombre viejo del snapshot");
+    });
   });
 });

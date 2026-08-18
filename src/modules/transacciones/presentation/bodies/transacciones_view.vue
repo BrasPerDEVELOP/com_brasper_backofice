@@ -2768,13 +2768,27 @@ function voucherMediaHref(path: unknown): string {
 }
 
 /** Tabla: solo banco + moneda (sin número de cuenta ni titular). */
-function getBankCurrencyTableLabel(id: string | undefined): string {
-  if (!id) return '-'
+/**
+ * Etiqueta del banco de una cuenta, resuelta contra los catálogos locales.
+ *
+ * `fallbackBankName` es el snapshot `bank_name` que la propia transacción trae
+ * del API, y se usa cuando los catálogos no alcanzan: una fila que llega por
+ * WebSocket puede referirse a una cuenta que este operador nunca cargó, y antes
+ * eso mostraba el UUID crudo o una raya. Un UUID no le dice nada a nadie, así
+ * que nunca se devuelve: sin snapshot ni catálogo, mejor una raya honesta.
+ */
+function getBankCurrencyTableLabel(
+  id: string | undefined,
+  fallbackBankName?: string | null
+): string {
+  const fallback = fallbackBankName != null ? String(fallbackBankName).trim() : ''
+  if (!id) return fallback || '-'
+
   const acc = cuentasStore.bankAccounts.find((a) => a.id === id)
-  if (!acc) return id
-  const bank = cuentasStore.banks.find((b) => b.id === acc.bank_id)
-  if (!bank) return '-'
-  return bank.currency ? `${bank.bank} (${bank.currency})` : bank.bank
+  const bank = acc ? cuentasStore.banks.find((b) => b.id === acc.bank_id) : undefined
+  if (bank) return bank.currency ? `${bank.bank} (${bank.currency})` : bank.bank
+
+  return fallback || '-'
 }
 
 function getTransactionDestinationAccountsLabel(t: Transaction): string {
@@ -2784,7 +2798,10 @@ function getTransactionDestinationAccountsLabel(t: Transaction): string {
   const effectiveIds =
     ids.length > 0 ? ids : ([t.bank_account_destination_id?.trim()].filter(Boolean) as string[])
   if (effectiveIds.length === 0) return '-'
-  const first = getBankCurrencyTableLabel(effectiveIds[0])
+  // El snapshot describe la cuenta destino única, así que sólo sirve de respaldo
+  // cuando no hay reparto entre varias.
+  const fallback = effectiveIds.length === 1 ? t.bank_name : undefined
+  const first = getBankCurrencyTableLabel(effectiveIds[0], fallback)
   const additional = effectiveIds.length - 1
   return additional > 0
     ? `${first} +${additional} ${additional === 1 ? 'cuenta' : 'cuentas'}`
@@ -2794,7 +2811,7 @@ function getTransactionDestinationAccountsLabel(t: Transaction): string {
 function getTransactionDestinationAccountsTitle(t: Transaction): string {
   const destinations = t.destinations ?? []
   if (destinations.length === 0) {
-    return getBankCurrencyTableLabel(t.bank_account_destination_id)
+    return getBankCurrencyTableLabel(t.bank_account_destination_id, t.bank_name)
   }
   const currency = getTransactionCurrencies(t).destination
   return destinations
