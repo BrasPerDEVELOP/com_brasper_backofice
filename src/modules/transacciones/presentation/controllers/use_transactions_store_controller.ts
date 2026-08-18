@@ -284,8 +284,9 @@ export const useTransactionsStore = defineStore('transactions', {
         const repo = getTransactionsRepository()
         const useCase = new CreateTransactionUseCase(repo)
         const created = await useCase.execute(payload)
-        this.transactions = [created, ...this.transactions]
-        this.total += 1
+        // No inserta directo: el backend difunde el evento en tiempo real antes
+        // de responder al POST, así que la fila puede estar ya en la lista.
+        this.upsertTransaction(created)
         this.resetDailySequences()
         return created
       } catch (e) {
@@ -294,6 +295,38 @@ export const useTransactionsStore = defineStore('transactions', {
       } finally {
         this.isCreating = false
       }
+    },
+
+    /**
+     * Inserta la transacción, o reemplaza la existente si ya está en la lista.
+     *
+     * Es el único punto de inserción a propósito. Una creación llega por dos
+     * vías —la respuesta del POST y el evento WebSocket, que el backend difunde
+     * *dentro* del endpoint y por eso suele ganar la carrera—, y antes cada vía
+     * insertaba por su cuenta: la fila salía duplicada y `total` contaba dos
+     * veces, hasta que una recarga traía la verdad del servidor.
+     *
+     * Devuelve `true` si la fila era nueva.
+     */
+    upsertTransaction(transaction: Transaction, options?: { prependIfNew?: boolean }): boolean {
+      const txId = transaction.id ?? ''
+      const enriched = enrichTransactionWithSpecialDiscountMeta(transaction)
+      // Sin id no hay forma de deduplicar: se trata como nueva antes que
+      // arriesgar pisar una fila ajena.
+      const existingIdx = txId
+        ? this.transactions.findIndex((t) => (t.id ?? '') === txId)
+        : -1
+
+      if (existingIdx >= 0) {
+        this.transactions[existingIdx] = enriched
+        return false
+      }
+
+      if (options?.prependIfNew !== false) {
+        this.transactions = [enriched, ...this.transactions]
+      }
+      this.total += 1
+      return true
     },
 
     async updateTransaction(id: string, payload: UpdateTransactionPayload) {
@@ -324,8 +357,11 @@ export const useTransactionsStore = defineStore('transactions', {
         const useCase = new DeleteTransactionUseCase(repo)
         await useCase.execute(id)
         removeTransactionSpecialDiscountMeta(id)
+        // El evento en tiempo real pudo quitarla ya: descontar sin comprobar
+        // dejaría `total` una unidad por debajo de la realidad.
+        const wasPresent = this.transactions.some((t) => (t.id ?? '') === id)
         this.transactions = this.transactions.filter((t) => (t.id ?? '') !== id)
-        this.total = Math.max(0, this.total - 1)
+        if (wasPresent) this.total = Math.max(0, this.total - 1)
         this.resetDailySequences()
       } catch (e) {
         this.error = e instanceof Error ? e.message : 'Error al eliminar transacción'
@@ -347,16 +383,12 @@ export const useTransactionsStore = defineStore('transactions', {
      */
     applyRealtimeCreated(transaction: Transaction, options?: { prependToVisible?: boolean }) {
       const txId = transaction.id ?? ''
-      const enriched = enrichTransactionWithSpecialDiscountMeta(transaction)
-      const existingIdx = this.transactions.findIndex((t) => (t.id ?? '') === txId)
+      const prependIfNew = options?.prependToVisible !== false
+      const isNew = this.upsertTransaction(transaction, { prependIfNew })
 
-      if (existingIdx >= 0) {
-        this.transactions[existingIdx] = enriched
-      } else if (options?.prependToVisible !== false) {
-        this.transactions = [enriched, ...this.transactions]
-        this.total += 1
-      } else {
-        this.total += 1
+      // Sólo se avisa de lo que no se puede ver: si no se insertó en la página
+      // visible, el operador necesita el contador para enterarse.
+      if (isNew && !prependIfNew) {
         this.unseenRealtimeCount += 1
       }
 
