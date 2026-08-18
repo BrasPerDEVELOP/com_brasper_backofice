@@ -397,8 +397,48 @@ que devuelve Starlette al cerrar un WebSocket antes del `accept()`. Cuando el
 API despliegue este código, un token válido debe dar
 `101 Switching Protocols`.
 
-> **Pendiente de despliegue.** Al 18/08/2026 el contenedor `com_brasper_api` en
-> producción corre una imagen anterior a este trabajo y no expone la ruta
-> `/ws/transactions`, así que el `403` observado es «ruta inexistente», no un
-> rechazo de credenciales. El `101` queda por confirmar tras el despliegue,
-> junto con la prueba de fan-out entre dos workers.
+**Desplegado y verificado el 18/08/2026.** Con el `location` en su sitio y el
+API sirviendo este código, el handshake responde `101 Switching Protocols` por
+`wss://` a través de Nginx, y el contenedor loguea
+`Escuchando eventos de transacciones en el canal 'brasper_transactions_events'`.
+
+El fan-out se comprobó con dos procesos reales dentro del contenedor desplegado,
+contra la base de producción: el proceso emisor publicó sin suscriptores locales
+y el receptor recibió el evento con el `origin` del emisor. No es un doble de
+test: es `pg_notify` y `LISTEN` de verdad.
+
+### 8.6. Vida del socket y renovación del token
+
+El access token dura 15 minutos y el refresh sólo se disparaba desde el
+interceptor HTTP, ante un 401. Eso dejaba dos agujeros simétricos:
+
+- Una pestaña sin actividad no generaba peticiones, así que nada renovaba el
+  token; si el socket se caía pasada la ventana, la reconexión iba con
+  credenciales vencidas y quedaba rechazada indefinidamente.
+- Al revés, un socket ya establecido no volvía a pasar por el handshake, así que
+  seguía recibiendo transacciones con una sesión vencida o revocada.
+
+Se cierran juntos, porque uno habilita la solución del otro:
+
+- **Servidor:** el handshake guarda el `exp` del token y el handler espera con
+  `asyncio.wait_for` acotado a ese vencimiento. Al llegar, cierra con `1008`.
+  Cerrar es la única forma de forzar un handshake nuevo, que revalida permisos.
+- **Cliente:** `WebSocketService` distingue el código de cierre. Ante `1008` o
+  `4001` invoca `onAuthFailure` —que llama a `refreshAccessToken()`— y sólo
+  después reconecta, con el token nuevo. Un corte de red normal (`1006`) no
+  gasta una renovación. Tras `maxAuthFailures` renovaciones fallidas seguidas
+  (5 por defecto) deja de insistir, para no golpear el refresh con una sesión
+  definitivamente muerta.
+
+El efecto neto es que el socket se renueva solo cada 15 minutos sin intervención
+del operador, y la pestaña ociosa sobrevive indefinidamente mientras el refresh
+token siga vigente (7 días, rotado en cada uso).
+
+### 8.7. Nota de build
+
+`npm run build` fallaba en el servidor con `ReferenceError: crypto is not
+defined`: Node 18 no expone `crypto` como global (llegó en Node 19) y
+`@rollup/plugin-terser` lo necesita vía `serialize-javascript`. El script
+`build` fija `NODE_OPTIONS=--experimental-global-webcrypto`, que Node 18
+reconoce y Node 22 acepta como no-op, así que funciona con ambas versiones sin
+tocar el Node del servidor —compartido con las otras apps de pm2.

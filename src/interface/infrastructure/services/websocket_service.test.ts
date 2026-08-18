@@ -10,7 +10,7 @@ class MockWebSocket {
   public readyState = MockWebSocket.CONNECTING
   public url: string
   public onopen: (() => void) | null = null
-  public onclose: (() => void) | null = null
+  public onclose: ((event?: { code?: number }) => void) | null = null
   public onerror: ((err: unknown) => void) | null = null
   public onmessage: ((event: { data: string }) => void) | null = null
   public sent: string[] = []
@@ -30,18 +30,18 @@ class MockWebSocket {
     this.onmessage?.({ data: raw })
   }
 
-  public simulateClose() {
+  public simulateClose(code = 1006) {
     this.readyState = MockWebSocket.CLOSED
-    this.onclose?.()
+    this.onclose?.({ code })
   }
 
   public send(data: string) {
     this.sent.push(data)
   }
 
-  public close() {
+  public close(code = 1000) {
     this.readyState = MockWebSocket.CLOSED
-    this.onclose?.()
+    this.onclose?.({ code })
   }
 }
 
@@ -141,6 +141,73 @@ describe('WebSocketService', () => {
     mockWs.simulateOpen()
 
     expect(service.currentStatus).toBe('connected')
+    service.disconnect()
+  })
+
+  it('renueva el token antes de reconectar cuando el cierre es por credenciales', async () => {
+    const onAuthFailure = vi.fn().mockResolvedValue(undefined)
+    let token = 'viejo'
+    const service = new WebSocketService(() => `wss://api/ws?token=${token}`, {
+      onAuthFailure: async () => {
+        await onAuthFailure()
+        token = 'nuevo'
+      }
+    })
+
+    service.connect()
+    MockWebSocket.instances[0].simulateOpen()
+
+    // 1008: el servidor cerró por token vencido.
+    MockWebSocket.instances[0].simulateClose(1008)
+
+    expect(onAuthFailure).toHaveBeenCalledTimes(1)
+
+    await vi.waitFor(() => expect(service.currentStatus).toBe('reconnecting'))
+    await Promise.resolve()
+    await vi.advanceTimersByTimeAsync(2000)
+
+    // La reconexión usa la URL con el token ya renovado.
+    expect(MockWebSocket.instances.length).toBeGreaterThan(1)
+    expect(MockWebSocket.instances[MockWebSocket.instances.length - 1].url).toContain('token=nuevo')
+
+    service.disconnect()
+  })
+
+  it('no renueva el token en una caída de red normal', () => {
+    const onAuthFailure = vi.fn().mockResolvedValue(undefined)
+    const service = new WebSocketService(() => 'wss://api/ws', { onAuthFailure })
+
+    service.connect()
+    MockWebSocket.instances[0].simulateOpen()
+    MockWebSocket.instances[0].simulateClose(1006) // corte abrupto de red
+
+    expect(onAuthFailure).not.toHaveBeenCalled()
+    expect(service.currentStatus).toBe('reconnecting')
+
+    service.disconnect()
+  })
+
+  it('deja de reintentar tras demasiadas renovaciones fallidas seguidas', async () => {
+    const service = new WebSocketService(() => 'wss://api/ws', {
+      onAuthFailure: async () => {
+        throw new Error('refresh token vencido')
+      },
+      maxAuthFailures: 2
+    })
+
+    service.connect()
+    MockWebSocket.instances[0].simulateOpen()
+
+    for (let i = 0; i < 3; i++) {
+      const last = MockWebSocket.instances[MockWebSocket.instances.length - 1]
+      last.simulateClose(1008)
+      await Promise.resolve()
+      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(3000)
+    }
+
+    await vi.waitFor(() => expect(service.currentStatus).toBe('disconnected'))
+
     service.disconnect()
   })
 })

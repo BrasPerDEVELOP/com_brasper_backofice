@@ -29,6 +29,22 @@ export interface WebSocketServiceOptions {
   autoReconnect?: boolean
   /** Mensaje enviado en heartbeat ping (default: { type: 'ping' }). */
   pingPayload?: Record<string, unknown>
+  /**
+   * Códigos de cierre que indican un problema de credenciales (default: 1008, 4001).
+   * Ante ellos se invoca `onAuthFailure` antes de volver a conectar, en vez de
+   * reintentar con el mismo token que el servidor acaba de rechazar.
+   */
+  authFailureCodes?: number[]
+  /**
+   * Renueva las credenciales tras un cierre por auth. Debe resolver cuando el
+   * token nuevo ya esté disponible para `urlGetter`.
+   */
+  onAuthFailure?: () => Promise<void>
+  /**
+   * Renovaciones fallidas consecutivas tras las cuales se deja de reintentar
+   * (default: 5). Evita insistir para siempre con una sesión ya muerta.
+   */
+  maxAuthFailures?: number
 }
 
 export class WebSocketService {
@@ -45,6 +61,7 @@ export class WebSocketService {
   private currentReconnectDelayMs: number
   private isManuallyClosed = false
   private hadConnectedBefore = false
+  private consecutiveAuthFailures = 0
 
   private readonly options: Required<WebSocketServiceOptions>
 
@@ -59,7 +76,10 @@ export class WebSocketService {
       maxReconnectDelayMs: options?.maxReconnectDelayMs ?? 30_000,
       backoffFactor: options?.backoffFactor ?? 2,
       autoReconnect: options?.autoReconnect ?? true,
-      pingPayload: options?.pingPayload ?? { type: 'ping' }
+      pingPayload: options?.pingPayload ?? { type: 'ping' },
+      authFailureCodes: options?.authFailureCodes ?? [1008, 4001],
+      onAuthFailure: options?.onAuthFailure ?? (async () => {}),
+      maxAuthFailures: options?.maxAuthFailures ?? 5
     }
     this.currentReconnectDelayMs = this.options.initialReconnectDelayMs
   }
@@ -172,6 +192,7 @@ export class WebSocketService {
       const wasReconnecting = this.status === 'reconnecting' || this.hadConnectedBefore
       this.hadConnectedBefore = true
       this.currentReconnectDelayMs = this.options.initialReconnectDelayMs
+      this.consecutiveAuthFailures = 0
       this.setStatus('connected')
       this.startHeartbeat()
 
@@ -190,9 +211,9 @@ export class WebSocketService {
       log.warn('WebSocket: Evento de error capturado', error)
     }
 
-    ws.onclose = () => {
+    ws.onclose = (event: CloseEvent) => {
       if (this.socket !== ws) return
-      this.handleSocketClose()
+      this.handleSocketClose(event?.code)
     }
   }
 
@@ -236,7 +257,7 @@ export class WebSocketService {
     }
   }
 
-  private handleSocketClose(): void {
+  private handleSocketClose(closeCode?: number): void {
     this.clearHeartbeat()
     this.socket = null
 
@@ -246,7 +267,40 @@ export class WebSocketService {
     }
 
     this.setStatus('reconnecting')
+
+    // El servidor cierra con 1008 cuando el token venció. Reintentar con el
+    // mismo token sólo repetiría el rechazo, así que primero se renueva.
+    if (closeCode !== undefined && this.options.authFailureCodes.includes(closeCode)) {
+      this.handleAuthFailureThenReconnect()
+      return
+    }
+
     this.scheduleReconnect()
+  }
+
+  /** Renueva credenciales y reprograma la reconexión. */
+  private handleAuthFailureThenReconnect(): void {
+    this.consecutiveAuthFailures += 1
+
+    if (this.consecutiveAuthFailures > this.options.maxAuthFailures) {
+      log.warn(
+        `WebSocket: ${this.consecutiveAuthFailures - 1} renovaciones fallidas seguidas; ` +
+          'se deja de reintentar hasta una reconexión manual.'
+      )
+      this.setStatus('disconnected')
+      return
+    }
+
+    log.info('WebSocket: cierre por credenciales, renovando token antes de reconectar')
+    this.options
+      .onAuthFailure()
+      .catch((e) => {
+        log.warn('WebSocket: falló la renovación del token', e)
+      })
+      .finally(() => {
+        if (this.isManuallyClosed) return
+        this.scheduleReconnect()
+      })
   }
 
   private scheduleReconnect(): void {

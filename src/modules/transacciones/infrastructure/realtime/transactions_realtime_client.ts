@@ -1,6 +1,7 @@
 import { WebSocketService } from '@/interface/infrastructure/services/websocket_service'
 import type { WebSocketStatus } from '@/interface/infrastructure/services/websocket_service'
 import { Domain } from '@/interface/infrastructure/services/domain'
+import { refreshAccessToken } from '@/interface/api/client'
 import { transactionFromApiRecord } from '../mappers/parse_transaction'
 import type { Transaction } from '../../domain/models'
 
@@ -70,7 +71,15 @@ export class TransactionsRealtimeClient {
       return Domain.buildWsUrl(this.wsPath, token)
     }
 
-    this.service = new WebSocketService(urlGetter)
+    this.service = new WebSocketService(urlGetter, {
+      // El servidor cierra el socket cuando vence el access token. Renovarlo acá
+      // es lo que mantiene vivo el tiempo real en una pestaña sin actividad: sin
+      // esto, el token expira, nada dispara el refresh del interceptor HTTP y la
+      // reconexión queda rechazada para siempre.
+      onAuthFailure: async () => {
+        await refreshAccessToken()
+      }
+    })
 
     // Listener global para capturar eventos formateados
     const unsubGlobal = this.service.onGlobalMessage((msg) => {
