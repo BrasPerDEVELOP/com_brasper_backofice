@@ -102,11 +102,29 @@ function mediaUrl(relativePath: string): string {
   return `${base}/media/${path}`
 }
 
+/**
+ * Genera la URL absoluta para WebSockets (`ws://` o `wss://`).
+ * Utiliza `VITE_WS_BASE_URL` o la deriva de `buildBaseUrl()`.
+ */
+function buildWsUrl(path = '', token?: string | null): string {
+  let base = env.wsBaseUrl
+  if (!base) {
+    const httpBase = buildBaseUrl()
+    base = httpBase.replace(/^http:/i, 'ws:').replace(/^https:/i, 'wss:')
+  }
+  const cleanPath = apiPath(path)
+  const full = cleanPath ? `${base.replace(/\/+$/, '')}/${cleanPath}` : base
+  if (!token) return full
+  const separator = full.includes('?') ? '&' : '?'
+  return `${full}${separator}token=${encodeURIComponent(token)}`
+}
+
 export const Domain = {
   buildBaseUrl,
   ensureHttpsUrl,
   apiPath,
   apiUrl,
   http,
-  mediaUrl
+  mediaUrl,
+  buildWsUrl
 }

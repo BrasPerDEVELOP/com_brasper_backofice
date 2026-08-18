@@ -75,6 +75,7 @@ import TransactionDestinationsEditor from '../components/TransactionDestinations
 import TableColumnResizeHandle from '../components/TableColumnResizeHandle.vue'
 import TransactionTagSelector from '../components/TransactionTagSelector.vue'
 import TransactionVoucherFileList from '../components/TransactionVoucherFileList.vue'
+import { useTransactionsRealtime } from '../composables/use_transactions_realtime'
 import {
   clearTransactionDestinationAccounts,
   emptyTransactionDestination,
@@ -1527,6 +1528,24 @@ const apiFilterParams = computed((): GetTransactionsParams => {
   if (q) p.search = q
   return p
 })
+
+const {
+  isConnected: isRealtimeConnected,
+  isReconnecting: isRealtimeReconnecting,
+  unseenCount: unseenRealtimeCount,
+  isTxHighlighted,
+  clearUnseenCount
+} = useTransactionsRealtime({
+  currentPage,
+  getFilters: () => apiFilterParams.value,
+  onRefresh: () => loadTransactions()
+})
+
+function showLatestTransactions() {
+  currentPage.value = 1
+  clearUnseenCount()
+  loadTransactions()
+}
 
 /** Página actual (ya filtrada y paginada por el servidor). */
 const paginatedTransactions = computed(() => transactionsStore.transactions)
@@ -3316,7 +3335,34 @@ onActivated(() => {
           <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brasper-indigoStrong">
             Operaciones
           </p>
-          <h1 class="text-2xl font-semibold text-[#232b4d]">Transacciones</h1>
+          <div class="flex items-center gap-3">
+            <h1 class="text-2xl font-semibold text-[#232b4d]">Transacciones</h1>
+            <span
+              class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium transition"
+              :class="{
+                'bg-emerald-50 text-emerald-700 border border-emerald-200': isRealtimeConnected,
+                'bg-amber-50 text-amber-700 border border-amber-200': isRealtimeReconnecting,
+                'bg-slate-100 text-slate-500 border border-slate-200': !isRealtimeConnected && !isRealtimeReconnecting
+              }"
+              :title="
+                isRealtimeConnected
+                  ? 'Conexión en tiempo real activa'
+                  : isRealtimeReconnecting
+                    ? 'Reconectando con el servidor...'
+                    : 'Tiempo real desconectado'
+              "
+            >
+              <span
+                class="h-1.5 w-1.5 rounded-full"
+                :class="{
+                  'bg-emerald-500 animate-pulse': isRealtimeConnected,
+                  'bg-amber-500 animate-ping': isRealtimeReconnecting,
+                  'bg-slate-400': !isRealtimeConnected && !isRealtimeReconnecting
+                }"
+              />
+              {{ isRealtimeConnected ? 'En vivo' : isRealtimeReconnecting ? 'Reconectando...' : 'Desconectado' }}
+            </span>
+          </div>
         </div>
         <div class="flex items-center gap-2">
           <button
@@ -3368,6 +3414,26 @@ onActivated(() => {
             Crear
           </button>
         </div>
+      </div>
+
+      <!-- Banner de nuevas transacciones en tiempo real -->
+      <div
+        v-if="unseenRealtimeCount > 0"
+        class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brasper-cyan/40 bg-brasper-cyanLight/20 px-4 py-2.5 text-sm text-brasper-indigoStrong shadow-sm transition"
+      >
+        <div class="flex items-center gap-2">
+          <span class="flex h-2 w-2 rounded-full bg-brasper-indigoStrong animate-ping" />
+          <span>
+            Hay <strong>{{ unseenRealtimeCount }}</strong> nueva(s) transacción(es) disponible(s).
+          </span>
+        </div>
+        <button
+          type="button"
+          class="inline-flex items-center gap-1.5 rounded-lg bg-brasper-indigoStrong px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brasper-indigoDark"
+          @click="showLatestTransactions"
+        >
+          Ver las más recientes
+        </button>
       </div>
 
       <!--
@@ -3713,7 +3779,8 @@ onActivated(() => {
           <tr
             v-for="t in paginatedTransactions"
             :key="t.id ?? ''"
-            class="border-t border-[#e5e7eb] bg-white transition hover:bg-[#f9fafb]"
+            class="border-t border-[#e5e7eb] transition-colors duration-700 hover:bg-[#f9fafb]"
+            :class="isTxHighlighted(t.id) ? 'bg-amber-50/80 ring-1 ring-inset ring-amber-300' : 'bg-white'"
             :title="rowShortcutHint"
             @dblclick="onRowDoubleClick(t, $event)"
             @contextmenu.prevent="onRowContextMenu(t, $event)"

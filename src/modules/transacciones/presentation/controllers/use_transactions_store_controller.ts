@@ -93,6 +93,16 @@ interface TransactionsState {
   isUpdating: boolean
   error: string | null
   hasLoadedOnce: boolean
+  /** Estado de la conexión en tiempo real */
+  realtimeStatus: 'connected' | 'connecting' | 'reconnecting' | 'disconnected'
+  /** Cantidad de nuevas transacciones recibidas que aún no se han insertado en la vista (por ej. en página > 1) */
+  unseenRealtimeCount: number
+  /** Último evento de tiempo real recibido */
+  lastRealtimeEvent: {
+    type: 'created' | 'updated' | 'deleted' | 'bulk_imported'
+    id?: string
+    timestamp: number
+  } | null
 }
 
 export const useTransactionsStore = defineStore('transactions', {
@@ -108,7 +118,10 @@ export const useTransactionsStore = defineStore('transactions', {
     isCreating: false,
     isUpdating: false,
     error: null,
-    hasLoadedOnce: false
+    hasLoadedOnce: false,
+    realtimeStatus: 'disconnected',
+    unseenRealtimeCount: 0,
+    lastRealtimeEvent: null
   }),
 
   actions: {
@@ -327,6 +340,93 @@ export const useTransactionsStore = defineStore('transactions', {
       } catch {
         return null
       }
+    },
+
+    /**
+     * Aplica la creación de una transacción recibida en tiempo real vía WebSocket.
+     */
+    applyRealtimeCreated(transaction: Transaction, options?: { prependToVisible?: boolean }) {
+      const txId = transaction.id ?? ''
+      const enriched = enrichTransactionWithSpecialDiscountMeta(transaction)
+      const existingIdx = this.transactions.findIndex((t) => (t.id ?? '') === txId)
+
+      if (existingIdx >= 0) {
+        this.transactions[existingIdx] = enriched
+      } else if (options?.prependToVisible !== false) {
+        this.transactions = [enriched, ...this.transactions]
+        this.total += 1
+      } else {
+        this.total += 1
+        this.unseenRealtimeCount += 1
+      }
+
+      this.resetDailySequences()
+      this.lastRealtimeEvent = {
+        type: 'created',
+        id: txId,
+        timestamp: Date.now()
+      }
+    },
+
+    /**
+     * Aplica la actualización de una transacción recibida en tiempo real vía WebSocket.
+     */
+    applyRealtimeUpdated(transaction: Transaction) {
+      const txId = transaction.id ?? ''
+      const enriched = enrichTransactionWithSpecialDiscountMeta(transaction)
+      const idx = this.transactions.findIndex((t) => (t.id ?? '') === txId)
+
+      if (idx >= 0) {
+        this.transactions[idx] = enriched
+      }
+
+      this.resetDailySequences()
+      this.lastRealtimeEvent = {
+        type: 'updated',
+        id: txId,
+        timestamp: Date.now()
+      }
+    },
+
+    /**
+     * Aplica la eliminación de una transacción recibida en tiempo real vía WebSocket.
+     */
+    applyRealtimeDeleted(id: string) {
+      removeTransactionSpecialDiscountMeta(id)
+      const had = this.transactions.some((t) => (t.id ?? '') === id)
+      if (had) {
+        this.transactions = this.transactions.filter((t) => (t.id ?? '') !== id)
+        this.total = Math.max(0, this.total - 1)
+      }
+      this.resetDailySequences()
+      this.lastRealtimeEvent = {
+        type: 'deleted',
+        id,
+        timestamp: Date.now()
+      }
+    },
+
+    /**
+     * Notificación de importación masiva en tiempo real.
+     */
+    applyRealtimeBulkImported() {
+      this.resetDailySequences()
+      this.lastRealtimeEvent = {
+        type: 'bulk_imported',
+        timestamp: Date.now()
+      }
+    },
+
+    setRealtimeStatus(status: 'connected' | 'connecting' | 'reconnecting' | 'disconnected') {
+      this.realtimeStatus = status
+    },
+
+    incrementUnseenRealtimeCount(amount = 1) {
+      this.unseenRealtimeCount += amount
+    },
+
+    clearUnseenRealtimeCount() {
+      this.unseenRealtimeCount = 0
     }
   }
 })

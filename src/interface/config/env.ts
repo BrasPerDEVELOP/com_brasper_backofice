@@ -57,6 +57,11 @@ export const env = {
     }
   },
 
+  /** URL base para WebSockets (opcional). Ej. wss://apibras.finzeler.com o ws://localhost:8000 */
+  get wsBaseUrl(): string {
+    return getEnv('VITE_WS_BASE_URL', '').trim()
+  },
+
   /** Dominio de la API, ej. api.demo.zefiron.com */
   get domain(): string {
     return getEnv('VITE_DOMAIN', '')
