@@ -40,6 +40,38 @@ describe('parseTransaction', () => {
     ])
   })
 
+  it('conserva el snapshot bancario anidado del endpoint de detalle', () => {
+    const [destination] = parseTransaction({
+      destinations: [{
+        id: 'dest-1',
+        bank_account_id: 'acc-1',
+        amount: '10000',
+        position: 0,
+        bank_account: {
+          id: 'acc-1',
+          bank_id: 'bank-1',
+          account_holder_type: 'legalEntity',
+          bank_country: 'br',
+          business_name: 'ACME LTDA',
+          ruc_number: '12345678000199',
+          account_number: '0012345-6',
+          pix_key: 'financeiro@acme.com',
+          bank_name: 'Nubank',
+          bank_currency: 'BRL'
+        }
+      }]
+    }).destinations ?? []
+
+    expect(destination?.bank_account).toEqual(expect.objectContaining({
+      id: 'acc-1',
+      business_name: 'ACME LTDA',
+      account_number: '0012345-6',
+      pix_key: 'financeiro@acme.com',
+      bank_name: 'Nubank',
+      bank_currency: 'BRL'
+    }))
+  })
+
   it('resuelve alias de estado (estado/transaction_status/state)', () => {
     expect(parseTransaction({ estado: 'pending' }).status).toBe('pending')
     expect(parseTransaction({ transaction_status: 'failed' }).status).toBe('failed')

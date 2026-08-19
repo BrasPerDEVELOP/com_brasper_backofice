@@ -1,4 +1,7 @@
-import type { Transaction } from "../../domain/models";
+import type {
+  Transaction,
+  TransactionDestinationAccountSnapshot,
+} from "../../domain/models";
 import {
   TRANSACTION_STATUS_LABELS,
   isTransactionChecked,
@@ -47,6 +50,21 @@ export type PreviewDestinationsSummary = {
   rows: PreviewDestinationRow[];
   totalLabel: string;
 };
+
+type PreviewAccountData = Pick<
+  TransactionDestinationAccountSnapshot,
+  | "account_holder_type"
+  | "bank_country"
+  | "holder_names"
+  | "holder_surnames"
+  | "document_number"
+  | "business_name"
+  | "ruc_number"
+  | "account_number"
+  | "cci_number"
+  | "pix_key"
+  | "cpf"
+>;
 
 const SKIP_KEYS = new Set([
   "send_voucher",
@@ -100,7 +118,16 @@ export function useTransactionPreviewController() {
       : "—";
   }
 
-  function bankAccountHolderLabel(a: BankAccount): string {
+  function destinationSnapshotBankLabel(
+    account: TransactionDestinationAccountSnapshot,
+  ): string {
+    const bankName = account.bank_name?.trim();
+    if (!bankName) return "—";
+    const currency = account.bank_currency?.trim().toUpperCase();
+    return `${bankName}${currency ? ` (${currency})` : ""}`;
+  }
+
+  function bankAccountHolderLabel(a: PreviewAccountData): string {
     const type = (a.account_holder_type ?? "").toLowerCase();
     if (
       type.includes("juridica") ||
@@ -124,7 +151,7 @@ export function useTransactionPreviewController() {
   }
 
   function bankAccountDocumentIdentifier(
-    a: BankAccount,
+    a: PreviewAccountData,
   ): PreviewDestinationRow["identifiers"][number] | null {
     const holderType = (a.account_holder_type ?? "").toLowerCase();
     const isLegal =
@@ -264,17 +291,25 @@ export function useTransactionPreviewController() {
     const currencies = getTransactionCurrencies(rec);
     const total = Number(rec.destination_amount) || 0;
 
-    const stored = Array.isArray(rec.destinations)
-      ? rec.destinations
-          .map((item) => {
-            if (item == null || typeof item !== "object") return null;
-            const destination = item as Record<string, unknown>;
+    const stored = Array.isArray(t.destinations)
+      ? t.destinations
+          .map((destination) => {
             const accountId = String(destination.bank_account_id ?? "").trim();
             if (!accountId) return null;
-            return { accountId, amount: Number(destination.amount) };
+            return {
+              accountId,
+              amount: Number(destination.amount),
+              bankAccount: destination.bank_account,
+            };
           })
-          .filter((item): item is { accountId: string; amount: number } =>
-            Boolean(item),
+          .filter(
+            (
+              item,
+            ): item is {
+              accountId: string;
+              amount: number;
+              bankAccount: TransactionDestinationAccountSnapshot | undefined;
+            } => Boolean(item),
           )
       : [];
 
@@ -283,7 +318,7 @@ export function useTransactionPreviewController() {
       stored.length > 0
         ? stored
         : fallbackId
-          ? [{ accountId: fallbackId, amount: total }]
+          ? [{ accountId: fallbackId, amount: total, bankAccount: undefined }]
           : [];
 
     // Snapshot del banco destino que la transacción ya trae del API. Sirve de
@@ -300,9 +335,10 @@ export function useTransactionPreviewController() {
       const acc = cuentasStore.bankAccounts.find(
         (candidate) => candidate.id === item.accountId,
       );
+      const account: PreviewAccountData | undefined = item.bankAccount ?? acc;
       const amountValid = Number.isFinite(item.amount);
-      const documentIdentifier = acc
-        ? bankAccountDocumentIdentifier(acc)
+      const documentIdentifier = account
+        ? bankAccountDocumentIdentifier(account)
         : null;
       const share =
         items.length > 1 && total > 0 && amountValid
@@ -310,24 +346,26 @@ export function useTransactionPreviewController() {
           : null;
       return {
         position: index + 1,
-        bankLabel: acc
-          ? bankAccountBankLabel(acc)
-          : snapshotBankName || "—",
-        identifiers: acc
+        bankLabel: item.bankAccount
+          ? destinationSnapshotBankLabel(item.bankAccount)
+          : acc
+            ? bankAccountBankLabel(acc)
+            : snapshotBankName || "—",
+        identifiers: account
           ? [
-              ...(acc.account_number?.trim()
-                ? [{ label: "Cuenta" as const, value: acc.account_number.trim() }]
+              ...(account.account_number?.trim()
+                ? [{ label: "Cuenta" as const, value: account.account_number.trim() }]
                 : []),
-              ...(acc.cci_number?.trim()
-                ? [{ label: "CCI" as const, value: acc.cci_number.trim() }]
+              ...(account.cci_number?.trim()
+                ? [{ label: "CCI" as const, value: account.cci_number.trim() }]
                 : []),
-              ...(acc.pix_key?.trim()
-                ? [{ label: "PIX" as const, value: acc.pix_key.trim() }]
+              ...(account.pix_key?.trim()
+                ? [{ label: "PIX" as const, value: account.pix_key.trim() }]
                 : []),
               ...(documentIdentifier ? [documentIdentifier] : []),
             ]
           : [],
-        holderLabel: acc ? bankAccountHolderLabel(acc) : "—",
+        holderLabel: account ? bankAccountHolderLabel(account) : "—",
         amountLabel: amountValid
           ? formatMoneyWithCurrency(item.amount, currencies.destination)
           : "—",

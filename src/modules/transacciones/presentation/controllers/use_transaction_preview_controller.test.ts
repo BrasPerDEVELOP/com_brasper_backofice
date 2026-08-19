@@ -215,6 +215,69 @@ describe("useTransactionPreviewController.buildPreviewSections", () => {
       }
     });
 
+    it("resuelve cada cuenta del detalle aunque el catálogo local esté vacío", () => {
+      const { buildPreviewDestinations } = useTransactionPreviewController();
+      const summary = buildPreviewDestinations({
+        ...(baseTransaction as Record<string, unknown>),
+        destination_amount: 21345,
+        destinations: [
+          {
+            bank_account_id: "acc-a",
+            amount: 11345,
+            position: 0,
+            bank_account: {
+              id: "acc-a",
+              bank_id: "bank-a",
+              account_holder_type: "naturalPerson",
+              bank_country: "br",
+              holder_names: "Maria",
+              holder_surnames: "Silva",
+              cpf: "12345678901",
+              account_number: "0001-9",
+              bank_name: "Nubank",
+              bank_currency: "BRL",
+            },
+          },
+          {
+            bank_account_id: "acc-b",
+            amount: 10000,
+            position: 1,
+            bank_account: {
+              id: "acc-b",
+              bank_id: "bank-b",
+              account_holder_type: "legalEntity",
+              bank_country: "br",
+              business_name: "ACME LTDA",
+              ruc_number: "12345678000199",
+              pix_key: "financeiro@acme.com",
+              bank_name: "Banco do Brasil",
+              bank_currency: "BRL",
+            },
+          },
+        ],
+      } as unknown as Transaction);
+
+      expect(summary.rows).toHaveLength(2);
+      expect(summary.rows[0]).toEqual(expect.objectContaining({
+        bankLabel: "Nubank (BRL)",
+        holderLabel: "Maria Silva",
+        identifiers: [
+          { label: "Cuenta", value: "0001-9" },
+          { label: "CPF", value: "12345678901" },
+        ],
+        shareLabel: "53%",
+      }));
+      expect(summary.rows[1]).toEqual(expect.objectContaining({
+        bankLabel: "Banco do Brasil (BRL)",
+        holderLabel: "ACME LTDA",
+        identifiers: [
+          { label: "PIX", value: "financeiro@acme.com" },
+          { label: "CNPJ", value: "12345678000199" },
+        ],
+        shareLabel: "47%",
+      }));
+    });
+
     it("prefiere la cuenta real del catálogo cuando sí está cargada", () => {
       const cuentasStore = useCuentasBancariasStore();
       cuentasStore.bankAccounts = [

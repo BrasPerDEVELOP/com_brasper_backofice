@@ -1,4 +1,8 @@
-import type { Transaction, TransactionDestination } from '../../domain/models'
+import type {
+  Transaction,
+  TransactionDestination,
+  TransactionDestinationAccountSnapshot
+} from '../../domain/models'
 
 /**
  * Etiquetas del envío. El API devuelve `tag_ids`; se acepta también `tags` con
@@ -53,13 +57,55 @@ function parseDestinations(value: unknown): TransactionDestination[] | undefined
     )
     const amount = parseOptionalAmount(record.amount)
     if (!bankAccountId || amount == null) return []
+    const bankAccount = parseDestinationAccount(record.bank_account)
     return [{
       id: record.id != null ? String(record.id) : undefined,
       bank_account_id: bankAccountId,
       amount,
-      position: Number.isFinite(Number(record.position)) ? Number(record.position) : index
+      position: Number.isFinite(Number(record.position)) ? Number(record.position) : index,
+      ...(bankAccount ? { bank_account: bankAccount } : {})
     }]
   })
+}
+
+function parseDestinationAccount(
+  value: unknown
+): TransactionDestinationAccountSnapshot | undefined {
+  if (value == null || typeof value !== 'object') return undefined
+  const record = value as Record<string, unknown>
+  const hasSnapshotFields = [
+    'bank_id',
+    'account_holder_type',
+    'bank_country',
+    'account_number',
+    'cci_number',
+    'pix_key',
+    'bank_name'
+  ].some((field) => record[field] != null)
+  if (!hasSnapshotFields) return undefined
+  const optionalString = (field: unknown): string | null | undefined => {
+    if (field == null) return field as null | undefined
+    return String(field)
+  }
+  const id = coerceBankAccountId(record.id)
+  if (!id) return undefined
+  return {
+    id,
+    bank_id: optionalString(record.bank_id) ?? undefined,
+    account_holder_type: optionalString(record.account_holder_type) ?? undefined,
+    bank_country: optionalString(record.bank_country) ?? undefined,
+    holder_names: optionalString(record.holder_names),
+    holder_surnames: optionalString(record.holder_surnames),
+    document_number: optionalString(record.document_number),
+    business_name: optionalString(record.business_name),
+    ruc_number: optionalString(record.ruc_number),
+    account_number: optionalString(record.account_number),
+    cci_number: optionalString(record.cci_number),
+    pix_key: optionalString(record.pix_key),
+    cpf: optionalString(record.cpf),
+    bank_name: optionalString(record.bank_name),
+    bank_currency: optionalString(record.bank_currency)
+  }
 }
 
 function parseOptionalAmount(v: unknown): number | undefined {

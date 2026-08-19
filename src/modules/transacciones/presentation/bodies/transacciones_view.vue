@@ -131,6 +131,8 @@ const bankAccountCreateFlow = ref<'origin' | 'destination'>('origin')
 const transactionBankModalHolder = ref<'natural' | 'juridica'>('natural')
 const previewTransaction = ref<Transaction | null>(null)
 const previewLoading = ref(false)
+const previewDetailWarning = ref('')
+const previewLoadRequestId = ref(0)
 const editModalLoading = ref(false)
 const searchQuery = ref('')
 const openMenuId = ref<string | null>(null)
@@ -2585,18 +2587,31 @@ const editHeroAmounts = computed(() => {
 
 async function openPreviewModal(t: Transaction | null) {
   if (!t) return
+  const requestId = ++previewLoadRequestId.value
   openMenuId.value = null
   previewTransaction.value = null
+  previewDetailWarning.value = ''
   showPreviewModal.value = true
   previewLoading.value = true
-  await ensurePreviewCatalogLoaded()
-  previewTransaction.value = { ...t }
+  const [fresh] = await Promise.all([
+    t.id ? transactionsStore.getTransactionById(t.id) : Promise.resolve(null),
+    ensurePreviewCatalogLoaded()
+  ])
+  if (requestId !== previewLoadRequestId.value || !showPreviewModal.value) return
+  previewTransaction.value = fresh ? { ...t, ...fresh } : { ...t }
+  if (t.id && !fresh) {
+    previewDetailWarning.value =
+      'No se pudo cargar el detalle actualizado de las cuentas destino. Se muestran los datos disponibles.'
+  }
   previewLoading.value = false
 }
 
 function closePreviewModal() {
+  previewLoadRequestId.value += 1
   showPreviewModal.value = false
   previewTransaction.value = null
+  previewDetailWarning.value = ''
+  previewLoading.value = false
 }
 
 function openEditFromPreview() {
@@ -4102,10 +4117,18 @@ onActivated(() => {
               <span
                 class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-brasper-indigoStrong border-t-transparent"
               />
-              Cargando catálogo (tasas, comisiones, cuentas)…
+              Cargando detalle de la transacción…
             </p>
 
             <template v-else-if="previewTransaction">
+              <div
+                v-if="previewDetailWarning"
+                class="mx-6 mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+                role="status"
+              >
+                {{ previewDetailWarning }}
+              </div>
+
               <!-- Hero: código, estado y verificación -->
               <div
                 v-if="previewSectionGroups.resumen"

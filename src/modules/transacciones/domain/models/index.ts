@@ -6,7 +6,12 @@ export type {
   UpdateTagPayload,
 } from './tag'
 export { TAG_COLOR_KEYS, TAG_COLOR_STYLES, tagColorStyle } from './tag'
-export type { Transaction, TransactionDestination, TransactionStatus } from './transaction'
+export type {
+  Transaction,
+  TransactionDestination,
+  TransactionDestinationAccountSnapshot,
+  TransactionStatus
+} from './transaction'
 export { TRANSACTION_STATUSES, TRANSACTION_STATUS_LABELS } from './transaction'
 export {
   normalizeTransactionStatus,

@@ -7,6 +7,26 @@ export interface TransactionDestination {
   bank_account_id: string
   amount: number
   position?: number
+  /** Snapshot autorizado que sólo expone el endpoint de detalle. */
+  bank_account?: TransactionDestinationAccountSnapshot
+}
+
+export interface TransactionDestinationAccountSnapshot {
+  id?: string
+  bank_id?: string
+  account_holder_type?: string
+  bank_country?: string
+  holder_names?: string | null
+  holder_surnames?: string | null
+  document_number?: string | null
+  business_name?: string | null
+  ruc_number?: string | null
+  account_number?: string | null
+  cci_number?: string | null
+  pix_key?: string | null
+  cpf?: string | null
+  bank_name?: string | null
+  bank_currency?: string | null
 }
 
 export interface Transaction {
