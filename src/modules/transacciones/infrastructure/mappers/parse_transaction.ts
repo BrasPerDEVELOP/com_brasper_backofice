@@ -389,6 +389,7 @@ export function parseTransaction(item: unknown): Transaction {
     updated_at: o.updated_at != null ? String(o.updated_at) : undefined,
     checked: transactionChecked,
     tag_ids: parseTagIds(o.tag_ids ?? o.tags),
+    accounting_percentage: parseOptionalAmount(o.accounting_percentage),
     comision_final_interna: comisionFinalInterna ?? resultado,
     impuesto_final_interno: impuestoFinalInterno,
     venta_final: ventaFinal,

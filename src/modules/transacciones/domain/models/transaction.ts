@@ -76,6 +76,14 @@ export interface Transaction {
   company_name?: string
   /** Banco exacto del catálogo elegido como razón social. */
   social_reason_bank_id?: string | null
+  /**
+   * Descuento variable: porcentaje del tramo de comisión de contabilidad que
+   * cubre el monto de envío (`40` = 40%). Solo lo devuelve
+   * `GET /transactions/accounting`, que lo resuelve contra el catálogo. Llega
+   * `null` cuando ningún tramo cubre el monto (envíos por debajo del mínimo del
+   * par) y `undefined` cuando el listado no es el contable.
+   */
+  accounting_percentage?: number | null
   /** Contabilidad / respuesta API extendida */
   comision_final_interna?: number
   impuesto_final_interno?: number

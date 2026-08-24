@@ -112,6 +112,8 @@ export interface TransactionMetrics {
 
 export interface TransactionsRepository {
   getTransactions(params?: GetTransactionsParams): Promise<PagedTransactions>
+  /** Mismo listado con los campos contables; requiere permiso `accounting.view`. */
+  getAccountingTransactions(params?: GetTransactionsParams): Promise<PagedTransactions>
   getTransactionMetrics(): Promise<TransactionMetrics>
   getTransactionById(id: string): Promise<Transaction | null>
   createTransaction(payload: CreateTransactionPayload): Promise<Transaction>

@@ -4,10 +4,7 @@ import { useTransactionsStore } from "@modules/transacciones/presentation/contro
 import { useCuentasBancariasStore } from "@modules/cuentas-bancarias/presentation/controllers/use_cuentas_bancarias_store_controller";
 import type { BankAccount } from "@modules/cuentas-bancarias/domain/models";
 import { useTasasStore } from "@modules/tasas/presentation/controllers/use_tasas_store_controller";
-import {
-  useComisionesStore,
-  useComisionesContabilidadStore,
-} from "@modules/comisiones/presentation/controllers/use_comisiones_store_controller";
+import { useComisionesStore } from "@modules/comisiones/presentation/controllers/use_comisiones_store_controller";
 import type {
   Transaction,
   TransactionSpecialDiscountInfo,
@@ -30,16 +27,11 @@ import AppDateInput from "@/interface/components/AppDateInput.vue";
 import { MediaViewerDialog } from "@interface/widgets";
 import { Domain } from "@/interface/infrastructure/services";
 import { downloadTransactionAccountingPdf } from "../../infrastructure/pdf/download_transaction_accounting_pdf";
-import {
-  resolveAccountingCommission,
-  type AccountingCommissionMatch,
-} from "../../domain/accounting_commission";
 
 const transactionsStore = useTransactionsStore();
 const cuentasStore = useCuentasBancariasStore();
 const tasasStore = useTasasStore();
 const comisionesStore = useComisionesStore();
-const comisionesContabilidadStore = useComisionesContabilidadStore();
 
 const searchQuery = ref("");
 const statusFilter = ref<string>("todos");
@@ -254,50 +246,39 @@ function formatPercent(value: number | null | undefined): string {
 }
 
 /**
- * Descuento variable: porcentaje de la comisión de contabilidad
- * (`/coin/commission-accounting`) que aplica a cada operación, resuelto por par
- * de monedas y tramo de monto. Es informativo — no altera la comisión final
- * interna, que sigue viniendo del API.
+ * Descuento variable: porcentaje de la comisión de contabilidad que aplica a la
+ * operación. Lo resuelve el servidor en `GET /transactions/accounting` buscando
+ * el tramo de `coin.commission_accounting` que cubre el monto de envío, así que
+ * aquí solo se lee: la vista ya no replica la regla de tramos (el corte superior
+ * es exclusivo y el navegador lo tenía inclusivo, lo que discrepaba justo en los
+ * montos de corte: 300, 1000, 2000…).
+ *
+ * Es informativo — no altera la comisión final interna, que sigue viniendo del
+ * API.
  */
-const descuentoVariableByTransactionId = computed(() => {
-  const commissions = comisionesContabilidadStore.commissions;
-  const map = new Map<string, AccountingCommissionMatch>();
-  for (const t of transactionsStore.transactions) {
-    if (!t.id) continue;
-    const { origin, destination } = getTransactionCurrencies(t);
-    const match = resolveAccountingCommission({
-      originCurrency: origin,
-      destinationCurrency: destination,
-      originAmount: t.origin_amount,
-      commissions,
-    });
-    if (match) map.set(t.id, match);
-  }
-  return map;
-});
-
-function descuentoVariable(t: Transaction): AccountingCommissionMatch | null {
-  if (!t.id) return null;
-  return descuentoVariableByTransactionId.value.get(t.id) ?? null;
+function descuentoVariable(t: Transaction): number | null {
+  const value = t.accounting_percentage;
+  if (value == null) return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
 }
 
 function descuentoVariableLabel(t: Transaction): string {
-  const match = descuentoVariable(t);
-  return match ? formatPercent(match.percentage) : "—";
+  const percentage = descuentoVariable(t);
+  return percentage != null ? formatPercent(percentage) : "—";
 }
 
 function descuentoVariableTitle(t: Transaction): string {
-  const match = descuentoVariable(t);
-  if (!match) return "Sin comisión de contabilidad para este par y monto";
-  const parts = [
-    `Comisión de contabilidad ${match.coinA} → ${match.coinB}`,
-    `Tramo ${formatValue(match.minAmount)} – ${formatValue(match.maxAmount)}`,
-    formatPercent(match.percentage),
-  ];
-  if (!match.withinBracket) {
-    parts.push("Ningún tramo cubre el monto: se muestra el último del par");
+  const percentage = descuentoVariable(t);
+  if (percentage == null) {
+    return "Sin comisión de contabilidad para este par y monto";
   }
-  return parts.join(" · ");
+  const { origin, destination } = getTransactionCurrencies(t);
+  const pair = origin && destination ? `${origin} → ${destination}` : "";
+  return [
+    pair ? `Comisión de contabilidad ${pair}` : "Comisión de contabilidad",
+    formatPercent(percentage),
+  ].join(" · ");
 }
 
 function comisionFinalInterna(t: Transaction): number | undefined {
@@ -511,7 +492,10 @@ function goToPage(page: number) {
 }
 
 function loadTransactions() {
-  void transactionsStore.loadTransactions(apiFilterParams.value);
+  // Listado contable: agrega el descuento variable y los importes contables.
+  void transactionsStore.loadTransactions(apiFilterParams.value, {
+    accounting: true,
+  });
 }
 
 // Al cambiar filtros/búsqueda/tamaño de página, vuelve a la primera página.
@@ -543,8 +527,6 @@ onMounted(() => {
     // Catálogos necesarios para inferir el descuento especial en operaciones antiguas.
     tasasStore.loadTaxRates(),
     comisionesStore.loadCommissions(),
-    // Catálogo del descuento variable (porcentaje de comisión de contabilidad).
-    comisionesContabilidadStore.loadCommissions(),
   ]);
 });
 </script>

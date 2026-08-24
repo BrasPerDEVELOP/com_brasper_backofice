@@ -9,6 +9,7 @@ import type {
 } from '../../infrastructure/adapters/transactions_repository'
 import {
   GetTransactionsUseCase,
+  GetAccountingTransactionsUseCase,
   ImportTransactionsFromExcelUseCase,
   CreateTransactionUseCase,
   UpdateTransactionUseCase,
@@ -67,6 +68,13 @@ export interface LoadTransactionsOptions {
    * (`isRefreshing`) para no ocultar la tabla. `false` fuerza pantalla de carga (`isLoading`).
    */
   background?: boolean
+  /**
+   * `true` pide el listado contable (`GET /transactions/accounting`): mismas
+   * filas y filtros, más el descuento variable y los importes contables que
+   * calcula el servidor. Solo lo usa Contabilidad, que ya exige
+   * `accounting.view`; el resto de vistas no debe activarlo.
+   */
+  accounting?: boolean
 }
 
 interface TransactionsState {
@@ -142,7 +150,9 @@ export const useTransactionsStore = defineStore('transactions', {
         }
         try {
           const repo = getTransactionsRepository()
-          const useCase = new GetTransactionsUseCase(repo)
+          const useCase = options?.accounting
+            ? new GetAccountingTransactionsUseCase(repo)
+            : new GetTransactionsUseCase(repo)
           const { items, total } = await useCase.execute(params)
           this.transactions = enrichTransactionsWithSpecialDiscountMeta(items)
           this.total = total

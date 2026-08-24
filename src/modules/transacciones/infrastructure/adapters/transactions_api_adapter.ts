@@ -29,7 +29,26 @@ export class TransactionsApiAdapter implements TransactionsRepository {
   }
 
   async getTransactions(params?: GetTransactionsParams): Promise<PagedTransactions> {
-    let url = this.endpoint('')
+    return this.fetchTransactionsPage(this.endpoint(''), params)
+  }
+
+  /**
+   * Listado con los campos contables (`GET /transactions/accounting`). Mismos
+   * filtros y paginación que `getTransactions`; el servidor agrega el descuento
+   * variable (`accounting_percentage`) y los importes contables. Requiere el
+   * permiso `accounting.view`.
+   */
+  async getAccountingTransactions(
+    params?: GetTransactionsParams
+  ): Promise<PagedTransactions> {
+    return this.fetchTransactionsPage(this.endpoint('accounting'), params)
+  }
+
+  private async fetchTransactionsPage(
+    baseUrl: string,
+    params?: GetTransactionsParams
+  ): Promise<PagedTransactions> {
+    let url = baseUrl
     const search = new URLSearchParams()
     if (params?.status?.trim()) search.set('status', params.status.trim())
     if (params?.user_id?.trim()) search.set('user_id', params.user_id.trim())
