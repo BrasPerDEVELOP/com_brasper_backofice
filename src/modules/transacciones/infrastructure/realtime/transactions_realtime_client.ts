@@ -10,6 +10,7 @@ export type RealtimeTransactionEventType =
   | 'TRANSACTION_UPDATED'
   | 'TRANSACTION_DELETED'
   | 'TRANSACTIONS_BULK_IMPORTED'
+  | 'CLIENT_DATA_STATUS_UPDATED'
 
 export interface RealtimeActor {
   id?: string
@@ -31,6 +32,7 @@ export interface TransactionsRealtimeCallbacks {
   onUpdated?: (transaction: Transaction, actor?: RealtimeActor) => void
   onDeleted?: (transactionId: string, actor?: RealtimeActor) => void
   onBulkImported?: (count?: number) => void
+  onClientDataStatusUpdated?: (userId: string) => void
   /**
    * El evento llegó recortado (replicado entre procesos con un payload que no
    * cabía en `NOTIFY`): trae el id pero no la fila completa, así que hay que
@@ -47,9 +49,12 @@ export interface TransactionsRealtimeCallbacks {
  */
 function normalizeEventType(rawEvent: string): RealtimeTransactionEventType | null {
   const norm = rawEvent.toLowerCase().replace(/[-.]/g, '_').trim()
-  if (norm.includes('create') || norm === 'transaction_created') return 'TRANSACTION_CREATED'
-  if (norm.includes('update') || norm === 'transaction_updated') return 'TRANSACTION_UPDATED'
-  if (norm.includes('delete') || norm === 'transaction_deleted') return 'TRANSACTION_DELETED'
+  // Debe evaluarse antes que el alias genérico `update`: este evento actualiza
+  // al cliente, no una fila de transacción.
+  if (norm === 'client_data_status_updated') return 'CLIENT_DATA_STATUS_UPDATED'
+  if (norm === 'transaction_created' || norm === 'create') return 'TRANSACTION_CREATED'
+  if (norm === 'transaction_updated' || norm === 'update') return 'TRANSACTION_UPDATED'
+  if (norm === 'transaction_deleted' || norm === 'delete') return 'TRANSACTION_DELETED'
   if (norm.includes('bulk') || norm.includes('import')) return 'TRANSACTIONS_BULK_IMPORTED'
   return null
 }
@@ -100,7 +105,10 @@ export class TransactionsRealtimeClient {
 
       switch (eventType) {
         case 'TRANSACTION_CREATED': {
-          const rawRecord = (payload.transaction || payload.item || payload) as Record<string, unknown>
+          const rawRecord = (payload.transaction || payload.item || payload) as Record<
+            string,
+            unknown
+          >
           if (rawRecord && typeof rawRecord === 'object') {
             const transaction = transactionFromApiRecord(rawRecord)
             callbacks.onCreated?.(transaction, actor)
@@ -108,7 +116,10 @@ export class TransactionsRealtimeClient {
           break
         }
         case 'TRANSACTION_UPDATED': {
-          const rawRecord = (payload.transaction || payload.item || payload) as Record<string, unknown>
+          const rawRecord = (payload.transaction || payload.item || payload) as Record<
+            string,
+            unknown
+          >
           if (rawRecord && typeof rawRecord === 'object') {
             const transaction = transactionFromApiRecord(rawRecord)
             callbacks.onUpdated?.(transaction, actor)
@@ -117,7 +128,10 @@ export class TransactionsRealtimeClient {
         }
         case 'TRANSACTION_DELETED': {
           const id = String(
-            payload.transaction_id || payload.id || (payload.transaction as Record<string, unknown>)?.id || ''
+            payload.transaction_id ||
+              payload.id ||
+              (payload.transaction as Record<string, unknown>)?.id ||
+              ''
           ).trim()
           if (id) {
             callbacks.onDeleted?.(id, actor)
@@ -127,6 +141,11 @@ export class TransactionsRealtimeClient {
         case 'TRANSACTIONS_BULK_IMPORTED': {
           const count = typeof payload.count === 'number' ? payload.count : undefined
           callbacks.onBulkImported?.(count)
+          break
+        }
+        case 'CLIENT_DATA_STATUS_UPDATED': {
+          const userId = String(payload.user_id ?? '').trim()
+          if (userId) callbacks.onClientDataStatusUpdated?.(userId)
           break
         }
       }

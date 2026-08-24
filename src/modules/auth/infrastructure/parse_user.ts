@@ -21,6 +21,9 @@ export interface UserListItem {
   identifications: UserIdentification[]
   phone?: number | null
   code_phone?: string | null
+  /** Señales no sensibles usadas por listados compactos como `name-list`. */
+  has_email?: boolean
+  has_phone?: boolean
 }
 
 export interface UserIdentification {
@@ -38,11 +41,13 @@ function parseIdentifications(o: Record<string, unknown>): UserIdentification[] 
         const type = document.document_type ?? document.type ?? document.tipo_documento
         const number = document.document_number ?? document.number ?? document.numero_documento
         if (type == null || number == null) return []
-        return [{
-          document_type: String(type),
-          document_number: String(number),
-          is_primary: Boolean(document.is_primary ?? document.primary ?? index === 0)
-        }]
+        return [
+          {
+            document_type: String(type),
+            document_number: String(number),
+            is_primary: Boolean(document.is_primary ?? document.primary ?? index === 0)
+          }
+        ]
       })
     : []
 
@@ -50,7 +55,8 @@ function parseIdentifications(o: Record<string, unknown>): UserIdentification[] 
   const legacyNumber = o.document_number ?? o.documentNumber ?? o.numero_documento
   if (legacyType != null && legacyNumber != null) {
     const alreadyIncluded = parsed.some(
-      (item) => item.document_type === String(legacyType) && item.document_number === String(legacyNumber)
+      (item) =>
+        item.document_type === String(legacyType) && item.document_number === String(legacyNumber)
     )
     if (!alreadyIncluded) {
       parsed.unshift({
@@ -129,7 +135,8 @@ export function parseUserListItem(item: unknown): UserListItem | null {
   const fullName = [names, lastnames].filter(Boolean).join(' ') || email || String(id)
   const role = o.role != null ? String(o.role) : undefined
   const identifications = parseIdentifications(o)
-  const primaryIdentification = identifications.find((document) => document.is_primary) ?? identifications[0]
+  const primaryIdentification =
+    identifications.find((document) => document.is_primary) ?? identifications[0]
   const document_number = primaryIdentification?.document_number
   const document_type = primaryIdentification?.document_type
   const phoneVal = o.phone ?? o.telefono
@@ -140,6 +147,8 @@ export function parseUserListItem(item: unknown): UserListItem | null {
         ? Number(phoneVal)
         : null
   const codePhone = o.code_phone ?? o.codePhone ?? o.codigo_telefono
+  const hasEmailSignal = o.has_email ?? o.hasEmail
+  const hasPhoneSignal = o.has_phone ?? o.hasPhone
   return {
     id: String(id),
     name: fullName,
@@ -151,7 +160,9 @@ export function parseUserListItem(item: unknown): UserListItem | null {
     document_type,
     identifications,
     phone: Number.isFinite(phone) ? phone : null,
-    code_phone: codePhone != null ? String(codePhone) : null
+    code_phone: codePhone != null ? String(codePhone) : null,
+    has_email: typeof hasEmailSignal === 'boolean' ? hasEmailSignal : Boolean(email),
+    has_phone: typeof hasPhoneSignal === 'boolean' ? hasPhoneSignal : Number.isFinite(phone)
   }
 }
 

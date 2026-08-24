@@ -10,6 +10,7 @@ import { CuentasBancariasApiAdapter } from '../../infrastructure/adapters'
 import { fetchBankNames } from '../../infrastructure/adapters/banks_api_adapter'
 import {
   fetchClientUsers,
+  fetchTransactionUserById,
   fetchUsersForTransactionForm
 } from '../../infrastructure/adapters/users_api_adapter'
 import type { UserOption } from '../../infrastructure/adapters/users_api_adapter'
@@ -38,6 +39,8 @@ interface CuentasBancariasState {
   _clientUsersLoaded: boolean
   _transactionFormUsersLoaded: boolean
   _banksLoaded: boolean
+  /** Confirma que `bankAccounts` contiene el catálogo global, no una carga parcial. */
+  _allBankAccountsLoaded: boolean
 }
 
 function getRepository() {
@@ -45,8 +48,9 @@ function getRepository() {
 }
 
 function mergeUserOption(list: UserOption[], user: UserOption): UserOption[] {
-  if (list.some((item) => item.id === user.id)) return list
-  return [...list, user].sort((a, b) => a.name.localeCompare(b.name, 'es'))
+  const next = list.filter((item) => item.id !== user.id)
+  next.push(user)
+  return next.sort((a, b) => a.name.localeCompare(b.name, 'es'))
 }
 
 function filterBankAccountsByUserId(accounts: BankAccount[], userId: string): BankAccount[] {
@@ -85,16 +89,22 @@ export const useCuentasBancariasStore = defineStore('cuentasBancarias', {
     isDeleting: false,
     _clientUsersLoaded: false,
     _transactionFormUsersLoaded: false,
-    _banksLoaded: false
+    _banksLoaded: false,
+    _allBankAccountsLoaded: false
   }),
 
   actions: {
-    async loadBankAccounts(params?: { userId?: string; bank_country?: 'pe' | 'br'; account_flow?: 'origin' | 'destination' }) {
+    async loadBankAccounts(params?: {
+      userId?: string
+      bank_country?: 'pe' | 'br'
+      account_flow?: 'origin' | 'destination'
+    }) {
       const workspaceUserId = params?.userId?.trim()
       if (workspaceUserId && !params?.bank_country && !params?.account_flow) {
         const cached = this.bankAccountsByUser[workspaceUserId]
         if (cached) {
           this.bankAccounts = cached
+          this._allBankAccountsLoaded = false
           this.error = null
           return
         }
@@ -105,6 +115,9 @@ export const useCuentasBancariasStore = defineStore('cuentasBancarias', {
         const repo = getRepository()
         const useCase = new GetBankAccountsUseCase(repo)
         this.bankAccounts = await useCase.execute(params)
+        this._allBankAccountsLoaded = Boolean(
+          !params?.userId && !params?.bank_country && !params?.account_flow
+        )
         if (workspaceUserId && !params?.bank_country && !params?.account_flow) {
           this.bankAccountsByUser[workspaceUserId] = this.bankAccounts
         }
@@ -196,6 +209,41 @@ export const useCuentasBancariasStore = defineStore('cuentasBancarias', {
       }
     },
 
+    async refreshTransactionFormUser(userId: string) {
+      const id = userId.trim()
+      if (!id) return
+      try {
+        const user = await fetchTransactionUserById(id)
+        if (!user) return
+        this.transactionFormUsers = mergeUserOption(this.transactionFormUsers, user)
+        if (this.clientUsers.some((item) => item.id === id)) {
+          this.clientUsers = mergeUserOption(this.clientUsers, user)
+        }
+      } catch (e) {
+        console.warn('Error al refrescar señales del usuario:', e)
+      }
+    },
+
+    async refreshBankAccountsForUser(userId: string) {
+      const id = userId.trim()
+      if (!id) return
+      try {
+        const repo = getRepository()
+        const useCase = new GetBankAccountsUseCase(repo)
+        const accounts = filterBankAccountsByUserId(await useCase.execute({ userId: id }), id)
+        this.bankAccounts = [
+          ...this.bankAccounts.filter((account) => String(account.user_id ?? '').trim() !== id),
+          ...accounts
+        ]
+        this.bankAccountsByUser[id] = accounts
+        if (this.transactionFormBankAccountsUserId === id) {
+          this.transactionFormBankAccounts = accounts
+        }
+      } catch (e) {
+        console.warn('Error al refrescar cuentas del usuario:', e)
+      }
+    },
+
     async ensureTransactionFormUser(userId?: string | null) {
       const id = userId?.trim()
       if (!id) return null
@@ -215,7 +263,9 @@ export const useCuentasBancariasStore = defineStore('cuentasBancarias', {
           name: user.name,
           email: user.email,
           role: user.role,
-          identifications: user.identifications
+          identifications: user.identifications,
+          has_email: user.has_email,
+          has_phone: user.has_phone
         }
 
         this.transactionFormUsers = mergeUserOption(this.transactionFormUsers, option)

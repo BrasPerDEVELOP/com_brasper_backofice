@@ -75,7 +75,9 @@ import TransactionDestinationsEditor from '../components/TransactionDestinations
 import TableColumnResizeHandle from '../components/TableColumnResizeHandle.vue'
 import TransactionTagSelector from '../components/TransactionTagSelector.vue'
 import TransactionVoucherFileList from '../components/TransactionVoucherFileList.vue'
+import TransactionClientDataIndicators from '../components/TransactionClientDataIndicators.vue'
 import { useTransactionsRealtime } from '../composables/use_transactions_realtime'
+import { resolveMissingClientData } from '../../domain/client_data_indicators'
 import {
   clearTransactionDestinationAccounts,
   emptyTransactionDestination,
@@ -94,6 +96,8 @@ const authStore = useAuthStore()
 const canCreateTransactions = computed(() => authStore.hasPermission('transactions.create'))
 const canUpdateTransactions = computed(() => authStore.hasPermission('transactions.update'))
 const canDeleteTransactions = computed(() => authStore.hasPermission('transactions.delete'))
+const canViewBankAccounts = computed(() => authStore.hasPermission('bank_accounts.view'))
+const canCreateBankAccounts = computed(() => authStore.hasPermission('bank_accounts.create'))
 const canEditTransactionAgent = computed(() => authStore.isAdmin)
 
 // C1 (Fase C) — labels/badges de estado extraídos a composable puro y testeado.
@@ -129,6 +133,9 @@ const showBancoCrudModal = ref(false)
 const bancoCrudOpenForCreate = ref(false)
 const bankAccountCreateFlow = ref<'origin' | 'destination'>('origin')
 const transactionBankModalHolder = ref<'natural' | 'juridica'>('natural')
+const bankAccountModalContext = ref<'transaction_form' | 'client_indicator'>('transaction_form')
+const bankAccountModalUserId = ref('')
+const bankAccountModalCountryOverride = ref<'pe' | 'br' | null>(null)
 const previewTransaction = ref<Transaction | null>(null)
 const previewLoading = ref(false)
 const previewDetailWarning = ref('')
@@ -849,12 +856,21 @@ function openBankAccountModalFromTransaction(flow: 'origin' | 'destination') {
     return
   }
   transactionsStore.error = null
+  bankAccountModalContext.value = 'transaction_form'
+  bankAccountModalUserId.value = form.user_id.trim()
+  bankAccountModalCountryOverride.value = null
   bankAccountCreateFlow.value = flow
   showBankAccountCreateModal.value = true
 }
 
 async function onTransactionBankAccountCreated(account: BankAccount) {
-  const userId = form.user_id?.trim()
+  const userId = bankAccountModalUserId.value.trim() || form.user_id?.trim()
+  if (bankAccountModalContext.value === 'client_indicator') {
+    if (userId && canViewBankAccounts.value) {
+      await cuentasStore.refreshBankAccountsForUser(userId)
+    }
+    return
+  }
   if (userId) {
     await cuentasStore.loadBankAccountsForTransactionUser(userId)
   }
@@ -1056,6 +1072,23 @@ const transactionBankModalCountry = computed((): 'pe' | 'br' => {
   const to = (calculatorStore.currencyTo ?? '').trim().toLowerCase()
   return to === 'brl' ? 'br' : 'pe'
 })
+
+const effectiveBankAccountModalCountry = computed(
+  (): 'pe' | 'br' => bankAccountModalCountryOverride.value ?? transactionBankModalCountry.value
+)
+
+function openClientBankAccountModal(t: Transaction) {
+  if (!canCreateBankAccounts.value) return
+  const userId = String(t.user_id ?? '').trim()
+  if (!userId) return
+  const destinationCurrency = getTransactionCurrencies(t).destination
+  bankAccountModalContext.value = 'client_indicator'
+  bankAccountModalUserId.value = userId
+  bankAccountModalCountryOverride.value = destinationCurrency === 'BRL' ? 'br' : 'pe'
+  bankAccountCreateFlow.value = 'destination'
+  transactionBankModalHolder.value = 'natural'
+  showBankAccountCreateModal.value = true
+}
 
 const currencyResolutionLookups = computed(() => ({
   taxRateById: (id: string) => tasasStore.taxRates.find((item) => item.id === id),
@@ -1540,7 +1573,8 @@ const {
 } = useTransactionsRealtime({
   currentPage,
   getFilters: () => apiFilterParams.value,
-  onRefresh: () => loadTransactions()
+  onRefresh: () => loadTransactions(),
+  onClientDataStatusUpdated: refreshClientDataStatus
 })
 
 function showLatestTransactions() {
@@ -1551,6 +1585,32 @@ function showLatestTransactions() {
 
 /** Página actual (ya filtrada y paginada por el servidor). */
 const paginatedTransactions = computed(() => transactionsStore.transactions)
+
+const bankAccountOwnerIds = computed(
+  () =>
+    new Set(
+      cuentasStore.bankAccounts
+        .map((account) => String(account.user_id ?? '').trim())
+        .filter(Boolean)
+    )
+)
+
+function missingClientData(t: Transaction) {
+  const userId = String(t.user_id ?? '').trim()
+  const user = cuentasStore.transactionFormUsers.find((item) => item.id === userId)
+  return resolveMissingClientData(user, userId, {
+    bankAccountOwnerIds: bankAccountOwnerIds.value,
+    canInspectBankAccounts: canViewBankAccounts.value,
+    bankAccountsReady: cuentasStore._allBankAccountsLoaded
+  })
+}
+
+async function refreshClientDataStatus(userId: string) {
+  await Promise.all([
+    cuentasStore.refreshTransactionFormUser(userId),
+    canViewBankAccounts.value ? cuentasStore.refreshBankAccountsForUser(userId) : Promise.resolve()
+  ])
+}
 
 /** Días (`YYYY-MM-DD`) presentes en la página visible. */
 const visibleDayKeys = computed(() => {
@@ -3355,6 +3415,9 @@ onActivated(() => {
   if (!transactionsStore.isLoading && !transactionsStore.isRefreshing) {
     loadTransactions()
   }
+  if (!cuentasStore._allBankAccountsLoaded) {
+    void cuentasStore.loadBankAccounts()
+  }
 })
 </script>
 
@@ -3374,7 +3437,8 @@ onActivated(() => {
               :class="{
                 'bg-emerald-50 text-emerald-700 border border-emerald-200': isRealtimeConnected,
                 'bg-amber-50 text-amber-700 border border-amber-200': isRealtimeReconnecting,
-                'bg-slate-100 text-slate-500 border border-slate-200': !isRealtimeConnected && !isRealtimeReconnecting
+                'bg-slate-100 text-slate-500 border border-slate-200':
+                  !isRealtimeConnected && !isRealtimeReconnecting
               }"
               :title="
                 isRealtimeConnected
@@ -3392,7 +3456,13 @@ onActivated(() => {
                   'bg-slate-400': !isRealtimeConnected && !isRealtimeReconnecting
                 }"
               />
-              {{ isRealtimeConnected ? 'En vivo' : isRealtimeReconnecting ? 'Reconectando...' : 'Desconectado' }}
+              {{
+                isRealtimeConnected
+                  ? 'En vivo'
+                  : isRealtimeReconnecting
+                    ? 'Reconectando...'
+                    : 'Desconectado'
+              }}
             </span>
           </div>
         </div>
@@ -3812,7 +3882,9 @@ onActivated(() => {
             v-for="t in paginatedTransactions"
             :key="t.id ?? ''"
             class="border-t border-[#e5e7eb] transition-colors duration-700 hover:bg-[#f9fafb]"
-            :class="isTxHighlighted(t.id) ? 'bg-amber-50/80 ring-1 ring-inset ring-amber-300' : 'bg-white'"
+            :class="
+              isTxHighlighted(t.id) ? 'bg-amber-50/80 ring-1 ring-inset ring-amber-300' : 'bg-white'
+            "
             :title="rowShortcutHint"
             @dblclick="onRowDoubleClick(t, $event)"
             @contextmenu.prevent="onRowContextMenu(t, $event)"
@@ -3876,8 +3948,15 @@ onActivated(() => {
               {{ t.operation_number || '—' }}
             </td>
             <td class="overflow-hidden px-4 py-3 text-[#374151]">
-              <span class="block truncate" :title="getClientLabel(t.user_id)">
-                {{ getClientLabel(t.user_id) }}
+              <span class="flex min-w-0 items-center gap-1.5">
+                <span class="min-w-0 truncate" :title="getClientLabel(t.user_id)">
+                  {{ getClientLabel(t.user_id) }}
+                </span>
+                <TransactionClientDataIndicators
+                  :missing="missingClientData(t)"
+                  :can-create-bank-account="canCreateBankAccounts"
+                  @add-bank-account="openClientBankAccountModal(t)"
+                />
               </span>
               <span
                 v-if="transactionTags(t).length"
@@ -6328,9 +6407,9 @@ onActivated(() => {
     <CuentaBancariaCreateFormModal
       v-model="showBankAccountCreateModal"
       :account-flow="bankAccountCreateFlow"
-      :bank-country="transactionBankModalCountry"
+      :bank-country="effectiveBankAccountModalCountry"
       :holder-type="transactionBankModalHolder"
-      :locked-user-id="form.user_id?.trim() || undefined"
+      :locked-user-id="bankAccountModalUserId.trim() || form.user_id?.trim() || undefined"
       variant="transaction"
       @created="onTransactionBankAccountCreated"
     />

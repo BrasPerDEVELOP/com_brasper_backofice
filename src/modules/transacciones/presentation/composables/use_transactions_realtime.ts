@@ -9,16 +9,14 @@ export interface UseTransactionsRealtimeOptions {
   currentPage?: Ref<number>
   getFilters?: () => GetTransactionsParams
   onRefresh?: () => void | Promise<void>
+  onClientDataStatusUpdated?: (userId: string) => void | Promise<void>
   autoConnect?: boolean
 }
 
 /**
  * Evalúa si una transacción cumple los filtros actualmente aplicados en la vista.
  */
-export function matchesCurrentFilters(
-  tx: Transaction,
-  filters?: GetTransactionsParams
-): boolean {
+export function matchesCurrentFilters(tx: Transaction, filters?: GetTransactionsParams): boolean {
   if (!filters) return true
 
   // Filtro por estado
@@ -29,8 +27,10 @@ export function matchesCurrentFilters(
   }
 
   // Filtro por usuario / cliente
-  const clientObj = (tx.client && typeof tx.client === 'object') ? (tx.client as Record<string, unknown>) : undefined
-  const userObj = (tx.user && typeof tx.user === 'object') ? (tx.user as Record<string, unknown>) : undefined
+  const clientObj =
+    tx.client && typeof tx.client === 'object' ? (tx.client as Record<string, unknown>) : undefined
+  const userObj =
+    tx.user && typeof tx.user === 'object' ? (tx.user as Record<string, unknown>) : undefined
   const txUserId = String(tx.user_id ?? clientObj?.id ?? userObj?.id ?? '')
   if (filters.user_id && txUserId !== String(filters.user_id)) {
     return false
@@ -76,7 +76,9 @@ export function matchesCurrentFilters(
   if (filters.search && filters.search.trim()) {
     const q = filters.search.trim().toLowerCase()
     const code = String(tx.transaction_code ?? tx.code ?? '').toLowerCase()
-    const clientName = String(clientObj?.full_name ?? userObj?.full_name ?? tx.company_name ?? '').toLowerCase()
+    const clientName = String(
+      clientObj?.full_name ?? userObj?.full_name ?? tx.company_name ?? ''
+    ).toLowerCase()
     const id = String(tx.id ?? '').toLowerCase()
     if (!code.includes(q) && !clientName.includes(q) && !id.includes(q)) {
       return false
@@ -167,6 +169,9 @@ export function useTransactionsRealtime(options?: UseTransactionsRealtimeOptions
       onBulkImported: () => {
         transactionsStore.applyRealtimeBulkImported()
         refresh()
+      },
+      onClientDataStatusUpdated: (userId) => {
+        void options?.onClientDataStatusUpdated?.(userId)
       },
       onPartial: (id) => {
         // Sin la fila completa sólo podemos recargar; el highlight se mantiene

@@ -161,4 +161,24 @@ describe('TransactionsRealtimeClient', () => {
 
     client.disconnect()
   })
+
+  it('procesa CLIENT_DATA_STATUS_UPDATED sin confundirlo con una transacción', () => {
+    const onClientDataStatusUpdated = vi.fn()
+    const onUpdated = vi.fn()
+    const client = new TransactionsRealtimeClient(() => 'test-token')
+
+    client.connect({ onClientDataStatusUpdated, onUpdated })
+    const mockWs = MockWs.instances[0]
+    mockWs.onopen?.()
+
+    mockWs.simulateMessage({
+      event: 'CLIENT_DATA_STATUS_UPDATED',
+      data: { user_id: 'user-9' }
+    })
+
+    expect(onClientDataStatusUpdated).toHaveBeenCalledWith('user-9')
+    expect(onUpdated).not.toHaveBeenCalled()
+
+    client.disconnect()
+  })
 })
