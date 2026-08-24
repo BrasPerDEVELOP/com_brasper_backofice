@@ -199,9 +199,17 @@ const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
   accounting: [
     'dashboard.view',
     'metrics.view',
+    'users.view',
+    'users.create',
+    'users.update',
+    'users.delete',
+    'users.reset_password',
     'accounting.view',
     'transactions.view',
     'bank_accounts.view',
+    'bank_accounts.create',
+    'bank_accounts.update',
+    'bank_accounts.delete',
     'profile.view',
     'profile.update',
     'profile.change_password'

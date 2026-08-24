@@ -11,10 +11,17 @@ describe('default role permissions', () => {
     expect(permissions).not.toContain('company_bank_accounts.view')
   })
 
-  it('keeps accounting access read-only by default', () => {
+  it('allows accounting to fully manage users and client bank accounts', () => {
     const permissions = getDefaultPermissionsForRole('accounting')
+    expect(permissions).toContain('users.view')
+    expect(permissions).toContain('users.create')
+    expect(permissions).toContain('users.update')
+    expect(permissions).toContain('users.delete')
+    expect(permissions).toContain('users.reset_password')
     expect(permissions).toContain('bank_accounts.view')
-    expect(permissions).not.toContain('bank_accounts.create')
+    expect(permissions).toContain('bank_accounts.create')
+    expect(permissions).toContain('bank_accounts.update')
+    expect(permissions).toContain('bank_accounts.delete')
   })
 
   it('keeps the corporate Brasper account CRUD restricted by default', () => {
