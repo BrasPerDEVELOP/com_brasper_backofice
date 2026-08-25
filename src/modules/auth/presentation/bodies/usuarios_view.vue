@@ -384,6 +384,31 @@ function getDocumentNumber(u: UserListItem): string {
   return u.document_number ?? '-'
 }
 
+function safeFilePart(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 60) || 'usuario'
+}
+
+function bankLabel(bankId: string): string {
+  const bank = cuentasStore.banks.find((item) => item.id === bankId)
+  if (!bank) return bankId
+  return bank.currency ? `${bank.bank} (${bank.currency})` : bank.bank
+}
+
+function accountHolder(account: BankAccount): string {
+  return (
+    account.business_name ||
+    [account.holder_names, account.holder_surnames].filter(Boolean).join(' ') ||
+    ''
+  )
+}
+
 function exportUsersToExcel() {
   const headers = ['uuid', 'nombres', 'email', 'tipo_documento', 'n_documento', 'rol']
   const rows = searchedUsers.value.map((u) => {
@@ -403,6 +428,87 @@ function exportUsersToExcel() {
   XLSX.utils.book_append_sheet(wb, ws, 'Usuarios')
   const filename = `usuarios_${new Date().toISOString().slice(0, 10)}.xlsx`
   XLSX.writeFile(wb, filename)
+}
+
+async function exportUserToExcel(user: UserListItem) {
+  openMenuId.value = null
+  error.value = ''
+  try {
+    const isClientUser = isClient(user)
+    if (isClientUser && canViewBankAccounts.value) {
+      await Promise.all([
+        cuentasStore.loadBankAccounts({ userId: user.id }),
+        cuentasStore.loadBanks()
+      ])
+    }
+
+    const roleLabel =
+      USER_ROLE_LABELS[user.role as keyof typeof USER_ROLE_LABELS] ?? user.role ?? ''
+    const userRows = [
+      ['Campo', 'Valor'],
+      ['UUID', user.id],
+      ['Nombres', user.names ?? user.name ?? ''],
+      ['Apellidos', user.lastnames ?? ''],
+      ['Email', user.email === '-' ? '' : user.email],
+      ['Rol', roleLabel],
+      ['Tipo documento', getDocumentType(user) === '-' ? '' : getDocumentType(user)],
+      ['Numero documento', getDocumentNumber(user) === '-' ? '' : getDocumentNumber(user)],
+      ['Telefono', [user.code_phone, user.phone].filter(Boolean).join(' ')]
+    ]
+
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(userRows), 'Usuario')
+
+    if (isClientUser && canViewBankAccounts.value) {
+      const accounts = cuentasStore.bankAccounts.filter((account) => account.user_id === user.id)
+      const accountRows = accounts.map((account) => [
+        account.id,
+        account.bank_country?.toUpperCase() ?? '',
+        account.account_flow === 'origin' ? 'Origen' : 'Destino',
+        bankLabel(account.bank_id),
+        account.account_holder_type?.toLowerCase().includes('legal') ? 'Juridica' : 'Natural',
+        accountHolder(account),
+        account.document_number ?? '',
+        account.ruc_number ?? '',
+        account.account_number ?? '',
+        account.cci_number ?? '',
+        account.pix_key ?? '',
+        account.pix_key_type ?? '',
+        account.created_at ?? '',
+        account.updated_at ?? ''
+      ])
+      XLSX.utils.book_append_sheet(
+        wb,
+        XLSX.utils.aoa_to_sheet([
+          [
+            'uuid',
+            'pais',
+            'flujo',
+            'banco',
+            'tipo_titular',
+            'titular',
+            'documento',
+            'ruc',
+            'numero_cuenta',
+            'cci',
+            'pix',
+            'tipo_pix',
+            'creado',
+            'actualizado'
+          ],
+          ...accountRows
+        ]),
+        'Cuentas bancarias'
+      )
+    }
+
+    const filename = `usuario_${safeFilePart(user.name || user.email || user.id)}_${new Date()
+      .toISOString()
+      .slice(0, 10)}.xlsx`
+    XLSX.writeFile(wb, filename)
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'No se pudo generar el Excel del usuario'
+  }
 }
 
 onMounted(async () => {
@@ -468,6 +574,7 @@ onMounted(async () => {
       @edit="openEditModal"
       @reset-password="openResetPasswordModal"
       @view-accounts="goToUserBankAccounts"
+      @export-excel="exportUserToExcel"
       @delete="handleDelete"
       @go-to-page="goToPage"
     />

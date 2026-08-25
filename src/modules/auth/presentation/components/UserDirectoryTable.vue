@@ -25,6 +25,7 @@ const emit = defineEmits<{
   edit: [user: UserListItem]
   resetPassword: [user: UserListItem]
   viewAccounts: [user: UserListItem]
+  exportExcel: [user: UserListItem]
   delete: [user: UserListItem]
   goToPage: [page: number]
 }>()
@@ -142,6 +143,13 @@ function documentNumber(user: UserListItem): string {
                   @click="emit('viewAccounts', user)"
                 >
                   Ver cuentas
+                </button>
+                <button
+                  type="button"
+                  class="block w-full px-4 py-2 text-left text-sm hover:bg-[#f9fafb]"
+                  @click="emit('exportExcel', user)"
+                >
+                  Exportar Excel
                 </button>
                 <button
                   v-if="canDelete"

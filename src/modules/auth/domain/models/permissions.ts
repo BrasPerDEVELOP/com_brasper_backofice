@@ -210,6 +210,10 @@ const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
     'bank_accounts.create',
     'bank_accounts.update',
     'bank_accounts.delete',
+    'commissions.view',
+    'commissions.create',
+    'commissions.update',
+    'commissions.delete',
     'profile.view',
     'profile.update',
     'profile.change_password'

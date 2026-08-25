@@ -2747,24 +2747,20 @@ function onRowContextMenu(t: Transaction, event: MouseEvent) {
 }
 
 /** Pista de los atajos de fila, mostrada como tooltip en cada `<tr>`. */
-const rowShortcutHint = computed(() =>
-  canUpdateTransactions.value
-    ? 'Doble clic para editar · clic derecho para más acciones'
-    : 'Doble clic para previsualizar · clic derecho para más acciones'
+const rowShortcutHint = computed(
+  () => 'Doble clic para previsualizar · clic derecho para más acciones'
 )
 
 /**
- * Doble clic sobre la fila: abre la edición, o la vista previa si no hay permiso
- * para editar. Se ignora si el doble clic cayó sobre un control de la fila.
+ * Doble clic sobre la fila: abre la previsualización siempre.
+ * La edición solo se accede desde el menú contextual o desde el propio preview.
  */
 function onRowDoubleClick(t: Transaction, event: MouseEvent) {
   const target = event.target as HTMLElement | null
   if (target?.closest('a, button, input, select, textarea, label')) return
-  // Un doble clic deja texto seleccionado; molesta al abrir el modal encima.
   window.getSelection()?.removeAllRanges()
   closeRowActionMenu()
-  if (canUpdateTransactions.value) openEditModal(t)
-  else void openPreviewModal(t)
+  void openPreviewModal(t)
 }
 
 function goToPage(page: number) {

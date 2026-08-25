@@ -22,6 +22,10 @@ describe('default role permissions', () => {
     expect(permissions).toContain('bank_accounts.create')
     expect(permissions).toContain('bank_accounts.update')
     expect(permissions).toContain('bank_accounts.delete')
+    expect(permissions).toContain('commissions.view')
+    expect(permissions).toContain('commissions.create')
+    expect(permissions).toContain('commissions.update')
+    expect(permissions).toContain('commissions.delete')
   })
 
   it('keeps the corporate Brasper account CRUD restricted by default', () => {
