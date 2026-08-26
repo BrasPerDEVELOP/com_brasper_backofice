@@ -9,7 +9,7 @@ import {
 import { useCuentasBancariasStore } from '@modules/cuentas-bancarias/presentation/controllers/use_cuentas_bancarias_store_controller'
 import type { BankAccount } from '@modules/cuentas-bancarias/domain/models'
 import { useTasasStore } from '@modules/tasas/presentation/controllers/use_tasas_store_controller'
-import { useComisionesStore } from '@modules/comisiones/presentation/controllers/use_comisiones_store_controller'
+import { useComisionesStore, useComisionesContabilidadStore } from '@modules/comisiones/presentation/controllers/use_comisiones_store_controller'
 import type { CurrencyCode } from '@modules/calculator/domain/models'
 import { CURRENCY_FLAG_SRC_BY_CODE } from '@modules/calculator/presentation/utils/calculator_format'
 import type {
@@ -27,7 +27,6 @@ import {
   localDateInputStartMs,
   localDateInputEndMs,
   getTransactionSpecialDiscountForDisplay,
-  SPECIAL_CALCULATOR_DISCOUNT_CODE,
   inferOriginCurrencyFromTransactionCode
 } from '@modules/transacciones/domain/models'
 import AppDropdown from '@/interface/components/AppDropdown.vue'
@@ -35,22 +34,74 @@ import AppDateInput from '@/interface/components/AppDateInput.vue'
 import TableColumnResizeHandle from '@modules/transacciones/presentation/components/TableColumnResizeHandle.vue'
 import { MediaViewerDialog } from '@interface/widgets'
 import { Domain } from '@/interface/infrastructure/services'
+import {
+  ACCOUNTING_COMMISSION_AMOUNT_THRESHOLD,
+  ACCOUNTING_COMMISSION_DEFAULT,
+  calculateAccountingCommission,
+  calculateAccountingFinalSale
+} from '../../domain/accounting_commission'
 import { downloadTransactionAccountingPdf } from '../../infrastructure/pdf/download_transaction_accounting_pdf'
 
 const transactionsStore = useTransactionsStore()
 const cuentasStore = useCuentasBancariasStore()
 const tasasStore = useTasasStore()
 const comisionesStore = useComisionesStore()
+const comisionesContabilidadStore = useComisionesContabilidadStore()
 
 const searchQuery = ref('')
 const statusFilter = ref<string>('todos')
 const userFilter = ref<string>('')
 const bankAccountFilter = ref<string>('')
+/** Par origen-destino (p. ej. `brl-pen`); vacío = todas las monedas. */
+const currencyPairFilter = ref<string>('')
 const createdAtFrom = ref<string>('')
 const createdAtTo = ref<string>('')
+
+/**
+ * Misma operación diaria que Ventas: por defecto un solo día;
+ * `"all"` levanta el recorte para el histórico contable.
+ */
+type TransactionScope = 'day' | 'all'
+
+function todayDayKey(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+    d.getDate()
+  ).padStart(2, '0')}`
+}
+
+const transactionScope = ref<TransactionScope>('day')
+const selectedDay = ref<string>(todayDayKey())
+
+const isToday = computed(() => selectedDay.value === todayDayKey())
+
+const selectedDayLabel = computed(() => {
+  const [y, m, d] = selectedDay.value.split('-').map(Number)
+  if (!y || !m || !d) return selectedDay.value
+  const label = new Date(y, m - 1, d).toLocaleDateString('es-PE', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  })
+  return label.charAt(0).toUpperCase() + label.slice(1)
+})
+
+function shiftSelectedDay(days: number) {
+  const [y = 0, m = 1, d = 1] = selectedDay.value.split('-').map(Number)
+  const next = new Date(y, m - 1, d + days)
+  selectedDay.value = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(
+    next.getDate()
+  ).padStart(2, '0')}`
+}
+
+function goToToday() {
+  selectedDay.value = todayDayKey()
+  transactionScope.value = 'day'
+}
+
 const perPage = ref(10)
 const currentPage = ref(1)
-const updatingCheckedId = ref<string | null>(null)
 const showMediaViewer = shallowRef(false)
 const mediaViewerSource = shallowRef('')
 const mediaViewerTitle = shallowRef('Comprobante')
@@ -69,9 +120,8 @@ interface AccountingTableColumn<Key extends string = string> extends ResizableTa
   visuallyHidden?: boolean
 }
 
-const ACCOUNTING_TABLE_ACTIONS_WIDTH = 96
+const ACCOUNTING_TABLE_ACTIONS_WIDTH = 72
 type AccountingTableColumnKey =
-  | 'checked'
   | 'code'
   | 'sendDate'
   | 'operationNumber'
@@ -82,176 +132,157 @@ type AccountingTableColumnKey =
   | 'receiveAmount'
   | 'exchangeRate'
   | 'variableDiscount'
-  | 'specialDiscount'
-  | 'internalCommission'
-  | 'internalTax'
+  | 'commission'
   | 'finalSale'
   | 'status'
   | 'sendVoucher'
   | 'paymentVoucher'
 
+/** Anchos pensados para ~1280–1600px de contenido; el usuario puede ensanchar. */
 const ACCOUNTING_TABLE_COLUMNS: readonly AccountingTableColumn<AccountingTableColumnKey>[] = [
-  {
-    key: 'checked',
-    label: 'Verificada',
-    defaultWidth: 48,
-    minWidth: 40,
-    maxWidth: 80,
-    headerClass: 'px-2 py-3',
-    title: 'Verificada',
-    visuallyHidden: true
-  },
   {
     key: 'code',
     label: 'Código',
-    defaultWidth: 132,
-    minWidth: 96,
+    defaultWidth: 108,
+    minWidth: 88,
     maxWidth: 600,
-    headerClass: 'whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark'
+    headerClass:
+      'whitespace-nowrap px-3 py-3 text-center font-semibold text-brasper-indigoDark'
   },
   {
     key: 'sendDate',
     label: 'Fecha envío',
-    defaultWidth: 150,
-    minWidth: 120,
+    defaultWidth: 118,
+    minWidth: 100,
     maxWidth: 600,
-    headerClass: 'whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark'
+    headerClass:
+      'whitespace-nowrap px-3 py-3 text-center font-semibold text-brasper-indigoDark'
   },
   {
     key: 'operationNumber',
     label: 'N° operación',
-    defaultWidth: 145,
-    minWidth: 110,
+    defaultWidth: 112,
+    minWidth: 90,
     maxWidth: 1200,
-    headerClass: 'whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark'
+    headerClass:
+      'whitespace-nowrap px-3 py-3 text-center font-semibold text-brasper-indigoDark'
   },
   {
     key: 'client',
     label: 'Cliente',
-    defaultWidth: 210,
-    minWidth: 140,
+    defaultWidth: 140,
+    minWidth: 110,
     maxWidth: 1200,
-    headerClass: 'whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark'
+    headerClass:
+      'whitespace-nowrap px-3 py-3 text-center font-semibold text-brasper-indigoDark'
   },
   {
     key: 'destinationAccount',
     label: 'Cuenta destino',
-    defaultWidth: 190,
-    minWidth: 140,
+    defaultWidth: 112,
+    minWidth: 96,
     maxWidth: 1200,
-    headerClass: 'whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark'
+    headerClass:
+      'whitespace-nowrap px-3 py-3 text-center font-semibold text-brasper-indigoDark'
   },
   {
     key: 'company',
     label: 'Razón social',
-    defaultWidth: 170,
-    minWidth: 130,
+    defaultWidth: 120,
+    minWidth: 100,
     maxWidth: 1200,
-    headerClass: 'whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark'
+    headerClass:
+      'whitespace-nowrap px-3 py-3 text-center font-semibold text-brasper-indigoDark'
   },
   {
     key: 'sendAmount',
     label: 'Monto de envío',
-    defaultWidth: 150,
-    minWidth: 120,
+    defaultWidth: 108,
+    minWidth: 92,
     maxWidth: 600,
-    headerClass: 'whitespace-nowrap px-4 py-3 text-center font-semibold text-brasper-indigoDark'
+    headerClass:
+      'whitespace-nowrap bg-sky-700 px-2 py-3 text-center text-[10px] font-bold uppercase leading-tight tracking-wide text-white',
+    headerLines: ['Monto de', 'envío']
   },
   {
     key: 'receiveAmount',
     label: 'Monto a recibir',
-    defaultWidth: 150,
-    minWidth: 120,
+    defaultWidth: 112,
+    minWidth: 96,
     maxWidth: 600,
-    headerClass: 'whitespace-nowrap px-4 py-3 text-center font-semibold text-brasper-indigoDark'
+    headerClass:
+      'whitespace-nowrap bg-sky-700 px-2 py-3 text-center text-[10px] font-bold uppercase leading-tight tracking-wide text-white',
+    headerLines: ['Monto a', 'recibir']
   },
   {
     key: 'exchangeRate',
     label: 'Tipo cambio',
-    defaultWidth: 130,
-    minWidth: 105,
+    defaultWidth: 88,
+    minWidth: 72,
     maxWidth: 600,
-    headerClass: 'whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark'
+    headerClass:
+      'whitespace-nowrap px-2 py-3 text-center font-semibold text-brasper-indigoDark'
   },
   {
     key: 'variableDiscount',
     label: 'Descuento variable',
-    defaultWidth: 112,
-    minWidth: 92,
+    defaultWidth: 84,
+    minWidth: 72,
     maxWidth: 400,
     headerClass:
-      'whitespace-nowrap px-2 py-3 text-right text-xs font-semibold leading-tight text-brasper-indigoDark',
+      'whitespace-nowrap px-2 py-3 text-center text-xs font-semibold leading-tight text-brasper-indigoDark',
     title: 'Porcentaje de la comisión de contabilidad aplicable a la operación',
     headerLines: ['Descuento', 'variable']
   },
   {
-    key: 'specialDiscount',
-    label: 'Descuento especial',
-    defaultWidth: 112,
-    minWidth: 92,
+    key: 'commission',
+    label: 'Comisión',
+    defaultWidth: 100,
+    minWidth: 88,
     maxWidth: 400,
     headerClass:
-      'whitespace-nowrap px-2 py-3 text-right text-xs font-semibold leading-tight text-brasper-indigoDark',
-    title: 'Descuento aplicado por la calculadora especial (ESPECIAL)',
-    headerLines: ['Descuento', 'especial']
-  },
-  {
-    key: 'internalCommission',
-    label: 'Comisión final interna',
-    defaultWidth: 126,
-    minWidth: 104,
-    maxWidth: 420,
-    headerClass:
-      'whitespace-nowrap bg-[#1e3a8a] px-2 py-3 text-right text-[10px] font-bold uppercase leading-tight tracking-wide text-white',
-    headerLines: ['Comisión', 'final interna']
-  },
-  {
-    key: 'internalTax',
-    label: 'Impuesto final interno',
-    defaultWidth: 126,
-    minWidth: 104,
-    maxWidth: 420,
-    headerClass:
-      'whitespace-nowrap bg-[#1e3a8a] px-2 py-3 text-right text-[10px] font-bold uppercase leading-tight tracking-wide text-white',
-    headerLines: ['Impuesto', 'final interno']
+      'whitespace-nowrap bg-[#1e3a8a] px-2 py-3 text-center text-[10px] font-bold uppercase leading-tight tracking-wide text-white',
+    title: `Comisión de contabilidad: si monto < ${ACCOUNTING_COMMISSION_AMOUNT_THRESHOLD} → S/ ${ACCOUNTING_COMMISSION_DEFAULT}; si no → monto × %`,
+    headerLines: ['Comisión']
   },
   {
     key: 'finalSale',
-    label: 'Venta final',
-    defaultWidth: 118,
-    minWidth: 100,
+    label: 'Total a enviar',
+    defaultWidth: 100,
+    minWidth: 88,
     maxWidth: 420,
     headerClass:
-      'whitespace-nowrap bg-emerald-600 px-2 py-3 text-right text-[10px] font-bold uppercase leading-tight tracking-wide text-white',
-    headerLines: ['Venta', 'final']
+      'whitespace-nowrap bg-emerald-600 px-2 py-3 text-center text-[10px] font-bold uppercase leading-tight tracking-wide text-white',
+    headerLines: ['Total a', 'enviar']
   },
   {
     key: 'status',
     label: 'Estado',
-    defaultWidth: 120,
-    minWidth: 100,
+    defaultWidth: 100,
+    minWidth: 88,
     maxWidth: 600,
-    headerClass: 'whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark'
+    headerClass:
+      'whitespace-nowrap px-2 py-3 text-center font-semibold text-brasper-indigoDark'
   },
   {
     key: 'sendVoucher',
     label: 'Comprobante de envío',
-    defaultWidth: 90,
-    minWidth: 76,
+    defaultWidth: 72,
+    minWidth: 64,
     maxWidth: 400,
     headerClass:
-      'whitespace-nowrap px-2 py-3 text-center text-xs font-semibold leading-tight text-brasper-indigoDark',
+      'whitespace-nowrap px-1.5 py-3 text-center text-xs font-semibold leading-tight text-brasper-indigoDark',
     title: 'Comprobante de envío (imagen)',
     headerLines: ['Comp.', 'envío']
   },
   {
     key: 'paymentVoucher',
     label: 'Comprobante de pago',
-    defaultWidth: 90,
-    minWidth: 76,
+    defaultWidth: 72,
+    minWidth: 64,
     maxWidth: 400,
     headerClass:
-      'whitespace-nowrap px-2 py-3 text-center text-xs font-semibold leading-tight text-brasper-indigoDark',
+      'whitespace-nowrap px-1.5 py-3 text-center text-xs font-semibold leading-tight text-brasper-indigoDark',
     title: 'Comprobante de pago (imagen)',
     headerLines: ['Comp.', 'pago']
   }
@@ -266,7 +297,7 @@ const {
   resizeBy: resizeAccountingColumnBy
 } = useResizableTableColumns({
   columns: ACCOUNTING_TABLE_COLUMNS,
-  storageKey: 'brasper:accounting:table-column-widths:v1',
+  storageKey: 'brasper:accounting:table-column-widths:v2',
   fixedWidth: ACCOUNTING_TABLE_ACTIONS_WIDTH
 })
 
@@ -313,6 +344,23 @@ const bankAccountFilterOptions = computed(() => [
   ...cuentasStore.bankAccounts.map(bankAccountToOption)
 ])
 
+const currencyPairFilterOptions = computed(() => {
+  const pairs = new Map<string, string>()
+  for (const rate of tasasStore.taxRates) {
+    const origin = (rate.coin_a ?? '').toUpperCase()
+    const destination = (rate.coin_b ?? '').toUpperCase()
+    if (!origin || !destination) continue
+    const key = `${origin.toLowerCase()}-${destination.toLowerCase()}`
+    pairs.set(key, `${origin}-${destination}`)
+  }
+  return [
+    { value: ALL_VALUE, label: 'Todas' },
+    ...Array.from(pairs.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([value, label]) => ({ value, label }))
+  ]
+})
+
 const perPageOptions = [
   { value: '5', label: '5' },
   { value: '10', label: '10' },
@@ -342,7 +390,8 @@ watch(
 
 /**
  * Parámetros que se envían al API. El filtrado (estado efectivo, cuenta,
- * rango por `send_date`, búsqueda) y la paginación se resuelven en el servidor.
+ * par de monedas, rango por `send_date`, búsqueda) y la paginación se
+ * resuelven en el servidor — misma lógica que Ventas.
  */
 const apiFilterParams = computed((): GetTransactionsParams => {
   const p: GetTransactionsParams = {
@@ -352,8 +401,21 @@ const apiFilterParams = computed((): GetTransactionsParams => {
   if (statusFilter.value && statusFilter.value !== 'todos') p.status = statusFilter.value
   if (userFilter.value?.trim()) p.user_id = userFilter.value.trim()
   if (bankAccountFilter.value?.trim()) p.bank_account_id = bankAccountFilter.value.trim()
-  const fromMs = localDateInputStartMs(createdAtFrom.value)
-  const toMs = localDateInputEndMs(createdAtTo.value)
+  const pair = currencyPairFilter.value?.trim()
+  if (pair) {
+    const [origin, destination] = pair.split('-')
+    if (origin) p.origin_currency = origin.toUpperCase()
+    if (destination) p.destination_currency = destination.toUpperCase()
+  }
+  // En modo día el recorte lo define `selectedDay`; desde/hasta solo en histórico.
+  const fromMs =
+    transactionScope.value === 'day'
+      ? localDateInputStartMs(selectedDay.value)
+      : localDateInputStartMs(createdAtFrom.value)
+  const toMs =
+    transactionScope.value === 'day'
+      ? localDateInputEndMs(selectedDay.value)
+      : localDateInputEndMs(createdAtTo.value)
   if (fromMs != null) p.send_date_from = new Date(fromMs).toISOString()
   if (toMs != null) p.send_date_to = new Date(toMs).toISOString()
   const q = debouncedSearch.value.trim()
@@ -453,21 +515,7 @@ function descuentoEspecialLabel(t: Transaction): string {
   return monto < 0 ? `+${formatPen(Math.abs(monto))}` : `-${formatPen(monto)}`
 }
 
-function descuentoEspecialTitle(t: Transaction): string {
-  const info = specialDiscount(t)
-  if (!info) return 'Sin descuento de calculadora especial'
-  const parts = [
-    info.discountPercentage != null
-      ? `${SPECIAL_CALCULATOR_DISCOUNT_CODE} (${formatValue(info.discountPercentage)}%)`
-      : SPECIAL_CALCULATOR_DISCOUNT_CODE,
-    `Comisión base: ${formatPen(info.baseCommission)}`,
-    `Comisión aplicada: ${formatPen(info.finalCommission)}`
-  ]
-  if (info.improvementReceive > 0.005) {
-    parts.push(`Mejora al recibir: +${formatValue(info.improvementReceive)}`)
-  }
-  return parts.join(' · ')
-}
+
 
 /** Contabilidad: porcentaje con dos decimales (3.50%). */
 function formatPercent(value: number | null | undefined): string {
@@ -480,21 +528,44 @@ function formatPercent(value: number | null | undefined): string {
 }
 
 /**
- * Descuento variable: porcentaje de la comisión de contabilidad que aplica a la
- * operación. Lo resuelve el servidor en `GET /transactions/accounting` buscando
- * el tramo de `coin.commission_accounting` que cubre el monto de envío, así que
- * aquí solo se lee: la vista ya no replica la regla de tramos (el corte superior
- * es exclusivo y el navegador lo tenía inclusivo, lo que discrepaba justo en los
- * montos de corte: 300, 1000, 2000…).
- *
- * Es informativo — no altera la comisión final interna, que sigue viniendo del
- * API.
+ * Porcentaje de comisión de contabilidad.
+ * Prioriza `accounting_percentage` del listado contable; si falta, resuelve
+ * el tramo en `/coin/commission-accounting` por par de monedas y monto.
  */
-function descuentoVariable(t: Transaction): number | null {
-  const value = t.accounting_percentage
-  if (value == null) return null
-  const n = Number(value)
+function accountingCommissionPercentage(t: Transaction): number | null {
+  const fromApi = t.accounting_percentage
+  if (fromApi != null) {
+    const n = Number(fromApi)
+    if (Number.isFinite(n)) return n
+  }
+
+  const commissions = comisionesContabilidadStore.commissions
+  if (!commissions.length) return null
+
+  const { origin, destination } = getTransactionCurrencies(t)
+  if (!origin || !destination) return null
+  const originKey = origin.toLowerCase()
+  const destinationKey = destination.toLowerCase()
+  const pair = commissions.filter(
+    (c) =>
+      String(c.coin_a ?? '').toLowerCase() === originKey &&
+      String(c.coin_b ?? '').toLowerCase() === destinationKey
+  )
+  if (!pair.length) return null
+
+  const amount = Number(t.origin_amount)
+  const bracket =
+    Number.isFinite(amount) && amount > 0
+      ? (pair.find((c) => amount >= c.min_amount && amount <= c.max_amount) ??
+        pair[pair.length - 1])
+      : pair[0]
+  const n = Number(bracket?.percentage)
   return Number.isFinite(n) ? n : null
+}
+
+/** % visible en tabla: comisión de contabilidad. */
+function descuentoVariable(t: Transaction): number | null {
+  return accountingCommissionPercentage(t)
 }
 
 function descuentoVariableLabel(t: Transaction): string {
@@ -515,30 +586,40 @@ function descuentoVariableTitle(t: Transaction): string {
   ].join(' · ')
 }
 
-function comisionFinalInterna(t: Transaction): number | undefined {
-  const v = t.comision_final_interna ?? t.resultado_comision ?? t.commission_result
-  if (v == null) return undefined
-  const n = Number(v)
-  return Number.isFinite(n) ? n : undefined
+/**
+ * Comisión contable: monto 0 → vacío; monto &lt; 100 → 3; si no → monto × %.
+ */
+function comisionMonto(t: Transaction): number | undefined {
+  return calculateAccountingCommission(t.origin_amount, descuentoVariable(t))
 }
 
-const IMPUESTO_INTERNO_RATE = 0.18
-
-/** 18% de la comisión final interna. */
-function impuestoFinalInterno(t: Transaction): number | undefined {
-  const c = comisionFinalInterna(t)
-  if (c == null) return undefined
-  return Math.round(c * IMPUESTO_INTERNO_RATE * 100) / 100
+function comisionMontoLabel(t: Transaction): string {
+  const monto = comisionMonto(t)
+  return monto != null ? formatPen(monto) : '—'
 }
 
+function comisionMontoTitle(t: Transaction): string {
+  const amount = Number(t.origin_amount)
+  const commission = comisionMonto(t)
+  if (commission == null) return '—'
+  if (Number.isFinite(amount) && amount > 0 && amount < ACCOUNTING_COMMISSION_AMOUNT_THRESHOLD) {
+    return `Monto < ${ACCOUNTING_COMMISSION_AMOUNT_THRESHOLD}: comisión fija ${formatPen(ACCOUNTING_COMMISSION_DEFAULT)}`
+  }
+  const percentage = descuentoVariable(t)
+  if (percentage != null && Number.isFinite(amount)) {
+    return `${formatValue(amount)} × ${formatPercent(percentage)} (contabilidad) = ${formatPen(commission)}`
+  }
+  return `Comisión de contabilidad: ${formatPen(commission)}`
+}
+
+/** Total a enviar: monto de envío − comisión contable (fallback al API si falta). */
 function ventaFinalMonto(t: Transaction): number | undefined {
+  const calculated = calculateAccountingFinalSale(t.origin_amount, comisionMonto(t))
+  if (calculated != null) return calculated
   if (t.venta_final != null) {
     const n = Number(t.venta_final)
     if (Number.isFinite(n)) return n
   }
-  const c = comisionFinalInterna(t)
-  const i = impuestoFinalInterno(t)
-  if (c != null && i != null) return Math.round((c + i) * 100) / 100
   const tot = t.total_a_enviar ?? t.total_to_send
   if (tot != null) {
     const n = Number(tot)
@@ -709,9 +790,8 @@ async function downloadPdf(t: Transaction) {
       exchangeRate: getTransactionExchangeLabel(t),
       exchangeDetail: getTransactionExchangeTitle(t),
       variableDiscount: descuentoVariableLabel(t),
+      commission: comisionMontoLabel(t),
       specialDiscount: descuentoEspecialLabel(t),
-      internalCommission: formatPen(comisionFinalInterna(t)),
-      internalTax: formatPen(impuestoFinalInterno(t)),
       finalSale: formatPen(ventaFinalMonto(t)),
       status: getStatusLabel(resolveTransactionStatusForDisplay(t) ?? t.status),
       checked: isTransactionChecked(t),
@@ -721,20 +801,6 @@ async function downloadPdf(t: Transaction) {
     pdfError.value = e instanceof Error ? e.message : 'No se pudo generar el PDF de la operación.'
   } finally {
     downloadingPdfId.value = null
-  }
-}
-
-async function toggleChecked(t: Transaction) {
-  if (!t.id || updatingCheckedId.value) return
-  const newChecked = !isTransactionChecked(t)
-  updatingCheckedId.value = t.id
-  transactionsStore.error = null
-  try {
-    await transactionsStore.updateTransaction(t.id, { checked: newChecked })
-  } catch {
-    // Error en store
-  } finally {
-    updatingCheckedId.value = null
   }
 }
 
@@ -755,8 +821,11 @@ watch(
     statusFilter,
     userFilter,
     bankAccountFilter,
+    currencyPairFilter,
     createdAtFrom,
     createdAtTo,
+    transactionScope,
+    selectedDay,
     debouncedSearch,
     perPage
   ],
@@ -768,6 +837,14 @@ watch(
 // Cualquier cambio de filtros o de página recarga desde el servidor.
 watch(apiFilterParams, () => loadTransactions(), { deep: true })
 
+watch(currencyPairFilterOptions, (options) => {
+  const current = currencyPairFilter.value
+  if (!current) return
+  if (!options.some((option) => option.value === current)) {
+    currencyPairFilter.value = ''
+  }
+})
+
 onMounted(() => {
   transactionsStore.error = null
   void loadTransactions()
@@ -775,15 +852,16 @@ onMounted(() => {
     cuentasStore.loadBankAccounts(),
     cuentasStore.loadClientUsers(),
     cuentasStore.loadBanks(),
-    // Catálogos necesarios para inferir el descuento especial en operaciones antiguas.
+    // Catálogos: tasas + comisiones de venta (descuento especial) + contabilidad (%).
     tasasStore.loadTaxRates(),
-    comisionesStore.loadCommissions()
+    comisionesStore.loadCommissions(),
+    comisionesContabilidadStore.loadCommissions()
   ])
 })
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="w-full min-w-0 max-w-full space-y-6">
     <div class="mb-6">
       <div class="mb-4 flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -791,6 +869,94 @@ onMounted(() => {
             Operaciones
           </p>
           <h1 class="text-2xl font-semibold text-[#232b4d]">Contabilidad</h1>
+        </div>
+      </div>
+
+      <!--
+        Alcance de la lista (igual que Ventas). Por defecto un día;
+        «Todas» habilita el rango de fechas de envío.
+      -->
+      <div
+        class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#dbe7fb] bg-[#f5f8ff] px-4 py-3"
+      >
+        <div class="flex flex-wrap items-center gap-3">
+          <div class="inline-flex overflow-hidden rounded-lg border border-[#dbe7fb]">
+            <button
+              type="button"
+              class="px-3 py-1.5 text-sm transition"
+              :class="
+                transactionScope === 'day'
+                  ? 'bg-brasper-indigoStrong font-medium text-white'
+                  : 'bg-white text-[#374151] hover:bg-[#f9fafb]'
+              "
+              :aria-pressed="transactionScope === 'day'"
+              @click="transactionScope = 'day'"
+            >
+              Por día
+            </button>
+            <button
+              type="button"
+              class="border-l border-[#dbe7fb] px-3 py-1.5 text-sm transition"
+              :class="
+                transactionScope === 'all'
+                  ? 'bg-brasper-indigoStrong font-medium text-white'
+                  : 'bg-white text-[#374151] hover:bg-[#f9fafb]'
+              "
+              :aria-pressed="transactionScope === 'all'"
+              @click="transactionScope = 'all'"
+            >
+              Todas
+            </button>
+          </div>
+
+          <template v-if="transactionScope === 'day'">
+            <div class="flex items-center gap-1">
+              <button
+                type="button"
+                class="rounded-lg border border-[#dbe7fb] bg-white px-2 py-1.5 text-sm text-[#374151] transition hover:bg-[#f9fafb]"
+                title="Día anterior"
+                @click="shiftSelectedDay(-1)"
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                class="rounded-lg border border-[#dbe7fb] bg-white px-2 py-1.5 text-sm text-[#374151] transition hover:bg-[#f9fafb] disabled:opacity-40"
+                title="Día siguiente"
+                :disabled="isToday"
+                @click="shiftSelectedDay(1)"
+              >
+                ›
+              </button>
+            </div>
+            <div>
+              <p class="text-base font-semibold leading-tight text-[#232b4d]">
+                {{ selectedDayLabel }}
+                <span
+                  v-if="isToday"
+                  class="ml-1 rounded-md bg-[#dcfce7] px-1.5 py-0.5 text-[11px] font-semibold text-[#15803d]"
+                >
+                  hoy
+                </span>
+              </p>
+              <p class="text-xs text-[#6b7280]">
+                De 00:00 a 23:59 · {{ totalResults }}
+                {{ totalResults === 1 ? 'envío' : 'envíos' }}
+              </p>
+            </div>
+            <AppDateInput v-model="selectedDay" size="sm" class="min-w-[150px]" />
+            <button
+              v-if="!isToday"
+              type="button"
+              class="rounded-lg border border-[#dbe7fb] bg-white px-3 py-1.5 text-sm text-brasper-indigoStrong transition hover:bg-[#f9fafb]"
+              @click="goToToday"
+            >
+              Ir a hoy
+            </button>
+          </template>
+          <p v-else class="text-sm text-[#374151]">
+            Histórico completo · <strong>{{ totalResults }}</strong> envíos.
+          </p>
         </div>
       </div>
 
@@ -829,10 +995,21 @@ onMounted(() => {
           />
         </div>
         <div class="flex flex-col gap-0.5">
+          <label class="text-[11px] text-[#6b7280]">Moneda</label>
+          <AppDropdown
+            v-model="currencyPairFilter"
+            :options="currencyPairFilterOptions"
+            placeholder="Todas"
+            :searchable="false"
+            size="sm"
+            min-width="130px"
+          />
+        </div>
+        <div v-if="transactionScope === 'all'" class="flex flex-col gap-0.5">
           <label class="text-[11px] text-[#6b7280]">Envío desde</label>
           <AppDateInput v-model="createdAtFrom" size="sm" class="min-w-[150px]" />
         </div>
-        <div class="flex flex-col gap-0.5">
+        <div v-if="transactionScope === 'all'" class="flex flex-col gap-0.5">
           <label class="text-[11px] text-[#6b7280]">Envío hasta</label>
           <AppDateInput v-model="createdAtTo" size="sm" class="min-w-[150px]" />
         </div>
@@ -884,7 +1061,7 @@ onMounted(() => {
 
     <div
       ref="tableScrollRef"
-      class="relative overflow-x-auto rounded-xl border border-[#e5e7eb] bg-white"
+      class="relative w-full min-w-0 max-w-full overflow-x-auto rounded-xl border border-[#e5e7eb] bg-white"
       :class="isDraggingTable ? 'cursor-grabbing select-none' : 'cursor-grab'"
       @pointerdown="onTablePointerDown"
     >
@@ -909,7 +1086,7 @@ onMounted(() => {
         </span>
       </div>
 
-      <table class="table-fixed text-left text-sm" :style="accountingTableStyle">
+      <table class="w-full table-fixed text-center text-sm" :style="accountingTableStyle">
         <colgroup>
           <col
             v-for="column in ACCOUNTING_TABLE_COLUMNS"
@@ -961,7 +1138,7 @@ onMounted(() => {
         <tbody>
           <tr v-if="paginatedTransactions.length === 0" class="border-t border-[#e5e7eb]">
             <td
-              colspan="19"
+              :colspan="ACCOUNTING_TABLE_COLUMNS.length + 1"
               class="rounded-xl border border-[#dbe7fb] bg-[#fbfdff] px-6 py-12 text-center text-[#666]"
             >
               {{
@@ -976,39 +1153,8 @@ onMounted(() => {
             :key="t.id ?? ''"
             class="border-t border-[#e5e7eb] bg-white transition-colors duration-700 hover:bg-[#f9fafb]"
           >
-            <td class="overflow-hidden px-2 py-3">
-              <button
-                type="button"
-                class="flex h-6 w-6 items-center justify-center rounded border transition"
-                :class="
-                  isTransactionChecked(t)
-                    ? 'border-brasper-indigoStrong bg-brasper-indigoStrong text-white'
-                    : 'border-[#d1d5db] bg-white text-transparent hover:border-[#9ca3af]'
-                "
-                :disabled="updatingCheckedId === t.id"
-                :title="
-                  isTransactionChecked(t)
-                    ? 'Verificada (clic para desmarcar)'
-                    : 'Marcar como verificada'
-                "
-                @click.stop="toggleChecked(t)"
-              >
-                <svg
-                  v-if="isTransactionChecked(t)"
-                  class="h-4 w-4"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path
-                    fill-rule="evenodd"
-                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                    clip-rule="evenodd"
-                  />
-                </svg>
-              </button>
-            </td>
-            <td class="overflow-hidden whitespace-nowrap px-4 py-3 font-medium text-[#374151]">
-              <span class="inline-flex max-w-full items-center gap-2">
+            <td class="overflow-hidden whitespace-nowrap px-3 py-3 text-center font-medium text-[#374151]">
+              <span class="inline-flex max-w-full items-center justify-center gap-2">
                 <template v-for="flag in [getTransactionOriginFlag(t)]" :key="flag?.src ?? 'none'">
                   <img
                     v-if="flag"
@@ -1023,36 +1169,39 @@ onMounted(() => {
                 </span>
               </span>
             </td>
-            <td class="truncate whitespace-nowrap px-4 py-3 text-[#374151]">
+            <td class="truncate whitespace-nowrap px-3 py-3 text-center text-[#374151]">
               {{ formatDateTime(t.send_date) }}
             </td>
             <td
-              class="truncate whitespace-nowrap px-4 py-3 text-[#374151]"
+              class="truncate whitespace-nowrap px-3 py-3 text-center text-[#374151]"
               :title="t.operation_number || '—'"
             >
               {{ t.operation_number || '—' }}
             </td>
-            <td class="overflow-hidden px-4 py-3 text-[#374151]">
-              <span class="block min-w-0 truncate" :title="getClientLabel(t.user_id)">
+            <td class="overflow-hidden px-3 py-3 text-center text-[#374151]">
+              <span class="mx-auto block min-w-0 max-w-full truncate" :title="getClientLabel(t.user_id)">
                 {{ getClientLabel(t.user_id) }}
               </span>
             </td>
             <td
-              class="truncate px-4 py-3 text-[#374151]"
+              class="truncate px-3 py-3 text-center text-[#374151]"
               :title="getBankCurrencyTableLabel(t.bank_account_destination_id)"
             >
               {{ getBankCurrencyTableLabel(t.bank_account_destination_id) }}
             </td>
-            <td class="truncate px-4 py-3 text-[#374151]" :title="transactionCompanyNameTable(t)">
+            <td
+              class="truncate px-3 py-3 text-center text-[#374151]"
+              :title="transactionCompanyNameTable(t)"
+            >
               {{ transactionCompanyNameTable(t) }}
             </td>
             <td
-              class="overflow-hidden text-ellipsis whitespace-nowrap px-4 py-3 text-center tabular-nums text-[#374151]"
+              class="overflow-hidden text-ellipsis whitespace-nowrap bg-sky-50 px-2 py-3 text-center text-sm font-semibold tabular-nums text-sky-950"
             >
               {{ formatValueWithCurrency(t.origin_amount, getTransactionCurrencies(t).origin) }}
             </td>
             <td
-              class="overflow-hidden text-ellipsis whitespace-nowrap px-4 py-3 text-center tabular-nums text-[#374151]"
+              class="overflow-hidden text-ellipsis whitespace-nowrap bg-sky-50 px-2 py-3 text-center text-sm font-semibold tabular-nums text-sky-950"
             >
               {{
                 formatValueWithCurrency(
@@ -1062,13 +1211,13 @@ onMounted(() => {
               }}
             </td>
             <td
-              class="truncate whitespace-nowrap px-4 py-3 tabular-nums text-[#374151]"
+              class="truncate whitespace-nowrap px-2 py-3 text-center tabular-nums text-[#374151]"
               :title="getTransactionExchangeTitle(t)"
             >
               {{ getTransactionExchangeLabel(t) }}
             </td>
             <td
-              class="overflow-hidden whitespace-nowrap px-2 py-3 text-right tabular-nums"
+              class="overflow-hidden whitespace-nowrap px-2 py-3 text-center tabular-nums"
               :class="
                 descuentoVariable(t) != null ? 'font-medium text-[#374151]' : 'text-[#9ca3af]'
               "
@@ -1077,30 +1226,17 @@ onMounted(() => {
               {{ descuentoVariableLabel(t) }}
             </td>
             <td
-              class="overflow-hidden whitespace-nowrap px-2 py-3 text-right tabular-nums"
-              :class="
-                descuentoEspecialMonto(t) != null ? 'font-medium text-rose-700' : 'text-[#9ca3af]'
-              "
-              :title="descuentoEspecialTitle(t)"
+              class="overflow-hidden whitespace-nowrap bg-slate-50/80 px-2 py-3 text-center tabular-nums text-[#111827]"
+              :title="comisionMontoTitle(t)"
             >
-              {{ descuentoEspecialLabel(t) }}
+              {{ comisionMontoLabel(t) }}
             </td>
             <td
-              class="overflow-hidden whitespace-nowrap bg-slate-50/80 px-2 py-3 text-right tabular-nums text-[#111827]"
-            >
-              {{ formatPen(comisionFinalInterna(t)) }}
-            </td>
-            <td
-              class="overflow-hidden whitespace-nowrap bg-slate-50/80 px-2 py-3 text-right tabular-nums text-[#111827]"
-            >
-              {{ formatPen(impuestoFinalInterno(t)) }}
-            </td>
-            <td
-              class="overflow-hidden whitespace-nowrap bg-emerald-50/90 px-2 py-3 text-right text-sm font-semibold tabular-nums text-emerald-900"
+              class="overflow-hidden whitespace-nowrap bg-emerald-50/90 px-2 py-3 text-center text-sm font-semibold tabular-nums text-emerald-900"
             >
               {{ formatPen(ventaFinalMonto(t)) }}
             </td>
-            <td class="overflow-hidden px-4 py-3">
+            <td class="overflow-hidden px-2 py-3 text-center">
               <span
                 class="inline-flex max-w-full truncate rounded-full px-2.5 py-0.5 text-xs font-medium"
                 :class="statusRowBadgeClass(resolveTransactionStatusForDisplay(t) ?? t.status)"

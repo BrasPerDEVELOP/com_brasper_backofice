@@ -110,7 +110,9 @@ export function useResizableTableColumns<Key extends string>(
   )
 
   const tableStyle = computed<CSSProperties>(() => ({
-    width: `${tableWidth.value}px`,
+    // Llena el contenedor en pantallas anchas; si las columnas suman más,
+    // `minWidth` activa el scroll horizontal sin romper el layout.
+    width: '100%',
     minWidth: `${tableWidth.value}px`
   }))
 

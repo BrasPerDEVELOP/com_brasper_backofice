@@ -32,9 +32,12 @@ export interface TransactionAccountingReportInput {
   exchangeDetail: string
   /** Porcentaje de la comisión de contabilidad, ej. `3.50%`. */
   variableDiscount: string
+  /**
+   * Comisión contable: si monto &lt; 100 → 3; si no → monto × (% / 100).
+   * Ver `calculateAccountingCommission`.
+   */
+  commission: string
   specialDiscount: string
-  internalCommission: string
-  internalTax: string
   finalSale: string
   status: string
   checked: boolean
@@ -136,9 +139,8 @@ export function buildTransactionAccountingReport(
         title: 'Resultado interno',
         fields: [
           { label: 'Descuento variable', value: display(input.variableDiscount) },
+          { label: 'Comisión', value: display(input.commission) },
           { label: 'Descuento especial', value: display(input.specialDiscount) },
-          { label: 'Comisión final interna', value: display(input.internalCommission) },
-          { label: 'Impuesto final interno', value: display(input.internalTax) },
           { label: 'Venta final', value: display(input.finalSale) }
         ]
       }

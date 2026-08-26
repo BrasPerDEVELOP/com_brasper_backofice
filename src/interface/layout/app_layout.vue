@@ -330,11 +330,11 @@ watch(showSidebar, (vis) => {
 
     <main
       :class="[
-        'min-h-screen transition-[margin] duration-300',
+        'min-h-screen min-w-0 transition-[margin] duration-300',
         showSidebar ? 'ml-[5.25rem] pt-16' : 'ml-0 pt-0',
       ]"
     >
-      <div class="p-8 lg:p-10">
+      <div class="min-w-0 max-w-full p-8 lg:p-10">
         <RouterView />
       </div>
     </main>

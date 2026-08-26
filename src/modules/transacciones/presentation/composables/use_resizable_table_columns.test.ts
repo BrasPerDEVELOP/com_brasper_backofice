@@ -64,4 +64,18 @@ describe('useResizableTableColumns', () => {
     expect(widths.client).toBe(224)
     expect(JSON.parse(read() ?? '{}')).toEqual({ code: 120, client: 224 })
   })
+
+  it('expone un estilo de tabla fluido con minWidth según columnas', () => {
+    const { tableStyle } = useResizableTableColumns({
+      columns,
+      storageKey: 'transaction-columns',
+      storage: memoryStorage().storage,
+      fixedWidth: 48
+    })
+
+    expect(tableStyle.value).toEqual({
+      width: '100%',
+      minWidth: '368px'
+    })
+  })
 })
