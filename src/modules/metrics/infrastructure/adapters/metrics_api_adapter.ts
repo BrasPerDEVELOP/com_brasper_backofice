@@ -6,9 +6,15 @@ import { Domain } from '@/interface/infrastructure/services'
 import type {
   Granularity,
   MetricsFilters,
+  MetricsAgentBreakdown,
+  MetricsOverview,
+  MetricsOverviewPoint,
   MetricsRange,
+  MetricsStatusBreakdown,
+  MetricsTagBreakdown,
   WeeklyMetricPoint,
   WeeklyMetrics,
+  WeeklyMetricsFilters,
   WeeklyMetricsTotals,
 } from '../../domain/models'
 import type { MetricsRepository } from './metrics_repository'
@@ -64,6 +70,49 @@ function parseRange(raw: Record<string, unknown> | undefined): MetricsRange {
   }
 }
 
+function parseCurrencyAmounts(value: unknown) {
+  const raw = value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+  return { PEN: num(raw.PEN), BRL: num(raw.BRL), USD: num(raw.USD) }
+}
+
+function records(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'))
+    : []
+}
+
+function parseOverviewPoint(raw: Record<string, unknown>): MetricsOverviewPoint {
+  return {
+    periodStart: str(raw.period_start),
+    enviosCount: num(raw.envios_count),
+    clientesNuevos: num(raw.clientes_nuevos),
+    volumeOrigin: parseCurrencyAmounts(raw.volume_origin),
+  }
+}
+
+function parseAgent(raw: Record<string, unknown>): MetricsAgentBreakdown {
+  return {
+    agentId: raw.agent_id == null ? null : str(raw.agent_id),
+    agentName: str(raw.agent_name) || 'Sin asesor',
+    enviosCount: num(raw.envios_count),
+    volumeOrigin: parseCurrencyAmounts(raw.volume_origin),
+  }
+}
+
+function parseTag(raw: Record<string, unknown>): MetricsTagBreakdown {
+  return {
+    tagId: str(raw.tag_id),
+    label: str(raw.label),
+    color: str(raw.color) || 'slate',
+    active: raw.active !== false,
+    count: num(raw.count),
+  }
+}
+
+function parseStatus(raw: Record<string, unknown>): MetricsStatusBreakdown {
+  return { key: str(raw.key), count: num(raw.count) }
+}
+
 /** Convierte un error de axios en un mensaje legible y accionable. */
 function toReadableError(err: unknown, endpoint: string): Error {
   if (axios.isAxiosError(err)) {
@@ -86,7 +135,44 @@ export class MetricsApiAdapter implements MetricsRepository {
     return Domain.apiPath(env.metricsWeeklyPath)
   }
 
-  async getWeeklyMetrics(filters: MetricsFilters): Promise<WeeklyMetrics> {
+  private overviewEndpoint(): string {
+    return Domain.apiPath(env.metricsOverviewPath)
+  }
+
+  async getMetricsOverview(filters: MetricsFilters): Promise<MetricsOverview> {
+    const params = new URLSearchParams()
+    params.set('corridor', filters.corridor)
+    params.set('granularity', filters.granularity)
+    if (filters.dateFrom) params.set('date_from', filters.dateFrom)
+    if (filters.dateTo) params.set('date_to', filters.dateTo)
+    if (filters.status) params.set('status', filters.status)
+    if (filters.agentId) params.set('agent_id', filters.agentId)
+    filters.tagIds.forEach((tagId) => params.append('tag_ids', tagId))
+
+    let response
+    try {
+      response = await apiClient.get<unknown>(this.overviewEndpoint(), { params })
+    } catch (err) {
+      throw toReadableError(err, this.overviewEndpoint())
+    }
+    const data = (response.data ?? {}) as Record<string, unknown>
+    const totals = (data.totals ?? {}) as Record<string, unknown>
+    return {
+      range: parseRange(data.range as Record<string, unknown> | undefined),
+      series: records(data.series).map(parseOverviewPoint),
+      totals: {
+        enviosCount: num(totals.envios_count),
+        clientesNuevos: num(totals.clientes_nuevos),
+        activeAgents: num(totals.active_agents),
+        volumeOrigin: parseCurrencyAmounts(totals.volume_origin),
+      },
+      breakdownByStatus: records(data.breakdown_by_status).map(parseStatus),
+      breakdownByTag: records(data.breakdown_by_tag).map(parseTag),
+      breakdownByAgent: records(data.breakdown_by_agent).map(parseAgent),
+    }
+  }
+
+  async getWeeklyMetrics(filters: WeeklyMetricsFilters): Promise<WeeklyMetrics> {
     const params: Record<string, string> = {
       origin_currency: filters.originCurrency,
       destination_currency: filters.destinationCurrency,

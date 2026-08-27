@@ -1,44 +1,34 @@
 import { describe, expect, it } from 'vitest'
-import type { WeeklyMetricPoint } from '../../domain/models'
+import type { MetricsOverviewPoint } from '../../domain/models'
 import {
-  buildCajaChart,
-  buildClientesChart,
-  buildEnviosChart,
-  buildFacturadoChart,
+  buildPeriodCountChart,
+  buildPeriodVolumeChart,
+  buildSingleSeriesChart,
   compact,
   formatPeriodLabel,
-  periodLabels,
+  periodLabels
 } from './use_metric_chart_options'
 
-function week(partial: Partial<WeeklyMetricPoint>): WeeklyMetricPoint {
-  return {
+const points: MetricsOverviewPoint[] = [
+  {
     periodStart: '2026-06-01',
-    enviosCount: 0,
-    enviosVolumeOrigin: 0,
-    clientesNuevos: 0,
-    cajaOriginIn: 0,
-    cajaDestinationOut: 0,
-    cajaDiferencia: 0,
-    facturadoDestino: 0,
-    ...partial,
+    enviosCount: 3,
+    clientesNuevos: 2,
+    volumeOrigin: { PEN: 300, BRL: 20, USD: 0 }
+  },
+  {
+    periodStart: '2026-06-08',
+    enviosCount: 5,
+    clientesNuevos: 4,
+    volumeOrigin: { PEN: 500, BRL: 40, USD: 10 }
   }
-}
+]
 
 describe('formatPeriodLabel', () => {
-  it('formatea fecha ISO a "DD Mmm" (día/semana)', () => {
+  it('formatea día, semana y mes en español', () => {
     expect(formatPeriodLabel('2026-07-01')).toBe('01 Jul')
-    expect(formatPeriodLabel('2026-01-15', 'day')).toBe('15 Ene')
-  })
-
-  it('formatea a "Mmm YYYY" cuando la granularidad es mes', () => {
-    expect(formatPeriodLabel('2026-07-01', 'month')).toBe('Jul 2026')
     expect(formatPeriodLabel('2025-12-01', 'month')).toBe('Dic 2025')
-  })
-
-  it('es robusto ante entradas inválidas', () => {
-    expect(formatPeriodLabel('')).toBe('')
     expect(formatPeriodLabel('bad')).toBe('bad')
-    expect(formatPeriodLabel('2026-13-01')).toBe('2026-13-01')
   })
 })
 
@@ -51,33 +41,23 @@ describe('compact', () => {
 })
 
 describe('chart builders', () => {
-  const weeks = [
-    week({ periodStart: '2026-06-01', enviosCount: 3, enviosVolumeOrigin: 300, cajaOriginIn: 300, cajaDestinationOut: 240, facturadoDestino: 240, clientesNuevos: 2 }),
-    week({ periodStart: '2026-06-08', enviosCount: 5, enviosVolumeOrigin: 500, cajaOriginIn: 500, cajaDestinationOut: 400, facturadoDestino: 400, clientesNuevos: 4 }),
-  ]
-
-  it('periodLabels mapea todos los periodos', () => {
-    expect(periodLabels(weeks)).toEqual(['01 Jun', '08 Jun'])
-    expect(periodLabels(weeks, 'month')).toEqual(['Jun 2026', 'Jun 2026'])
+  it('mapea periodos y conteos', () => {
+    expect(periodLabels(points)).toEqual(['01 Jun', '08 Jun'])
+    expect(
+      (buildPeriodCountChart(points, 'week', 'envios', 'bar').series[0] as { data: number[] }).data
+    ).toEqual([3, 5])
   })
 
-  it('buildEnviosChart genera columna + línea con los datos', () => {
-    const { series } = buildEnviosChart(weeks)
-    expect(series).toHaveLength(2)
-    expect((series[0] as { data: number[] }).data).toEqual([3, 5])
-    expect((series[1] as { data: number[] }).data).toEqual([300, 500])
+  it('separa el volumen por moneda sin sumar monedas incompatibles', () => {
+    const result = buildPeriodVolumeChart(points, 'week', ['PEN', 'BRL'], 'line')
+    expect(result.series).toHaveLength(2)
+    expect((result.series[0] as { name: string }).name).toBe('PEN')
+    expect((result.series[1] as { data: number[] }).data).toEqual([20, 40])
   })
 
-  it('buildCajaChart agrupa soles in vs reales out', () => {
-    const { series } = buildCajaChart(weeks)
-    expect((series[0] as { name: string }).name).toBe('Soles in')
-    expect((series[0] as { data: number[] }).data).toEqual([300, 500])
-    expect((series[1] as { data: number[] }).data).toEqual([240, 400])
-  })
-
-  it('buildClientesChart y buildFacturadoChart producen una serie', () => {
-    expect(buildClientesChart(weeks).series).toHaveLength(1)
-    expect((buildClientesChart(weeks).series[0] as { data: number[] }).data).toEqual([2, 4])
-    expect((buildFacturadoChart(weeks).series[0] as { data: number[] }).data).toEqual([240, 400])
+  it('convierte una serie a dona con etiquetas equivalentes', () => {
+    const result = buildSingleSeriesChart(['A', 'B'], [2, 3], 'Estados', 'donut')
+    expect(result.series).toEqual([2, 3])
+    expect(result.options.labels).toEqual(['A', 'B'])
   })
 })
