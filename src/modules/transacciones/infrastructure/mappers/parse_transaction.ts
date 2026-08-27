@@ -47,6 +47,21 @@ function parseTagIds(value: unknown): string[] | undefined {
   return Array.from(new Set(ids))
 }
 
+function parseUserDocumentField(
+  o: Record<string, unknown>,
+  nestedKey: 'document_type' | 'document_number',
+  flatKey: 'user_document_type' | 'user_document_number'
+): string | null | undefined {
+  const nested =
+    o.user && typeof o.user === 'object' && !Array.isArray(o.user)
+      ? (o.user as Record<string, unknown>)
+      : null
+  const raw = nested?.[nestedKey] ?? o[flatKey]
+  if (raw == null) return nested ? null : undefined
+  const text = String(raw).trim()
+  return text || null
+}
+
 function parseDestinations(value: unknown): TransactionDestination[] | undefined {
   if (!Array.isArray(value)) return undefined
   return value.flatMap((item, index) => {
@@ -321,6 +336,8 @@ export function parseTransaction(item: unknown): Transaction {
     bank_account_destination_id: destFromFlat,
     destinations: parseDestinations(o.destinations),
     user_id: coerceUserId(o.user_id) ?? coerceUserId(o.user),
+    user_document_type: parseUserDocumentField(o, 'document_type', 'user_document_type'),
+    user_document_number: parseUserDocumentField(o, 'document_number', 'user_document_number'),
     agent_id:
       coerceUserId(o.agent_id) ??
       coerceUserId(o.agent) ??

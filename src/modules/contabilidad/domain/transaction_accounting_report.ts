@@ -23,6 +23,8 @@ export interface TransactionAccountingReportInput {
   sendDate: string
   operationNumber: string
   client: string
+  documentType: string
+  documentNumber: string
   destinationAccount: string
   companyName: string
   originAmount: string
@@ -122,6 +124,8 @@ export function buildTransactionAccountingReport(
         title: 'Cliente y destino',
         fields: [
           { label: 'Cliente', value: display(input.client) },
+          { label: 'Tipo de documento', value: display(input.documentType) },
+          { label: 'Documento', value: display(input.documentNumber) },
           { label: 'Cuenta destino', value: display(input.destinationAccount) },
           { label: 'Razón social', value: display(input.companyName) }
         ]

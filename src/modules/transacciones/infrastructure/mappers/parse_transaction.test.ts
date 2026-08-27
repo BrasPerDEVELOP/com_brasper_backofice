@@ -111,6 +111,22 @@ describe('parseTransaction', () => {
     expect(parseTransaction({ agent_id: 'a1', user_id: 'u3' }).agent_id).toBe('a1')
   })
 
+  it('saca tipo y número de documento del usuario anidado', () => {
+    const parsed = parseTransaction({
+      user: { id: 'u2', document_type: 'dni', document_number: '12345678' }
+    })
+    expect(parsed.user_document_type).toBe('dni')
+    expect(parsed.user_document_number).toBe('12345678')
+  })
+
+  it('deja el documento del usuario vacío cuando el listado no lo trae', () => {
+    expect(parseTransaction({ user_id: 'u1' }).user_document_type).toBeUndefined()
+    expect(
+      parseTransaction({ user: { id: 'u2', document_type: null, document_number: '  ' } })
+        .user_document_number
+    ).toBeNull()
+  })
+
   it('usa commission_result explícito o el resultado calculado', () => {
     expect(parseTransaction({ commission_result: '12.5' }).commission_result).toBe(12.5)
   })

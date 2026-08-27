@@ -18,7 +18,6 @@ import type {
 } from '@modules/transacciones/domain/models'
 import type { GetTransactionsParams } from '@modules/transacciones/infrastructure/adapters/transactions_repository'
 import {
-  TRANSACTION_STATUSES,
   TRANSACTION_STATUS_LABELS,
   isTransactionChecked,
   normalizeTransactionStatus,
@@ -50,7 +49,6 @@ const comisionesStore = useComisionesStore()
 const comisionesContabilidadStore = useComisionesContabilidadStore()
 
 const searchQuery = ref('')
-const statusFilter = ref<string>('todos')
 const userFilter = ref<string>('')
 const bankAccountFilter = ref<string>('')
 /** Par origen-destino (p. ej. `brl-pen`); vacío = todas las monedas. */
@@ -175,6 +173,25 @@ const ACCOUNTING_TABLE_COLUMNS: readonly AccountingTableColumn<AccountingTableCo
     defaultWidth: 140,
     minWidth: 110,
     maxWidth: 1200,
+    headerClass:
+      'whitespace-nowrap px-3 py-3 text-center font-semibold text-brasper-indigoDark'
+  },
+  {
+    key: 'documentType',
+    label: 'Tipo de documento',
+    defaultWidth: 88,
+    minWidth: 72,
+    maxWidth: 400,
+    headerClass:
+      'whitespace-nowrap px-2 py-3 text-center text-xs font-semibold leading-tight text-brasper-indigoDark',
+    headerLines: ['Tipo de', 'documento']
+  },
+  {
+    key: 'documentNumber',
+    label: 'Documento',
+    defaultWidth: 120,
+    minWidth: 96,
+    maxWidth: 600,
     headerClass:
       'whitespace-nowrap px-3 py-3 text-center font-semibold text-brasper-indigoDark'
   },
@@ -311,7 +328,7 @@ const {
   resizeBy: resizeAccountingColumnBy
 } = useResizableTableColumns({
   columns: ACCOUNTING_TABLE_COLUMNS,
-  storageKey: 'brasper:accounting:table-column-widths:v4',
+  storageKey: 'brasper:accounting:table-column-widths:v5',
   fixedWidth: ACCOUNTING_TABLE_ACTIONS_WIDTH
 })
 
@@ -322,14 +339,6 @@ function openMediaViewer(source: string, title = 'Comprobante') {
   mediaViewerTitle.value = title
   showMediaViewer.value = true
 }
-
-const statusOptions = computed(() => [
-  { value: 'todos', label: 'Todos' },
-  ...TRANSACTION_STATUSES.map((s) => ({
-    value: s,
-    label: TRANSACTION_STATUS_LABELS[s]
-  }))
-])
 
 const ALL_VALUE = ''
 const userFilterOptions = computed(() => [
@@ -402,17 +411,20 @@ watch(
   { immediate: true }
 )
 
+/** Contabilidad solo opera sobre envíos ya cerrados (estado Finalizada). */
+const ACCOUNTING_LIST_STATUS = 'completed' as const
+
 /**
- * Parámetros que se envían al API. El filtrado (estado efectivo, cuenta,
+ * Parámetros que se envían al API. El filtrado (estado Finalizada, cuenta,
  * par de monedas, rango por `send_date`, búsqueda) y la paginación se
- * resuelven en el servidor — misma lógica que Ventas.
+ * resuelven en el servidor.
  */
 const apiFilterParams = computed((): GetTransactionsParams => {
   const p: GetTransactionsParams = {
     skip: (currentPage.value - 1) * perPage.value,
-    limit: perPage.value
+    limit: perPage.value,
+    status: ACCOUNTING_LIST_STATUS
   }
-  if (statusFilter.value && statusFilter.value !== 'todos') p.status = statusFilter.value
   if (userFilter.value?.trim()) p.user_id = userFilter.value.trim()
   if (bankAccountFilter.value?.trim()) p.bank_account_id = bankAccountFilter.value.trim()
   const pair = currencyPairFilter.value?.trim()
@@ -738,6 +750,16 @@ function getClientLabel(id: string | undefined): string {
   return u?.name ?? id
 }
 
+function getUserDocumentTypeLabel(t: Transaction): string {
+  const raw = t.user_document_type?.trim()
+  return raw ? raw.toUpperCase() : '—'
+}
+
+function getUserDocumentNumberLabel(t: Transaction): string {
+  const raw = t.user_document_number?.trim()
+  return raw || '—'
+}
+
 function normalizeCurrencyCode(value: unknown): string {
   if (value == null) return ''
   return String(value).trim().toLowerCase()
@@ -833,6 +855,8 @@ async function downloadPdf(t: Transaction) {
       sendDate: formatDate(t.send_date),
       operationNumber: t.operation_number ? String(t.operation_number) : '',
       client: getClientLabel(t.user_id),
+      documentType: getUserDocumentTypeLabel(t),
+      documentNumber: getUserDocumentNumberLabel(t),
       destinationAccount: getBankCurrencyTableLabel(t.bank_account_destination_id),
       companyName: transactionCompanyNameTable(t),
       originAmount: formatValue(t.origin_amount),
@@ -869,7 +893,6 @@ function loadTransactions() {
 // Al cambiar filtros/búsqueda/tamaño de página, vuelve a la primera página.
 watch(
   [
-    statusFilter,
     userFilter,
     bankAccountFilter,
     currencyPairFilter,
@@ -1012,17 +1035,6 @@ onMounted(() => {
       </div>
 
       <div class="flex flex-wrap items-center gap-4 text-sm">
-        <div class="flex flex-col gap-0.5">
-          <label class="text-[11px] text-[#6b7280]">Estado</label>
-          <AppDropdown
-            v-model="statusFilter"
-            :options="statusOptions"
-            placeholder="Todos"
-            :searchable="false"
-            size="sm"
-            min-width="120px"
-          />
-        </div>
         <div class="flex flex-col gap-0.5">
           <label class="text-[11px] text-[#6b7280]">Cliente</label>
           <AppDropdown
@@ -1233,6 +1245,18 @@ onMounted(() => {
               <span class="mx-auto block min-w-0 max-w-full truncate" :title="getClientLabel(t.user_id)">
                 {{ getClientLabel(t.user_id) }}
               </span>
+            </td>
+            <td
+              class="truncate whitespace-nowrap px-2 py-3 text-center text-[#374151]"
+              :title="getUserDocumentTypeLabel(t)"
+            >
+              {{ getUserDocumentTypeLabel(t) }}
+            </td>
+            <td
+              class="truncate whitespace-nowrap px-3 py-3 text-center tabular-nums text-[#374151]"
+              :title="getUserDocumentNumberLabel(t)"
+            >
+              {{ getUserDocumentNumberLabel(t) }}
             </td>
             <td
               class="truncate px-3 py-3 text-center text-[#374151]"

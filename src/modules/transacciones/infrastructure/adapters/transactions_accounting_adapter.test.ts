@@ -72,6 +72,30 @@ describe('TransactionsApiAdapter listado contable', () => {
     expect(total).toBe(1)
   })
 
+  it('mapea tipo y número de documento del usuario del listado contable', async () => {
+    getMock.mockResolvedValue({
+      data: {
+        items: [
+          {
+            ...PAGE.items[0],
+            user: {
+              id: 'user-1',
+              role: 'client',
+              document_type: 'dni',
+              document_number: '12345678'
+            }
+          }
+        ],
+        total: 1
+      }
+    })
+
+    const { items } = await adapter.getAccountingTransactions()
+
+    expect(items[0].user_document_type).toBe('dni')
+    expect(items[0].user_document_number).toBe('12345678')
+  })
+
   it('deja accounting_percentage vacío cuando ningún tramo cubre el monto', async () => {
     getMock.mockResolvedValue({
       data: { items: [{ ...PAGE.items[0], accounting_percentage: null }], total: 1 }
