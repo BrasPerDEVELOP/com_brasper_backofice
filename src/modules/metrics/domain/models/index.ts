@@ -1,4 +1,4 @@
-// Modelos de dominio del módulo de métricas por periodo (día/semana/mes).
+// Modelos de dominio del módulo de métricas por periodo (día/semana/mes/año).
 
 export type CurrencyCode = 'PEN' | 'BRL' | 'USD'
 export type CurrencyAmounts = Record<CurrencyCode, number>
@@ -9,16 +9,17 @@ export const METRICS_CORRIDORS: ReadonlyArray<{ value: MetricsCorridor; label: s
   { value: 'PEN_BRL', label: 'PEN → BRL' },
   { value: 'BRL_PEN', label: 'BRL → PEN' },
   { value: 'USD_BRL', label: 'USD → BRL' },
-  { value: 'BRL_USD', label: 'BRL → USD' },
+  { value: 'BRL_USD', label: 'BRL → USD' }
 ]
 
 /** Granularidad temporal del panel. */
-export type Granularity = 'day' | 'week' | 'month'
+export type Granularity = 'day' | 'week' | 'month' | 'year'
 
 export const GRANULARITY_LABELS: Record<Granularity, string> = {
   day: 'Día',
   week: 'Semana',
   month: 'Mes',
+  year: 'Año'
 }
 
 /** Métricas consolidadas de un periodo (period_start = inicio del bucket). */
@@ -131,5 +132,5 @@ export const DEFAULT_METRICS_FILTERS: MetricsFilters = {
   granularity: 'week',
   status: null,
   agentId: null,
-  tagIds: [],
+  tagIds: []
 }

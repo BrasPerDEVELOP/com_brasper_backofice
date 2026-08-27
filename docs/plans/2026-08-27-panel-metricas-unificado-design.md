@@ -20,7 +20,7 @@ La experiencia está pensada para operadores y responsables de tesorería que ne
 ## Comportamiento
 
 1. El usuario elige una de las cinco rutas de cambio. El panel actualiza KPIs, series, monedas y distribuciones como un solo conjunto.
-2. Puede acotar por fechas y agrupar por día, semana o mes.
+2. Puede acotar un rango variable y agrupar por día, semana, mes o año. Los controles se adaptan: fechas exactas para día, semanas ISO completas, meses completos o años completos. La interfaz normaliza cada selección a fechas ISO antes de consultar el backend.
 3. Puede filtrar por una o varias etiquetas. Las etiquetas activas se muestran primero; las inactivas solo deben aparecer si están presentes en datos históricos.
 4. El selector **Analizar por** cambia la forma de agrupar los datos:
    - **Evolución:** buckets de fecha.
@@ -47,18 +47,18 @@ Las definiciones de cálculo no deben inventarse en el componente. Se mantienen 
 
 ## Arquitectura propuesta
 
-| Pieza                         | Responsabilidad                                         | Contrato principal                                                            |
-| ----------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `metrics_view.vue`            | Orquestar la vista unificada y permisos                 | Compone filtros, KPIs y secciones; no construye series                        |
-| `MetricsFilterBar.vue`        | Editar filtros frecuentes y avanzados                   | `filters`, `agents`, `tags`, `loading`; emite `apply` y `clear`               |
-| `CorridorSelector.vue`        | Exponer las cinco rutas sin combinaciones inválidas     | `modelValue`; emite `update:modelValue`                                       |
-| `MetricsExplorer.vue`         | Coordinar dimensión, medida y tipo de gráfico           | `points`, `dimension`, `chartType`; emite cambios de vista                    |
-| `MetricsChartGrid.vue`        | Organizar los varios gráficos coordinados               | `timeSeries`, `advisorBreakdown`, `currency`; emite cambios de representación |
-| `AdvisorPerformanceChart.vue` | Comparar cantidad y volumen por asesor                  | `advisors`, `measure`, `currency`, `chartType`                                |
-| `MetricHelpTooltip.vue`       | Explicar significado, fórmula y lectura de cada métrica | `title`, `description`, `calculation`, `readingHint`                          |
-| `MetricChart.vue`             | Renderizar barra, dona o línea                          | `config`, `type`, `empty`, `loading`                                          |
-| `MetricsBreakdown.vue`        | Mostrar distribución textual accesible                  | filas normalizadas con etiqueta, valor, porcentaje y color                    |
-| `useMetricsExplorer.ts`       | Derivar series, totales y configuración                 | Estado fuente mínimo; todo lo derivado con `computed`                         |
+| Pieza                         | Responsabilidad                                            | Contrato principal                                                            |
+| ----------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `metrics_view.vue`            | Orquestar la vista unificada y permisos                    | Compone filtros, KPIs y secciones; no construye series                        |
+| `MetricsFilterBar.vue`        | Editar filtros frecuentes, periodos adaptables y avanzados | `filters`, `agents`, `tags`, `loading`; emite `apply` y `clear`               |
+| `CorridorSelector.vue`        | Exponer las cinco rutas sin combinaciones inválidas        | `modelValue`; emite `update:modelValue`                                       |
+| `MetricsExplorer.vue`         | Coordinar dimensión, medida y tipo de gráfico              | `points`, `dimension`, `chartType`; emite cambios de vista                    |
+| `MetricsChartGrid.vue`        | Organizar los varios gráficos coordinados                  | `timeSeries`, `advisorBreakdown`, `currency`; emite cambios de representación |
+| `AdvisorPerformanceChart.vue` | Comparar cantidad y volumen por asesor                     | `advisors`, `measure`, `currency`, `chartType`                                |
+| `MetricHelpTooltip.vue`       | Explicar significado, fórmula y lectura de cada métrica    | `title`, `description`, `calculation`, `readingHint`                          |
+| `MetricChart.vue`             | Renderizar barra, dona o línea                             | `config`, `type`, `empty`, `loading`                                          |
+| `MetricsBreakdown.vue`        | Mostrar distribución textual accesible                     | filas normalizadas con etiqueta, valor, porcentaje y color                    |
+| `useMetricsExplorer.ts`       | Derivar series, totales y configuración                    | Estado fuente mínimo; todo lo derivado con `computed`                         |
 
 El catálogo se obtiene mediante `useTagsStore`. La vista no debe llamar la API directamente: `metrics_view.vue` coordina stores/use cases y los componentes reciben datos por props y emiten eventos. No existe una variante separada para Marketing.
 
@@ -109,7 +109,7 @@ interface UnifiedMetricsFilters {
   corridor: Corridor
   dateFrom?: string | null
   dateTo?: string | null
-  granularity: 'day' | 'week' | 'month'
+  granularity: 'day' | 'week' | 'month' | 'year'
   status?: string | null
   agentId?: string | null
   tagIds: string[]

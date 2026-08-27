@@ -28,6 +28,7 @@ describe('formatPeriodLabel', () => {
   it('formatea día, semana y mes en español', () => {
     expect(formatPeriodLabel('2026-07-01')).toBe('01 Jul')
     expect(formatPeriodLabel('2025-12-01', 'month')).toBe('Dic 2025')
+    expect(formatPeriodLabel('2025-01-01', 'year')).toBe('2025')
     expect(formatPeriodLabel('bad')).toBe('bad')
   })
 })

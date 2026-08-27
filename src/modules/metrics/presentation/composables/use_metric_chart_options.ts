@@ -32,6 +32,7 @@ export function formatPeriodLabel(isoDate: string, granularity: Granularity = 'w
   const parts = (isoDate || '').split('-')
   if (parts.length !== 3) return isoDate || ''
   const [year, month, day] = parts
+  if (granularity === 'year') return year ?? isoDate
   const m = Number(month)
   if (!Number.isFinite(m) || m < 1 || m > 12) return isoDate
   if (granularity === 'month') return `${MONTHS_ES[m - 1]} ${year}`

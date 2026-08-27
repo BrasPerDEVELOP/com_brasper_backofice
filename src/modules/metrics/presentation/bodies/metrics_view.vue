@@ -126,7 +126,9 @@ function filtersFromQuery(): MetricsFilters {
     : DEFAULT_METRICS_FILTERS.corridor
   const granularityRaw = queryValue(route.query.granularity)
   const granularity: Granularity =
-    granularityRaw === 'day' || granularityRaw === 'month' ? granularityRaw : 'week'
+    granularityRaw === 'day' || granularityRaw === 'month' || granularityRaw === 'year'
+      ? granularityRaw
+      : 'week'
   const tagQuery = route.query.tags
   const tagIds = Array.isArray(tagQuery)
     ? tagQuery.filter((item): item is string => typeof item === 'string')

@@ -15,7 +15,7 @@ import type {
   WeeklyMetricPoint,
   WeeklyMetrics,
   WeeklyMetricsFilters,
-  WeeklyMetricsTotals,
+  WeeklyMetricsTotals
 } from '../../domain/models'
 import type { MetricsRepository } from './metrics_repository'
 
@@ -37,7 +37,7 @@ function parseWeek(raw: Record<string, unknown>): WeeklyMetricPoint {
     cajaOriginIn: num(raw.caja_origin_in),
     cajaDestinationOut: num(raw.caja_destination_out),
     cajaDiferencia: num(raw.caja_diferencia),
-    facturadoDestino: num(raw.facturado_destino),
+    facturadoDestino: num(raw.facturado_destino)
   }
 }
 
@@ -50,12 +50,12 @@ function parseTotals(raw: Record<string, unknown> | undefined): WeeklyMetricsTot
     cajaOriginIn: num(t.caja_origin_in),
     cajaDestinationOut: num(t.caja_destination_out),
     cajaDiferencia: num(t.caja_diferencia),
-    facturadoDestino: num(t.facturado_destino),
+    facturadoDestino: num(t.facturado_destino)
   }
 }
 
 function parseGranularity(value: unknown): Granularity {
-  return value === 'day' || value === 'month' ? value : 'week'
+  return value === 'day' || value === 'month' || value === 'year' ? value : 'week'
 }
 
 function parseRange(raw: Record<string, unknown> | undefined): MetricsRange {
@@ -66,7 +66,7 @@ function parseRange(raw: Record<string, unknown> | undefined): MetricsRange {
     originCurrency: r.origin_currency == null ? null : str(r.origin_currency),
     destinationCurrency: r.destination_currency == null ? null : str(r.destination_currency),
     corridor: str(r.corridor),
-    granularity: parseGranularity(r.granularity),
+    granularity: parseGranularity(r.granularity)
   }
 }
 
@@ -77,7 +77,9 @@ function parseCurrencyAmounts(value: unknown) {
 
 function records(value: unknown): Record<string, unknown>[] {
   return Array.isArray(value)
-    ? value.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'))
+    ? value.filter((item): item is Record<string, unknown> =>
+        Boolean(item && typeof item === 'object')
+      )
     : []
 }
 
@@ -86,7 +88,7 @@ function parseOverviewPoint(raw: Record<string, unknown>): MetricsOverviewPoint 
     periodStart: str(raw.period_start),
     enviosCount: num(raw.envios_count),
     clientesNuevos: num(raw.clientes_nuevos),
-    volumeOrigin: parseCurrencyAmounts(raw.volume_origin),
+    volumeOrigin: parseCurrencyAmounts(raw.volume_origin)
   }
 }
 
@@ -95,7 +97,7 @@ function parseAgent(raw: Record<string, unknown>): MetricsAgentBreakdown {
     agentId: raw.agent_id == null ? null : str(raw.agent_id),
     agentName: str(raw.agent_name) || 'Sin asesor',
     enviosCount: num(raw.envios_count),
-    volumeOrigin: parseCurrencyAmounts(raw.volume_origin),
+    volumeOrigin: parseCurrencyAmounts(raw.volume_origin)
   }
 }
 
@@ -105,7 +107,7 @@ function parseTag(raw: Record<string, unknown>): MetricsTagBreakdown {
     label: str(raw.label),
     color: str(raw.color) || 'slate',
     active: raw.active !== false,
-    count: num(raw.count),
+    count: num(raw.count)
   }
 }
 
@@ -118,7 +120,9 @@ function toReadableError(err: unknown, endpoint: string): Error {
   if (axios.isAxiosError(err)) {
     const status = err.response?.status
     if (status === 404) {
-      return new Error(`El endpoint de métricas (${endpoint}) no está disponible en el backend (404).`)
+      return new Error(
+        `El endpoint de métricas (${endpoint}) no está disponible en el backend (404).`
+      )
     }
     const body = formatApiErrorBody(err.response?.data)
     if (body) return new Error(body)
@@ -164,11 +168,11 @@ export class MetricsApiAdapter implements MetricsRepository {
         enviosCount: num(totals.envios_count),
         clientesNuevos: num(totals.clientes_nuevos),
         activeAgents: num(totals.active_agents),
-        volumeOrigin: parseCurrencyAmounts(totals.volume_origin),
+        volumeOrigin: parseCurrencyAmounts(totals.volume_origin)
       },
       breakdownByStatus: records(data.breakdown_by_status).map(parseStatus),
       breakdownByTag: records(data.breakdown_by_tag).map(parseTag),
-      breakdownByAgent: records(data.breakdown_by_agent).map(parseAgent),
+      breakdownByAgent: records(data.breakdown_by_agent).map(parseAgent)
     }
   }
 
@@ -176,7 +180,7 @@ export class MetricsApiAdapter implements MetricsRepository {
     const params: Record<string, string> = {
       origin_currency: filters.originCurrency,
       destination_currency: filters.destinationCurrency,
-      granularity: filters.granularity,
+      granularity: filters.granularity
     }
     if (filters.dateFrom) params.date_from = filters.dateFrom
     if (filters.dateTo) params.date_to = filters.dateTo
@@ -195,7 +199,7 @@ export class MetricsApiAdapter implements MetricsRepository {
     return {
       range: parseRange(data.range as Record<string, unknown> | undefined),
       weeks: weeksRaw.map(parseWeek),
-      totals: parseTotals(data.totals as Record<string, unknown> | undefined),
+      totals: parseTotals(data.totals as Record<string, unknown> | undefined)
     }
   }
 }

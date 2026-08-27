@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from 'vue'
-import { ChevronDown, Filter, RotateCcw } from '@lucide/vue'
+import { CalendarRange, ChevronDown, Filter, RotateCcw } from '@lucide/vue'
+import {
+  dateToPeriodValue,
+  normalizePeriodRange,
+  PERIOD_RANGE_HINTS,
+  periodInputType,
+  periodValueToIsoDate
+} from '../../domain/metrics_period_range'
 import {
   GRANULARITY_LABELS,
   METRICS_CORRIDORS,
@@ -34,6 +41,28 @@ watch(
 const invalidRange = computed(() =>
   Boolean(local.dateFrom && local.dateTo && local.dateFrom > local.dateTo)
 )
+const inputType = computed(() => periodInputType(local.granularity))
+const periodHint = computed(() => PERIOD_RANGE_HINTS[local.granularity])
+const dateFromValue = computed({
+  get: () => dateToPeriodValue(local.dateFrom, local.granularity),
+  set: (value: string) => {
+    local.dateFrom = periodValueToIsoDate(value, local.granularity, 'start')
+  }
+})
+const dateToValue = computed({
+  get: () => dateToPeriodValue(local.dateTo, local.granularity),
+  set: (value: string) => {
+    local.dateTo = periodValueToIsoDate(value, local.granularity, 'end')
+  }
+})
+
+watch(
+  () => local.granularity,
+  (granularity, previousGranularity) => {
+    if (granularity === previousGranularity) return
+    Object.assign(local, normalizePeriodRange(local.dateFrom, local.dateTo, granularity))
+  }
+)
 
 function apply() {
   if (invalidRange.value) return
@@ -63,11 +92,25 @@ function apply() {
 
       <label class="filters__field">
         <span class="filters__label">Desde</span>
-        <input v-model="local.dateFrom" type="date" />
+        <input
+          v-model="dateFromValue"
+          class="filters__period-input"
+          :type="inputType"
+          :min="inputType === 'number' ? 1900 : undefined"
+          :max="inputType === 'number' ? 2200 : undefined"
+          :aria-label="`Desde · ${GRANULARITY_LABELS[local.granularity]}`"
+        />
       </label>
       <label class="filters__field">
         <span class="filters__label">Hasta</span>
-        <input v-model="local.dateTo" type="date" />
+        <input
+          v-model="dateToValue"
+          class="filters__period-input"
+          :type="inputType"
+          :min="inputType === 'number' ? 1900 : undefined"
+          :max="inputType === 'number' ? 2200 : undefined"
+          :aria-label="`Hasta · ${GRANULARITY_LABELS[local.granularity]}`"
+        />
       </label>
       <label class="filters__field">
         <span class="filters__label">Agrupar por</span>
@@ -79,6 +122,11 @@ function apply() {
       </label>
     </div>
 
+    <p class="filters__period-hint" aria-live="polite">
+      <CalendarRange :size="15" aria-hidden="true" />
+      <span>{{ periodHint }}</span>
+    </p>
+
     <p v-if="invalidRange" class="filters__validation" role="alert">
       La fecha inicial no puede ser posterior a la fecha final.
     </p>
@@ -87,9 +135,7 @@ function apply() {
       <summary>
         <span><Filter :size="16" aria-hidden="true" /> Filtros avanzados</span>
         <span class="filters__count">
-          {{
-            Number(Boolean(local.status)) + Number(Boolean(local.agentId)) + local.tagIds.length
-          }}
+          {{ Number(Boolean(local.status)) + Number(Boolean(local.agentId)) + local.tagIds.length }}
           activos
         </span>
         <ChevronDown :size="16" class="filters__chevron" aria-hidden="true" />
@@ -172,7 +218,7 @@ function apply() {
   font-weight: 700;
   letter-spacing: 0.025em;
 }
-.filters input[type='date'],
+.filters__period-input,
 .filters select {
   width: 100%;
   height: 40px;
@@ -183,6 +229,18 @@ function apply() {
   background: #fff;
   font: inherit;
   font-size: 0.82rem;
+}
+.filters__period-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 9px 0 0;
+  color: #718096;
+  font-size: 0.74rem;
+}
+.filters__period-hint svg {
+  flex: 0 0 auto;
+  color: #3346a8;
 }
 .filters input:focus-visible,
 .filters select:focus-visible {
