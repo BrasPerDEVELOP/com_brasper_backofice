@@ -40,8 +40,7 @@ async function handleLogout() {
 const showSidebar = computed(() => route.path.startsWith("/app"));
 
 const allNavItems = [
-  { to: "/app/dashboard", label: "Panel", icon: "chart", permission: "dashboard.view" },
-  { to: "/app/metricas", label: "Métricas", icon: "metrics", permission: "metrics.view" },
+  { to: "/app/dashboard", label: "Panel", icon: "metrics", permissions: ["dashboard.view", "metrics.view"] },
   { to: "/app/usuarios", label: "Usuarios y cuentas", icon: "users", permissions: ["users.view", "bank_accounts.view"] },
   { to: "/app/transacciones", label: "Transacciones", icon: "transactions", permission: "transactions.view" },
   { to: "/app/contabilidad", label: "Contabilidad", icon: "ledger", permission: "accounting.view" },
@@ -85,7 +84,7 @@ const breadcrumbs = computed(() => {
   const meta = (route.meta?.breadcrumb as string) ?? "";
   if (meta) return meta;
   const map: Record<string, string> = {
-    dashboard: "Panel > Resumen",
+    dashboard: authStore.hasPermission("metrics.view") ? "Panel > Métricas" : "Panel > Resumen",
     transacciones: "Operaciones > Transacciones",
     contabilidad: "Operaciones > Contabilidad",
     calculator: "Operaciones > Calculadora",

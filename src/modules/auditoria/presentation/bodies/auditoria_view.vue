@@ -68,7 +68,7 @@ function relativeDate(value: string): string {
 const eventRows = computed(() =>
   store.events.map((event) => ({
     ...event,
-    actor_label: event.actor_username ?? event.actor_user_id ?? 'Sistema',
+    actor_label: event.actor_username || (event.actor_user_id ? `Usuario (${event.actor_user_id.slice(0, 8)})` : (event.source === 'system' ? 'Sistema' : 'Sistema / Anónimo')),
     entity_label: event.entity_id ? `${event.entity} · ${event.entity_id}` : event.entity
   }))
 )

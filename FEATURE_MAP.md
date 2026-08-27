@@ -24,8 +24,7 @@ Vue View (*_view.vue)
 | Módulo | Ruta Vue | Permiso view | Store Pinia | Adapter principal | API path (Domain.apiPath) | Capas |
 |--------|----------|--------------|-------------|-------------------|---------------------------|-------|
 | auth / login | `/` | público | `useAuthStore` | `auth_api_adapter` | `auth/login` | Completo |
-| dashboard | `/app/dashboard` | `dashboard.view` | — (multi-store) | varios | — | Solo presentation ⚠️ |
-| metrics | `/app/metricas` | `metrics.view` | `use_metrics_store` | `metrics_api_adapter` | `env.metricsWeeklyPath` | Completo |
+| dashboard / metrics | `/app/dashboard` (`/app/metricas` redirige conservando query) | `dashboard.view` o `metrics.view` | `use_metrics_store` | `metrics_api_adapter` | `env.metricsOverviewPath` (`metrics/overview`) | Completo; vista única para todos los roles autorizados |
 | transacciones | `/app/transacciones` | `transactions.view` | `use_transactions_store` | `transactions_api_adapter` | `transactions` | Completo — **god view** |
 | contabilidad | `/app/contabilidad` | `accounting.view` | — | — | — | Solo presentation ⚠️ |
 | calculator | `/app/calculator` | `calculator.view` | `useCalculatorStore` | `calculator_api_adapter` | `coin/{path}` | Completo |

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { reactive, watch } from 'vue'
 import { TRANSACTION_STATUS_LABELS } from '@modules/transacciones/domain/models'
-import type { CurrencyCode, Granularity, MetricsFilters } from '../../domain/models'
+import type { CurrencyCode, Granularity, WeeklyMetricsFilters } from '../../domain/models'
 import { GRANULARITY_LABELS } from '../../domain/models'
 
 interface AgentOption {
@@ -10,19 +10,19 @@ interface AgentOption {
 }
 
 const props = defineProps<{
-  filters: MetricsFilters
+  filters: WeeklyMetricsFilters
   agents: AgentOption[]
   loading?: boolean
 }>()
 
-const emit = defineEmits<{ (e: 'apply', filters: MetricsFilters): void }>()
+const emit = defineEmits<{ (e: 'apply', filters: WeeklyMetricsFilters): void }>()
 
 const CURRENCIES: CurrencyCode[] = ['PEN', 'BRL', 'USD']
 const STATUS_ENTRIES = Object.entries(TRANSACTION_STATUS_LABELS) as [string, string][]
 const GRANULARITY_ENTRIES = Object.entries(GRANULARITY_LABELS) as [Granularity, string][]
 
 // Estado local editable; se sincroniza si el padre reemplaza los filtros.
-const local = reactive<MetricsFilters>({ ...props.filters })
+const local = reactive<WeeklyMetricsFilters>({ ...props.filters })
 watch(
   () => props.filters,
   (next) => Object.assign(local, next),

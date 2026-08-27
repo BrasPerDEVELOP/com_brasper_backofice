@@ -127,6 +127,11 @@ export const env = {
     return getEnv('VITE_METRICS_WEEKLY_PATH', 'metrics/weekly')
   },
 
+  /** Ruta del panel agregado unificado. Por defecto: metrics/overview */
+  get metricsOverviewPath(): string {
+    return getEnv('VITE_METRICS_OVERVIEW_PATH', 'metrics/overview')
+  },
+
   /** App ID de Facebook Login. Si está vacío, el botón de Facebook no se muestra. */
   get facebookAppId(): string {
     return getEnv('VITE_FACEBOOK_APP_ID', '').trim()
