@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   ACCOUNTING_COMMISSION_DEFAULT,
   calculateAccountingCommission,
-  calculateAccountingFinalSale
+  calculateAccountingFinalSale,
+  calculateAccountingInternalSale,
+  defaultVariableDiscountPercent
 } from './accounting_commission'
 
 describe('calculateAccountingCommission', () => {
@@ -39,5 +41,45 @@ describe('calculateAccountingFinalSale', () => {
   it('devuelve vacío si faltan datos', () => {
     expect(calculateAccountingFinalSale(100, null)).toBeUndefined()
     expect(calculateAccountingFinalSale(null, 3)).toBeUndefined()
+  })
+})
+
+describe('defaultVariableDiscountPercent', () => {
+  it('es 0 bajo el umbral de 100 y sube por tramos de monto', () => {
+    expect(defaultVariableDiscountPercent(80)).toBe(0)
+    expect(defaultVariableDiscountPercent(200)).toBe(40)
+    expect(defaultVariableDiscountPercent(1500)).toBe(50)
+    expect(defaultVariableDiscountPercent(4520)).toBe(60)
+  })
+})
+
+describe('calculateAccountingInternalSale', () => {
+  it('reproduce la fila de comisión fija 3 (monto < 100, V = 0)', () => {
+    expect(calculateAccountingInternalSale(3, 0)).toEqual({
+      net: 2.54,
+      tax: 0.46,
+      sale: 3
+    })
+  })
+
+  it('aplica el descuento variable y el IGV 18% (Excel Q=8, V=40%)', () => {
+    expect(calculateAccountingInternalSale(8, 40)).toEqual({
+      net: 4.07,
+      tax: 0.73,
+      sale: 4.8
+    })
+  })
+
+  it('Venta Final = comisión neta + impuesto (Excel Q=45, V=50%)', () => {
+    expect(calculateAccountingInternalSale(45, 50)).toEqual({
+      net: 19.07,
+      tax: 3.43,
+      sale: 22.5
+    })
+  })
+
+  it('devuelve vacío cuando no hay comisión de cliente', () => {
+    expect(calculateAccountingInternalSale(0, 40)).toBeUndefined()
+    expect(calculateAccountingInternalSale(null, 40)).toBeUndefined()
   })
 })

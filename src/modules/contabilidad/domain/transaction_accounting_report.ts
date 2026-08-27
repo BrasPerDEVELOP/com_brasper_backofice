@@ -32,13 +32,13 @@ export interface TransactionAccountingReportInput {
   exchangeDetail: string
   /** Porcentaje de la comisión de contabilidad, ej. `3.50%`. */
   variableDiscount: string
-  /**
-   * Comisión contable: si monto &lt; 100 → 3; si no → monto × (% / 100).
-   * Ver `calculateAccountingCommission`.
-   */
-  commission: string
+  /** Comisión neta de IGV tras el descuento variable. */
+  internalCommission: string
+  /** IGV 18% de la comisión final interna. */
+  internalTax: string
+  /** Comisión final interna + impuesto. */
+  internalSale: string
   specialDiscount: string
-  finalSale: string
   status: string
   checked: boolean
   generatedAt: Date
@@ -106,7 +106,7 @@ export function buildTransactionAccountingReport(
     code,
     fileName: buildAccountingPdfFileName(input.code, input.generatedAt),
     generatedAtLabel: `Generado el ${formatGeneratedAt(input.generatedAt)}`,
-    highlight: { label: 'Venta final', value: display(input.finalSale) },
+    highlight: { label: 'Venta final', value: display(input.internalSale) },
     sections: [
       {
         title: 'Operación',
@@ -139,9 +139,10 @@ export function buildTransactionAccountingReport(
         title: 'Resultado interno',
         fields: [
           { label: 'Descuento variable', value: display(input.variableDiscount) },
-          { label: 'Comisión', value: display(input.commission) },
-          { label: 'Descuento especial', value: display(input.specialDiscount) },
-          { label: 'Venta final', value: display(input.finalSale) }
+          { label: 'Comisión final interna', value: display(input.internalCommission) },
+          { label: 'Impuesto final interno', value: display(input.internalTax) },
+          { label: 'Venta final', value: display(input.internalSale) },
+          { label: 'Descuento especial', value: display(input.specialDiscount) }
         ]
       }
     ]

@@ -36,9 +36,10 @@ import { MediaViewerDialog } from '@interface/widgets'
 import { Domain } from '@/interface/infrastructure/services'
 import {
   ACCOUNTING_COMMISSION_AMOUNT_THRESHOLD,
-  ACCOUNTING_COMMISSION_DEFAULT,
+  ACCOUNTING_IGV_RATE,
   calculateAccountingCommission,
-  calculateAccountingFinalSale
+  calculateAccountingInternalSale,
+  defaultVariableDiscountPercent
 } from '../../domain/accounting_commission'
 import { downloadTransactionAccountingPdf } from '../../infrastructure/pdf/download_transaction_accounting_pdf'
 
@@ -132,8 +133,9 @@ type AccountingTableColumnKey =
   | 'receiveAmount'
   | 'exchangeRate'
   | 'variableDiscount'
-  | 'commission'
-  | 'finalSale'
+  | 'internalCommission'
+  | 'internalTax'
+  | 'internalSale'
   | 'status'
   | 'sendVoucher'
   | 'paymentVoucher'
@@ -235,25 +237,37 @@ const ACCOUNTING_TABLE_COLUMNS: readonly AccountingTableColumn<AccountingTableCo
     headerLines: ['Descuento', 'variable']
   },
   {
-    key: 'commission',
-    label: 'Comisión',
-    defaultWidth: 100,
-    minWidth: 88,
-    maxWidth: 400,
+    key: 'internalCommission',
+    label: 'Comisión final interna',
+    defaultWidth: 112,
+    minWidth: 96,
+    maxWidth: 420,
     headerClass:
       'whitespace-nowrap bg-[#1e3a8a] px-2 py-3 text-center text-[10px] font-bold uppercase leading-tight tracking-wide text-white',
-    title: `Comisión de contabilidad: si monto < ${ACCOUNTING_COMMISSION_AMOUNT_THRESHOLD} → S/ ${ACCOUNTING_COMMISSION_DEFAULT}; si no → monto × %`,
-    headerLines: ['Comisión']
+    title: 'Comisión neta de IGV tras el descuento variable: (comisión cliente / 1.18) × (1 − %)',
+    headerLines: ['Comisión final', 'interna']
   },
   {
-    key: 'finalSale',
-    label: 'Total a enviar',
-    defaultWidth: 100,
-    minWidth: 88,
+    key: 'internalTax',
+    label: 'Impuesto final interno',
+    defaultWidth: 112,
+    minWidth: 96,
+    maxWidth: 420,
+    headerClass:
+      'whitespace-nowrap bg-[#1e3a8a] px-2 py-3 text-center text-[10px] font-bold uppercase leading-tight tracking-wide text-white',
+    title: `IGV ${ACCOUNTING_IGV_RATE * 100}% de la comisión final interna`,
+    headerLines: ['Impuesto final', 'interno']
+  },
+  {
+    key: 'internalSale',
+    label: 'Venta Final',
+    defaultWidth: 108,
+    minWidth: 92,
     maxWidth: 420,
     headerClass:
       'whitespace-nowrap bg-emerald-600 px-2 py-3 text-center text-[10px] font-bold uppercase leading-tight tracking-wide text-white',
-    headerLines: ['Total a', 'enviar']
+    title: 'Comisión final interna + impuesto final interno',
+    headerLines: ['Venta', 'Final']
   },
   {
     key: 'status',
@@ -297,7 +311,7 @@ const {
   resizeBy: resizeAccountingColumnBy
 } = useResizableTableColumns({
   columns: ACCOUNTING_TABLE_COLUMNS,
-  storageKey: 'brasper:accounting:table-column-widths:v2',
+  storageKey: 'brasper:accounting:table-column-widths:v4',
   fixedWidth: ACCOUNTING_TABLE_ACTIONS_WIDTH
 })
 
@@ -586,46 +600,82 @@ function descuentoVariableTitle(t: Transaction): string {
   ].join(' · ')
 }
 
-/**
- * Comisión contable: monto 0 → vacío; monto &lt; 100 → 3; si no → monto × %.
- */
-function comisionMonto(t: Transaction): number | undefined {
-  return calculateAccountingCommission(t.origin_amount, descuentoVariable(t))
-}
+function salesCommissionPercentage(t: Transaction): number | null {
+  const commissions = comisionesStore.commissions
+  if (!commissions.length) return null
 
-function comisionMontoLabel(t: Transaction): string {
-  const monto = comisionMonto(t)
-  return monto != null ? formatPen(monto) : '—'
-}
+  if (t.commission_id) {
+    const byId = commissions.find((c) => c.id === t.commission_id)
+    const n = Number(byId?.percentage)
+    if (Number.isFinite(n)) return n
+  }
 
-function comisionMontoTitle(t: Transaction): string {
+  const { origin, destination } = getTransactionCurrencies(t)
+  if (!origin || !destination) return null
+  const originKey = origin.toLowerCase()
+  const destinationKey = destination.toLowerCase()
+  const pair = commissions.filter(
+    (c) =>
+      String(c.coin_a ?? '').toLowerCase() === originKey &&
+      String(c.coin_b ?? '').toLowerCase() === destinationKey
+  )
+  if (!pair.length) return null
+
   const amount = Number(t.origin_amount)
-  const commission = comisionMonto(t)
-  if (commission == null) return '—'
-  if (Number.isFinite(amount) && amount > 0 && amount < ACCOUNTING_COMMISSION_AMOUNT_THRESHOLD) {
-    return `Monto < ${ACCOUNTING_COMMISSION_AMOUNT_THRESHOLD}: comisión fija ${formatPen(ACCOUNTING_COMMISSION_DEFAULT)}`
-  }
-  const percentage = descuentoVariable(t)
-  if (percentage != null && Number.isFinite(amount)) {
-    return `${formatValue(amount)} × ${formatPercent(percentage)} (contabilidad) = ${formatPen(commission)}`
-  }
-  return `Comisión de contabilidad: ${formatPen(commission)}`
+  const bracket =
+    Number.isFinite(amount) && amount > 0
+      ? (pair.find((c) => amount >= c.min_amount && amount <= c.max_amount) ??
+        pair[pair.length - 1])
+      : pair[0]
+  const n = Number(bracket?.percentage)
+  return Number.isFinite(n) ? n : null
 }
 
-/** Total a enviar: monto de envío − comisión contable (fallback al API si falta). */
-function ventaFinalMonto(t: Transaction): number | undefined {
-  const calculated = calculateAccountingFinalSale(t.origin_amount, comisionMonto(t))
-  if (calculated != null) return calculated
-  if (t.venta_final != null) {
-    const n = Number(t.venta_final)
-    if (Number.isFinite(n)) return n
+/** Comisión del cliente (Q de la hoja): si monto < 100 → 3; si no → monto × tasa de venta. */
+function clientCommissionAmount(t: Transaction): number | undefined {
+  return calculateAccountingCommission(t.origin_amount, salesCommissionPercentage(t))
+}
+
+function variableDiscountPercentForInternalSale(t: Transaction): number {
+  const amount = Number(t.origin_amount)
+  if (Number.isFinite(amount) && amount < ACCOUNTING_COMMISSION_AMOUNT_THRESHOLD) {
+    return 0
   }
-  const tot = t.total_a_enviar ?? t.total_to_send
-  if (tot != null) {
-    const n = Number(tot)
-    if (Number.isFinite(n)) return n
-  }
-  return undefined
+  return descuentoVariable(t) ?? defaultVariableDiscountPercent(t.origin_amount)
+}
+
+function internalSaleBreakdown(t: Transaction) {
+  return calculateAccountingInternalSale(
+    clientCommissionAmount(t),
+    variableDiscountPercentForInternalSale(t)
+  )
+}
+
+function internalCommissionLabel(t: Transaction): string {
+  const breakdown = internalSaleBreakdown(t)
+  return breakdown ? formatPen(breakdown.net) : '—'
+}
+
+function internalTaxLabel(t: Transaction): string {
+  const breakdown = internalSaleBreakdown(t)
+  return breakdown ? formatPen(breakdown.tax) : '—'
+}
+
+function internalSaleLabel(t: Transaction): string {
+  const breakdown = internalSaleBreakdown(t)
+  return breakdown ? formatPen(breakdown.sale) : '—'
+}
+
+function internalSaleTitle(t: Transaction): string {
+  const breakdown = internalSaleBreakdown(t)
+  if (!breakdown) return '—'
+  const q = clientCommissionAmount(t)
+  const v = variableDiscountPercentForInternalSale(t)
+  return [
+    `Comisión cliente ${formatPen(q)}`,
+    `descuento variable ${formatPercent(v)}`,
+    `neta ${formatPen(breakdown.net)} + IGV ${formatPen(breakdown.tax)} = ${formatPen(breakdown.sale)}`
+  ].join(' · ')
 }
 
 /** Tabla: razón social de la empresa (`company_name` en API). */
@@ -790,9 +840,10 @@ async function downloadPdf(t: Transaction) {
       exchangeRate: getTransactionExchangeLabel(t),
       exchangeDetail: getTransactionExchangeTitle(t),
       variableDiscount: descuentoVariableLabel(t),
-      commission: comisionMontoLabel(t),
+      internalCommission: internalCommissionLabel(t),
+      internalTax: internalTaxLabel(t),
+      internalSale: internalSaleLabel(t),
       specialDiscount: descuentoEspecialLabel(t),
-      finalSale: formatPen(ventaFinalMonto(t)),
       status: getStatusLabel(resolveTransactionStatusForDisplay(t) ?? t.status),
       checked: isTransactionChecked(t),
       generatedAt: new Date()
@@ -1227,14 +1278,21 @@ onMounted(() => {
             </td>
             <td
               class="overflow-hidden whitespace-nowrap bg-slate-50/80 px-2 py-3 text-center tabular-nums text-[#111827]"
-              :title="comisionMontoTitle(t)"
+              :title="internalSaleTitle(t)"
             >
-              {{ comisionMontoLabel(t) }}
+              {{ internalCommissionLabel(t) }}
+            </td>
+            <td
+              class="overflow-hidden whitespace-nowrap bg-slate-50/80 px-2 py-3 text-center tabular-nums text-[#111827]"
+              :title="internalSaleTitle(t)"
+            >
+              {{ internalTaxLabel(t) }}
             </td>
             <td
               class="overflow-hidden whitespace-nowrap bg-emerald-50/90 px-2 py-3 text-center text-sm font-semibold tabular-nums text-emerald-900"
+              :title="internalSaleTitle(t)"
             >
-              {{ formatPen(ventaFinalMonto(t)) }}
+              {{ internalSaleLabel(t) }}
             </td>
             <td class="overflow-hidden px-2 py-3 text-center">
               <span
