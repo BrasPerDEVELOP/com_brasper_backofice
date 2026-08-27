@@ -28,7 +28,7 @@ function pretty(value: Record<string, unknown> | null): string {
       <dl class="grid gap-3 text-sm sm:grid-cols-2">
         <div><dt class="text-neutral-500">Fecha</dt><dd>{{ new Date(event.created_at).toLocaleString('es-PE') }}</dd></div>
         <div><dt class="text-neutral-500">Resultado</dt><dd>{{ event.success ? 'Exitoso' : 'Fallido' }} · {{ event.status_code ?? '-' }}</dd></div>
-        <div><dt class="text-neutral-500">Usuario</dt><dd>{{ event.actor_username ?? event.actor_user_id ?? 'Sistema/anónimo' }}</dd></div>
+        <div><dt class="text-neutral-500">Usuario</dt><dd>{{ event.actor_username || (event.actor_user_id ? `Usuario (${event.actor_user_id})` : (event.source === 'system' ? 'Sistema' : 'Sistema / Anónimo')) }}</dd></div>
         <div><dt class="text-neutral-500">Rol / origen</dt><dd>{{ event.actor_role ?? '-' }} · {{ event.source }}</dd></div>
         <div><dt class="text-neutral-500">IP</dt><dd>{{ event.ip_address ?? '-' }}</dd></div>
         <div><dt class="text-neutral-500">Entidad ID</dt><dd class="break-all">{{ event.entity_id ?? '-' }}</dd></div>
