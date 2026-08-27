@@ -125,6 +125,8 @@ type AccountingTableColumnKey =
   | 'sendDate'
   | 'operationNumber'
   | 'client'
+  | 'documentType'
+  | 'documentNumber'
   | 'destinationAccount'
   | 'company'
   | 'sendAmount'
