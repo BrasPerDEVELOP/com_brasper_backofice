@@ -32,3 +32,7 @@ export function normalizeStoredRole(role: unknown): string | null {
 export function isAdminRole(role: string | null | undefined): boolean {
   return normalizeStoredRole(role) === 'admin'
 }
+
+export function isAccountingRole(role: string | null | undefined): boolean {
+  return normalizeStoredRole(role) === 'accounting'
+}

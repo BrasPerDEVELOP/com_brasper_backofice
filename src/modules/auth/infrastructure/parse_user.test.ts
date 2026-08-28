@@ -142,6 +142,16 @@ describe('parseUser (dominio)', () => {
     expect(Array.isArray(u?.permissions)).toBe(true)
     expect(u?.permissions.length).toBeGreaterThan(0)
   })
+
+  it('conserva accounting.view para el rol contabilidad aunque el API no lo liste', () => {
+    const u = parseUser({
+      id: 1,
+      role: 'accounting',
+      permissions: ['dashboard.view', 'users.view']
+    })
+    expect(u?.permissions).toContain('accounting.view')
+    expect(u?.permissions).toContain('dashboard.view')
+  })
 })
 
 describe('parseUserListItem (listado)', () => {

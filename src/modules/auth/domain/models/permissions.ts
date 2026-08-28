@@ -1,4 +1,4 @@
-import { USER_ROLES, type UserRole } from './user_roles'
+import { USER_ROLES, isAccountingRole, isAdminRole, type UserRole } from './user_roles'
 
 export const PERMISSION_MODULES = [
   {
@@ -166,6 +166,15 @@ export const ALL_PERMISSIONS: PermissionKey[] = PERMISSION_MODULES.flatMap((modu
   module.permissions.map((permission) => permission.key)
 )
 
+/** Permisos del módulo Contabilidad (`GET /transactions/accounting` y la tabla `/app/contabilidad`). */
+export const ACCOUNTING_PERMISSION_KEYS: PermissionKey[] = PERMISSION_MODULES.find(
+  (module) => module.key === 'accounting'
+)!.permissions.map((permission) => permission.key)
+
+function uniquePermissions(keys: PermissionKey[]): PermissionKey[] {
+  return [...new Set(keys)]
+}
+
 const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
   admin: ALL_PERMISSIONS,
   client: [
@@ -242,7 +251,23 @@ export function isUserRole(value: string | null | undefined): value is UserRole 
 
 export function getDefaultPermissionsForRole(role: string | null | undefined): PermissionKey[] {
   if (!isUserRole(role)) return DEFAULT_ROLE_PERMISSIONS.user
-  return DEFAULT_ROLE_PERMISSIONS[role]
+  const defaults = DEFAULT_ROLE_PERMISSIONS[role]
+  if (role === 'accounting') {
+    return uniquePermissions([...defaults, ...ACCOUNTING_PERMISSION_KEYS])
+  }
+  return defaults
+}
+
+/**
+ * El rol `accounting` siempre conserva los permisos del módulo Contabilidad,
+ * aunque el API / la fila de roles traiga una lista incompleta.
+ */
+function withGuaranteedRolePermissions(
+  permissions: PermissionKey[],
+  role?: string | null
+): PermissionKey[] {
+  if (!isAccountingRole(role)) return permissions
+  return uniquePermissions([...permissions, ...ACCOUNTING_PERMISSION_KEYS])
 }
 
 export function normalizePermissions(value: unknown, role?: string | null): PermissionKey[] {
@@ -252,5 +277,18 @@ export function normalizePermissions(value: unknown, role?: string | null): Perm
         (item): item is PermissionKey => typeof item === 'string' && allowed.has(item)
       )
     : []
-  return parsed.length > 0 ? parsed : getDefaultPermissionsForRole(role)
+  const base = parsed.length > 0 ? parsed : getDefaultPermissionsForRole(role)
+  return withGuaranteedRolePermissions(base, role)
+}
+
+/** Admin pasa todo; Contabilidad pasa todos los permisos de su tabla. */
+export function roleGrantsPermission(
+  role: string | null | undefined,
+  permission: string
+): boolean {
+  if (isAdminRole(role)) return true
+  return (
+    isAccountingRole(role) &&
+    ACCOUNTING_PERMISSION_KEYS.includes(permission as PermissionKey)
+  )
 }

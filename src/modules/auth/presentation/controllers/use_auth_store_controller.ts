@@ -4,6 +4,7 @@ import {
   getDefaultPermissionsForRole,
   isAdminRole,
   normalizeStoredRole,
+  roleGrantsPermission,
   type PermissionKey,
   type User
 } from '../../domain/models'
@@ -113,7 +114,7 @@ export const useAuthStore = defineStore('auth', {
     },
 
     hasPermission(permission: PermissionKey | string): boolean {
-      if (isAdminRole(this.user?.role)) return true
+      if (roleGrantsPermission(this.user?.role, permission)) return true
       return this.permissions.includes(permission)
     },
 
