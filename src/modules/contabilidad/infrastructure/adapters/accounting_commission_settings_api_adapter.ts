@@ -54,12 +54,12 @@ export function toAccountingCommissionSettingsPayload(
 }
 
 /**
- * GET/PUT `coin/commission-accounting/settings/`.
+ * GET/PUT `coin/commission-accounting/settings`.
  * El backend debe exponer umbral + comisión fija editable.
  */
 export class AccountingCommissionSettingsApiAdapter {
   private endpoint(): string {
-    return Domain.apiPath('coin/commission-accounting/settings/')
+    return Domain.apiPath('coin/commission-accounting/settings')
   }
 
   async getSettings(): Promise<AccountingCommissionSettings> {

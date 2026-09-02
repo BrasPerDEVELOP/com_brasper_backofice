@@ -2,7 +2,7 @@
  * Comisión de contabilidad según la regla operativa (hoja Brasper):
  *   =IF(monto=0, "", IF(monto<umbral, fijo, monto * porcentaje))
  *
- * Umbral y fijo vienen del API (`/coin/commission-accounting/settings/`).
+ * Umbral y fijo vienen del API (`/coin/commission-accounting/settings`).
  * El porcentaje llega como `accounting_percentage` o del catálogo de tramos.
  */
 

@@ -55,7 +55,7 @@ describe('AccountingCommissionSettingsApiAdapter', () => {
     vi.mocked(apiClient.put).mockReset()
   })
 
-  it('hace GET y PUT a coin/commission-accounting/settings/', async () => {
+  it('hace GET y PUT a coin/commission-accounting/settings', async () => {
     vi.mocked(apiClient.get).mockResolvedValue({
       data: { amount_threshold: 100, fixed_commission: 3 }
     })
@@ -72,8 +72,8 @@ describe('AccountingCommissionSettingsApiAdapter', () => {
       adapter.saveSettings({ amountThreshold: 120, fixedCommission: 5 })
     ).resolves.toEqual({ amountThreshold: 120, fixedCommission: 5 })
 
-    expect(apiClient.get).toHaveBeenCalledWith('coin/commission-accounting/settings/')
-    expect(apiClient.put).toHaveBeenCalledWith('coin/commission-accounting/settings/', {
+    expect(apiClient.get).toHaveBeenCalledWith('coin/commission-accounting/settings')
+    expect(apiClient.put).toHaveBeenCalledWith('coin/commission-accounting/settings', {
       amount_threshold: 120,
       fixed_commission: 5
     })
