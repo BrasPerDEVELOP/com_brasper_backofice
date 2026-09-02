@@ -199,6 +199,20 @@
   ]
  },
  {
+  "method": "GET",
+  "path": "/coin/commission-accounting/settings",
+  "permissions": [
+   "commissions.view"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/coin/commission-accounting/settings",
+  "permissions": [
+   "commissions.update"
+  ]
+ },
+ {
   "method": "DELETE",
   "path": "/coin/commission-accounting/{commission_accounting_id}",
   "permissions": [
