@@ -7,6 +7,7 @@ import {
 import { useAuthStore } from '@modules/auth/presentation/controllers/use_auth_store_controller'
 import { PageHeader } from '@interface/widgets'
 import CommissionsPanel from '../components/CommissionsPanel.vue'
+import AccountingCommissionFixedSettings from '../components/AccountingCommissionFixedSettings.vue'
 
 type CommissionScope = 'sales' | 'accounting'
 
@@ -64,7 +65,10 @@ watch(canViewAccountingScope, (allowed) => {
 
       <CommissionsPanel v-if="activeScope === 'sales'" :store="comisionesStore" />
       <!-- El API de contabilidad no expone historial: se oculta el botón. -->
-      <CommissionsPanel v-else :store="comisionesContabilidadStore" :show-history="false" />
+      <template v-else>
+        <AccountingCommissionFixedSettings />
+        <CommissionsPanel :store="comisionesContabilidadStore" :show-history="false" />
+      </template>
     </section>
   </div>
 </template>

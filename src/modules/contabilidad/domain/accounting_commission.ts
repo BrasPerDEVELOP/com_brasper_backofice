@@ -1,31 +1,61 @@
 /**
  * Comisión de contabilidad según la regla operativa (hoja Brasper):
- *   =IF(monto=0, "", IF(monto<100, 3, monto * porcentaje))
+ *   =IF(monto=0, "", IF(monto<umbral, fijo, monto * porcentaje))
  *
- * El porcentaje llega como número entero/decimal del API (`accounting_percentage`
- * o catálogo `/coin/commission-accounting`, p. ej. `3` = 3%).
+ * Umbral y fijo vienen del API (`/coin/commission-accounting/settings/`).
+ * El porcentaje llega como `accounting_percentage` o del catálogo de tramos.
  */
 
-/** Umbral del monto de envío bajo el cual aplica la comisión mínima fija. */
-export const ACCOUNTING_COMMISSION_AMOUNT_THRESHOLD = 100
+/** Regla de comisión fija bajo umbral (configurable en back). */
+export interface AccountingCommissionFixedRule {
+  amountThreshold: number
+  fixedCommission: number
+}
 
-/** Comisión fija cuando el monto de envío es positivo pero menor al umbral. */
-export const ACCOUNTING_COMMISSION_DEFAULT = 3
+/**
+ * Valores de respaldo solo si el API aún no cargó settings.
+ * No son la fuente de verdad: se editan en Comisiones → Contabilidad.
+ */
+export const ACCOUNTING_COMMISSION_FALLBACK_THRESHOLD = 100
+export const ACCOUNTING_COMMISSION_FALLBACK_FIXED = 3
+
+/** @deprecated Usar `ACCOUNTING_COMMISSION_FALLBACK_THRESHOLD`. */
+export const ACCOUNTING_COMMISSION_AMOUNT_THRESHOLD = ACCOUNTING_COMMISSION_FALLBACK_THRESHOLD
+
+/** @deprecated Usar `ACCOUNTING_COMMISSION_FALLBACK_FIXED`. */
+export const ACCOUNTING_COMMISSION_DEFAULT = ACCOUNTING_COMMISSION_FALLBACK_FIXED
+
+function resolveFixedRule(
+  rule?: AccountingCommissionFixedRule | null
+): AccountingCommissionFixedRule {
+  const threshold = Number(rule?.amountThreshold)
+  const fixed = Number(rule?.fixedCommission)
+  return {
+    amountThreshold: Number.isFinite(threshold) && threshold > 0
+      ? threshold
+      : ACCOUNTING_COMMISSION_FALLBACK_THRESHOLD,
+    fixedCommission: Number.isFinite(fixed) && fixed >= 0
+      ? fixed
+      : ACCOUNTING_COMMISSION_FALLBACK_FIXED
+  }
+}
 
 /**
  * Calcula la comisión contable a mostrar.
- * Devuelve `undefined` cuando no hay monto (o es 0) o, por encima del umbral,
- * cuando falta el porcentaje de contabilidad.
+ * Bajo el umbral → comisión fija del settings; si no → monto × %.
  */
 export function calculateAccountingCommission(
   originAmount: number | null | undefined,
-  accountingPercentage: number | null | undefined
+  accountingPercentage: number | null | undefined,
+  fixedRule?: AccountingCommissionFixedRule | null
 ): number | undefined {
   const amount = originAmount == null ? NaN : Number(originAmount)
   if (!Number.isFinite(amount) || amount === 0) return undefined
 
-  if (amount < ACCOUNTING_COMMISSION_AMOUNT_THRESHOLD) {
-    return ACCOUNTING_COMMISSION_DEFAULT
+  const { amountThreshold, fixedCommission } = resolveFixedRule(fixedRule)
+
+  if (amount < amountThreshold) {
+    return fixedCommission
   }
 
   if (accountingPercentage == null) return undefined
@@ -67,13 +97,17 @@ function roundAccountingMoney(value: number): number {
 
 /**
  * Descuento variable de la hoja cuando el API no trae `accounting_percentage`.
- * `=IF(monto<100,0, IF(monto<300,40%, … 75%))`
+ * `=IF(monto<umbral,0, IF(monto<300,40%, … 75%))`
  */
 export function defaultVariableDiscountPercent(
-  originAmount: number | null | undefined
+  originAmount: number | null | undefined,
+  amountThreshold: number = ACCOUNTING_COMMISSION_FALLBACK_THRESHOLD
 ): number {
   const amount = originAmount == null ? NaN : Number(originAmount)
-  if (!Number.isFinite(amount) || amount < ACCOUNTING_COMMISSION_AMOUNT_THRESHOLD) {
+  const threshold = Number.isFinite(amountThreshold) && amountThreshold > 0
+    ? amountThreshold
+    : ACCOUNTING_COMMISSION_FALLBACK_THRESHOLD
+  if (!Number.isFinite(amount) || amount < threshold) {
     return 0
   }
   if (amount < 300) return 40
@@ -91,9 +125,6 @@ export function defaultVariableDiscountPercent(
  *   AG = (Q / 118%) * (1 − V)
  *   AH = 18% * AG
  *   AI = AG + AH
- *
- * `Q` es la comisión del cliente; `V` es el descuento variable en porcentaje
- * (40 = 40%). Si el monto es menor a 100, la hoja fuerza V = 0.
  */
 export function calculateAccountingInternalSale(
   clientCommission: number | null | undefined,

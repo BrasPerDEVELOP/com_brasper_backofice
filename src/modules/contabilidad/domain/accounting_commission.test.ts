@@ -1,34 +1,47 @@
 import { describe, expect, it } from 'vitest'
 import {
-  ACCOUNTING_COMMISSION_DEFAULT,
+  ACCOUNTING_COMMISSION_FALLBACK_FIXED,
   calculateAccountingCommission,
   calculateAccountingFinalSale,
   calculateAccountingInternalSale,
   defaultVariableDiscountPercent
 } from './accounting_commission'
 
+const defaultRule = {
+  amountThreshold: 100,
+  fixedCommission: 3
+}
+
 describe('calculateAccountingCommission', () => {
   it('devuelve vacío cuando el monto es 0 o inválido', () => {
-    expect(calculateAccountingCommission(0, 45)).toBeUndefined()
-    expect(calculateAccountingCommission(null, 45)).toBeUndefined()
-    expect(calculateAccountingCommission(undefined, 45)).toBeUndefined()
+    expect(calculateAccountingCommission(0, 45, defaultRule)).toBeUndefined()
+    expect(calculateAccountingCommission(null, 45, defaultRule)).toBeUndefined()
+    expect(calculateAccountingCommission(undefined, 45, defaultRule)).toBeUndefined()
   })
 
-  it('usa la comisión fija de 3 cuando el monto de envío es menor a 100', () => {
-    expect(calculateAccountingCommission(50, 0)).toBe(ACCOUNTING_COMMISSION_DEFAULT)
-    expect(calculateAccountingCommission(52, 45)).toBe(3)
-    expect(calculateAccountingCommission(99.99, null)).toBe(3)
+  it('usa la comisión fija del settings cuando el monto es menor al umbral', () => {
+    expect(calculateAccountingCommission(50, 0, defaultRule)).toBe(
+      ACCOUNTING_COMMISSION_FALLBACK_FIXED
+    )
+    expect(calculateAccountingCommission(52, 45, defaultRule)).toBe(3)
+    expect(calculateAccountingCommission(99.99, null, defaultRule)).toBe(3)
   })
 
-  it('calcula monto × porcentaje de contabilidad cuando el monto es >= 100', () => {
-    expect(calculateAccountingCommission(2000, 3)).toBe(60)
-    expect(calculateAccountingCommission(5640, 45)).toBe(2538)
-    expect(calculateAccountingCommission(100, 3.5)).toBe(3.5)
+  it('respeta un fijo distinto al del fallback', () => {
+    expect(
+      calculateAccountingCommission(80, 40, { amountThreshold: 100, fixedCommission: 5 })
+    ).toBe(5)
   })
 
-  it('sin porcentaje no calcula cuando el monto es >= 100', () => {
-    expect(calculateAccountingCommission(200, null)).toBeUndefined()
-    expect(calculateAccountingCommission(200, undefined)).toBeUndefined()
+  it('calcula monto × porcentaje cuando el monto es >= umbral', () => {
+    expect(calculateAccountingCommission(2000, 3, defaultRule)).toBe(60)
+    expect(calculateAccountingCommission(5640, 45, defaultRule)).toBe(2538)
+    expect(calculateAccountingCommission(100, 3.5, defaultRule)).toBe(3.5)
+  })
+
+  it('sin porcentaje no calcula cuando el monto es >= umbral', () => {
+    expect(calculateAccountingCommission(200, null, defaultRule)).toBeUndefined()
+    expect(calculateAccountingCommission(200, undefined, defaultRule)).toBeUndefined()
   })
 })
 
@@ -45,11 +58,16 @@ describe('calculateAccountingFinalSale', () => {
 })
 
 describe('defaultVariableDiscountPercent', () => {
-  it('es 0 bajo el umbral de 100 y sube por tramos de monto', () => {
+  it('es 0 bajo el umbral y sube por tramos de monto', () => {
     expect(defaultVariableDiscountPercent(80)).toBe(0)
     expect(defaultVariableDiscountPercent(200)).toBe(40)
     expect(defaultVariableDiscountPercent(1500)).toBe(50)
     expect(defaultVariableDiscountPercent(4520)).toBe(60)
+  })
+
+  it('respeta un umbral personalizado', () => {
+    expect(defaultVariableDiscountPercent(120, 150)).toBe(0)
+    expect(defaultVariableDiscountPercent(200, 150)).toBe(40)
   })
 })
 

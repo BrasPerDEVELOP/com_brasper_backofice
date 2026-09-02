@@ -34,19 +34,20 @@ import TableColumnResizeHandle from '@modules/transacciones/presentation/compone
 import { MediaViewerDialog } from '@interface/widgets'
 import { Domain } from '@/interface/infrastructure/services'
 import {
-  ACCOUNTING_COMMISSION_AMOUNT_THRESHOLD,
   ACCOUNTING_IGV_RATE,
   calculateAccountingCommission,
   calculateAccountingInternalSale,
   defaultVariableDiscountPercent
 } from '../../domain/accounting_commission'
 import { downloadTransactionAccountingPdf } from '../../infrastructure/pdf/download_transaction_accounting_pdf'
+import { useAccountingCommissionSettingsStore } from '../controllers/use_accounting_commission_settings_store'
 
 const transactionsStore = useTransactionsStore()
 const cuentasStore = useCuentasBancariasStore()
 const tasasStore = useTasasStore()
 const comisionesStore = useComisionesStore()
 const comisionesContabilidadStore = useComisionesContabilidadStore()
+const accountingCommissionSettingsStore = useAccountingCommissionSettingsStore()
 
 const searchQuery = ref('')
 const userFilter = ref<string>('')
@@ -582,10 +583,16 @@ function accountingCommissionPercentage(t: Transaction): number | null {
   if (!pair.length) return null
 
   const amount = Number(t.origin_amount)
+  // Misma convención que el API / commission_accounting: max exclusivo.
   const bracket =
     Number.isFinite(amount) && amount > 0
-      ? (pair.find((c) => amount >= c.min_amount && amount <= c.max_amount) ??
-        pair[pair.length - 1])
+      ? (pair.find(
+          (c) =>
+            amount >= c.min_amount &&
+            (c.max_amount == null ||
+              c.max_amount === 0 ||
+              amount < c.max_amount)
+        ) ?? pair[pair.length - 1])
       : pair[0]
   const n = Number(bracket?.percentage)
   return Number.isFinite(n) ? n : null
@@ -645,17 +652,25 @@ function salesCommissionPercentage(t: Transaction): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-/** Comisión del cliente (Q de la hoja): si monto < 100 → 3; si no → monto × tasa de venta. */
+/** Comisión del cliente (Q de la hoja): bajo umbral → fijo del settings; si no → monto × %. */
 function clientCommissionAmount(t: Transaction): number | undefined {
-  return calculateAccountingCommission(t.origin_amount, salesCommissionPercentage(t))
+  return calculateAccountingCommission(
+    t.origin_amount,
+    salesCommissionPercentage(t),
+    accountingCommissionSettingsStore.fixedRule
+  )
 }
 
 function variableDiscountPercentForInternalSale(t: Transaction): number {
   const amount = Number(t.origin_amount)
-  if (Number.isFinite(amount) && amount < ACCOUNTING_COMMISSION_AMOUNT_THRESHOLD) {
+  const threshold = accountingCommissionSettingsStore.fixedRule.amountThreshold
+  if (Number.isFinite(amount) && amount < threshold) {
     return 0
   }
-  return descuentoVariable(t) ?? defaultVariableDiscountPercent(t.origin_amount)
+  return (
+    descuentoVariable(t) ??
+    defaultVariableDiscountPercent(t.origin_amount, threshold)
+  )
 }
 
 function internalSaleBreakdown(t: Transaction) {
@@ -928,10 +943,11 @@ onMounted(() => {
     cuentasStore.loadBankAccounts(),
     cuentasStore.loadClientUsers(),
     cuentasStore.loadBanks(),
-    // Catálogos: tasas + comisiones de venta (descuento especial) + contabilidad (%).
+    // Catálogos: tasas + comisiones + settings de comisión fija.
     tasasStore.loadTaxRates(),
     comisionesStore.loadCommissions(),
-    comisionesContabilidadStore.loadCommissions()
+    comisionesContabilidadStore.loadCommissions(),
+    accountingCommissionSettingsStore.loadSettings()
   ])
 })
 </script>
