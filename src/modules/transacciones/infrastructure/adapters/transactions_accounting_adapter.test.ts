@@ -27,6 +27,7 @@ const PAGE = {
       origin_amount: 500,
       destination_amount: 400,
       code: 'PxB-0000000001',
+      billing_date: '2026-09-03T10:15:00Z',
       accounting_percentage: 45
     }
   ],
@@ -70,6 +71,12 @@ describe('TransactionsApiAdapter listado contable', () => {
 
     expect(items[0].accounting_percentage).toBe(45)
     expect(total).toBe(1)
+  })
+
+  it('mapea billing_date del listado contable al modelo', async () => {
+    const { items } = await adapter.getAccountingTransactions()
+
+    expect(items[0].billing_date).toBe('2026-09-03T10:15:00Z')
   })
 
   it('mapea tipo y número de documento del usuario del listado contable', async () => {

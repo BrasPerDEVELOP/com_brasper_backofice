@@ -21,6 +21,7 @@ export interface AccountingReportSection {
 export interface TransactionAccountingReportInput {
   code: string
   sendDate: string
+  billingDate: string
   operationNumber: string
   client: string
   documentType: string
@@ -41,7 +42,6 @@ export interface TransactionAccountingReportInput {
   /** Comisión final interna + impuesto. */
   internalSale: string
   specialDiscount: string
-  status: string
   checked: boolean
   generatedAt: Date
 }
@@ -115,8 +115,8 @@ export function buildTransactionAccountingReport(
         fields: [
           { label: 'Código', value: code },
           { label: 'Fecha de envío', value: display(input.sendDate) },
+          { label: 'Fecha de facturación', value: display(input.billingDate) },
           { label: 'N° de operación', value: display(input.operationNumber) },
-          { label: 'Estado', value: display(input.status) },
           { label: 'Verificada', value: input.checked ? 'Sí' : 'No' }
         ]
       },

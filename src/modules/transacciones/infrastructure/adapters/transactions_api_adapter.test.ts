@@ -94,6 +94,30 @@ describe('TransactionsApiAdapter social_reason_bank_id', () => {
     })
   })
 
+  it('envía billing_date en PUT para actualizar la fecha de facturación', async () => {
+    putMock.mockResolvedValue({ data: { id: 'tx-1', billing_date: '2026-09-03T10:15:00Z' } })
+
+    await adapter.updateTransaction('tx-1', {
+      billing_date: '2026-09-03T10:15:00.000Z'
+    })
+
+    expect(putMock).toHaveBeenCalledWith('transactions', {
+      id: 'tx-1',
+      billing_date: '2026-09-03T10:15:00.000Z'
+    })
+  })
+
+  it('usa la ruta contable para registrar billing_date desde Contabilidad', async () => {
+    putMock.mockResolvedValue({ data: { id: 'tx-1', billing_date: '2026-09-03T10:15:00Z' } })
+
+    await adapter.updateAccountingBillingDate('tx-1', '2026-09-03T10:15:00.000Z')
+
+    expect(putMock).toHaveBeenCalledWith('transactions/accounting/billing-date', {
+      id: 'tx-1',
+      billing_date: '2026-09-03T10:15:00.000Z'
+    })
+  })
+
   it('envía el nuevo cliente, sus cuentas y una lista vacía para quitar etiquetas', async () => {
     putMock.mockResolvedValue({ data: { id: 'tx-1' } })
     const destinations = [

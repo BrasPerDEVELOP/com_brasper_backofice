@@ -31,6 +31,7 @@ export interface CreateTransactionPayload {
   operation_number?: string | null
   send_date?: string
   payment_date?: string
+  billing_date?: string | null
   send_voucher?: TransactionAttachmentPayload
   payment_voucher?: TransactionAttachmentPayload
   checked_image?: TransactionAttachmentPayload
@@ -118,6 +119,7 @@ export interface TransactionsRepository {
   getTransactionById(id: string): Promise<Transaction | null>
   createTransaction(payload: CreateTransactionPayload): Promise<Transaction>
   updateTransaction(id: string, payload: UpdateTransactionPayload): Promise<Transaction>
+  updateAccountingBillingDate(id: string, billingDate: string): Promise<Transaction>
   deleteTransaction(id: string): Promise<void>
   importFromExcel(file: File): Promise<unknown>
 }

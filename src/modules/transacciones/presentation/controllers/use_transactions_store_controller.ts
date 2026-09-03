@@ -360,6 +360,24 @@ export const useTransactionsStore = defineStore('transactions', {
       }
     },
 
+    async updateAccountingBillingDate(id: string, billingDate: string) {
+      this.isUpdating = true
+      this.error = null
+      try {
+        const repo = getTransactionsRepository()
+        const updated = await repo.updateAccountingBillingDate(id.trim(), billingDate)
+        const idx = this.transactions.findIndex((t) => (t.id ?? '') === id)
+        const enriched = enrichTransactionWithSpecialDiscountMeta(updated)
+        if (idx >= 0) this.transactions[idx] = { ...this.transactions[idx], ...enriched }
+        return enriched
+      } catch (e) {
+        this.error = errorMessageFromCatch(e, 'Error al actualizar fecha de facturación')
+        throw e
+      } finally {
+        this.isUpdating = false
+      }
+    },
+
     async deleteTransaction(id: string) {
       this.error = null
       try {

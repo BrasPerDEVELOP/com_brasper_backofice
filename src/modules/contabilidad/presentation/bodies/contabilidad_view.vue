@@ -18,10 +18,7 @@ import type {
 } from '@modules/transacciones/domain/models'
 import type { GetTransactionsParams } from '@modules/transacciones/infrastructure/adapters/transactions_repository'
 import {
-  TRANSACTION_STATUS_LABELS,
   isTransactionChecked,
-  normalizeTransactionStatus,
-  resolveTransactionStatusForDisplay,
   formatTransactionCodeForDisplay,
   localDateInputStartMs,
   localDateInputEndMs,
@@ -41,6 +38,7 @@ import {
 } from '../../domain/accounting_commission'
 import { downloadTransactionAccountingPdf } from '../../infrastructure/pdf/download_transaction_accounting_pdf'
 import { useAccountingCommissionSettingsStore } from '../controllers/use_accounting_commission_settings_store'
+import AccountingBillingDateCell from '../components/AccountingBillingDateCell.vue'
 
 const transactionsStore = useTransactionsStore()
 const cuentasStore = useCuentasBancariasStore()
@@ -124,6 +122,7 @@ const ACCOUNTING_TABLE_ACTIONS_WIDTH = 72
 type AccountingTableColumnKey =
   | 'code'
   | 'sendDate'
+  | 'billingDate'
   | 'operationNumber'
   | 'client'
   | 'documentType'
@@ -137,7 +136,6 @@ type AccountingTableColumnKey =
   | 'internalCommission'
   | 'internalTax'
   | 'internalSale'
-  | 'status'
   | 'sendVoucher'
   | 'paymentVoucher'
 
@@ -160,6 +158,16 @@ const ACCOUNTING_TABLE_COLUMNS: readonly AccountingTableColumn<AccountingTableCo
     maxWidth: 600,
     headerClass:
       'whitespace-nowrap px-3 py-3 text-center font-semibold text-brasper-indigoDark'
+  },
+  {
+    key: 'billingDate',
+    label: 'Fecha de facturación',
+    defaultWidth: 150,
+    minWidth: 130,
+    maxWidth: 600,
+    headerClass:
+      'whitespace-nowrap px-2 py-3 text-center text-xs font-semibold leading-tight text-brasper-indigoDark',
+    headerLines: ['Fecha de', 'facturación']
   },
   {
     key: 'operationNumber',
@@ -288,15 +296,6 @@ const ACCOUNTING_TABLE_COLUMNS: readonly AccountingTableColumn<AccountingTableCo
       'whitespace-nowrap bg-emerald-600 px-2 py-3 text-center text-[10px] font-bold uppercase leading-tight tracking-wide text-white',
     title: 'Comisión final interna + impuesto final interno',
     headerLines: ['Venta', 'Final']
-  },
-  {
-    key: 'status',
-    label: 'Estado',
-    defaultWidth: 100,
-    minWidth: 88,
-    maxWidth: 600,
-    headerClass:
-      'whitespace-nowrap px-2 py-3 text-center font-semibold text-brasper-indigoDark'
   },
   {
     key: 'sendVoucher',
@@ -724,33 +723,6 @@ function voucherMediaHref(path: unknown): string {
   return Domain.mediaUrl(s)
 }
 
-function getStatusLabel(status: string | undefined): string {
-  if (!status) return '-'
-  const s = normalizeTransactionStatus(status)
-  return TRANSACTION_STATUS_LABELS[s as keyof typeof TRANSACTION_STATUS_LABELS] ?? status
-}
-
-function statusRowBadgeClass(status: string | undefined): string {
-  const s = normalizeTransactionStatus(status ?? '')
-  switch (s) {
-    case 'verification':
-    case 'pending':
-      return 'bg-amber-100 text-amber-900'
-    case 'verified':
-      return 'bg-violet-100 text-violet-900'
-    case 'completed':
-      return 'bg-emerald-100 text-emerald-900'
-    case 'failed':
-      return 'bg-red-100 text-red-800'
-    case 'checked':
-      return 'bg-sky-100 text-sky-900'
-    case 'cancelled':
-      return 'bg-gray-100 text-gray-800'
-    default:
-      return 'bg-[#dbeafe] text-brasper-indigoDark'
-  }
-}
-
 /** Tabla: solo banco + moneda (sin número de cuenta ni titular). */
 function getBankCurrencyTableLabel(id: string | undefined): string {
   if (!id) return '-'
@@ -857,6 +829,23 @@ function getTransactionExchangeTitle(t: Transaction): string {
 
 const downloadingPdfId = ref<string | null>(null)
 const pdfError = ref<string | null>(null)
+const savingBillingDateId = shallowRef<string | null>(null)
+const billingDateError = ref<string | null>(null)
+
+async function persistBillingDate(t: Transaction, iso: string) {
+  const id = t.id?.trim()
+  if (!id || savingBillingDateId.value) return
+  savingBillingDateId.value = id
+  billingDateError.value = null
+  try {
+    await transactionsStore.updateAccountingBillingDate(id, iso)
+  } catch (e) {
+    billingDateError.value =
+      e instanceof Error ? e.message : 'No se pudo guardar la fecha de facturación.'
+  } finally {
+    savingBillingDateId.value = null
+  }
+}
 
 /**
  * PDF de una fila: se arma con los mismos valores que muestra la tabla, así el
@@ -870,6 +859,7 @@ async function downloadPdf(t: Transaction) {
     await downloadTransactionAccountingPdf({
       code: formatTransactionCodeForDisplay(t.code),
       sendDate: formatDate(t.send_date),
+      billingDate: formatDate(t.billing_date),
       operationNumber: t.operation_number ? String(t.operation_number) : '',
       client: getClientLabel(t.user_id),
       documentType: getUserDocumentTypeLabel(t),
@@ -885,7 +875,6 @@ async function downloadPdf(t: Transaction) {
       internalTax: internalTaxLabel(t),
       internalSale: internalSaleLabel(t),
       specialDiscount: descuentoEspecialLabel(t),
-      status: getStatusLabel(resolveTransactionStatusForDisplay(t) ?? t.status),
       checked: isTransactionChecked(t),
       generatedAt: new Date()
     })
@@ -1139,6 +1128,12 @@ onMounted(() => {
     <p v-if="pdfError" class="rounded-lg bg-[#dc3545]/10 px-4 py-3 text-sm text-[#dc3545]">
       {{ pdfError }}
     </p>
+    <p
+      v-if="billingDateError"
+      class="rounded-lg bg-[#dc3545]/10 px-4 py-3 text-sm text-[#dc3545]"
+    >
+      {{ billingDateError }}
+    </p>
 
     <div
       ref="tableScrollRef"
@@ -1253,6 +1248,13 @@ onMounted(() => {
             <td class="truncate whitespace-nowrap px-3 py-3 text-center text-[#374151]">
               {{ formatDateTime(t.send_date) }}
             </td>
+            <td class="overflow-hidden px-2 py-2 align-middle">
+              <AccountingBillingDateCell
+                :billing-date="t.billing_date"
+                :disabled="!t.id || savingBillingDateId != null"
+                @persist="persistBillingDate(t, $event)"
+              />
+            </td>
             <td
               class="truncate whitespace-nowrap px-3 py-3 text-center text-[#374151]"
               :title="t.operation_number || '—'"
@@ -1335,14 +1337,6 @@ onMounted(() => {
               :title="internalSaleTitle(t)"
             >
               {{ internalSaleLabel(t) }}
-            </td>
-            <td class="overflow-hidden px-2 py-3 text-center">
-              <span
-                class="inline-flex max-w-full truncate rounded-full px-2.5 py-0.5 text-xs font-medium"
-                :class="statusRowBadgeClass(resolveTransactionStatusForDisplay(t) ?? t.status)"
-              >
-                {{ getStatusLabel(resolveTransactionStatusForDisplay(t) ?? t.status) }}
-              </span>
             </td>
             <td class="overflow-hidden px-2 py-2 align-middle text-center">
               <template v-if="voucherMediaHref(t.send_voucher)">

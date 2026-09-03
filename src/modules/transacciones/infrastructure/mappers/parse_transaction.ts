@@ -392,6 +392,7 @@ export function parseTransaction(item: unknown): Transaction {
     })(),
     send_date: o.send_date != null ? String(o.send_date) : undefined,
     payment_date: o.payment_date != null ? String(o.payment_date) : undefined,
+    billing_date: o.billing_date != null ? String(o.billing_date) : undefined,
     send_voucher: (() => {
       const values = attachmentStrings(o.send_voucher, o.send_vouchers, o.send_voucher_files)
       return values.length > 1 ? values : values[0]

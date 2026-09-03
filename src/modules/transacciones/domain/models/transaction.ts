@@ -63,6 +63,7 @@ export interface Transaction {
   coupon_discount_total_to_send?: number | null
   send_date?: string
   payment_date?: string
+  billing_date?: string
   send_voucher?: string | string[]
   payment_voucher?: string | string[]
   /** Imagen checklist (path/URL), nullable en API */

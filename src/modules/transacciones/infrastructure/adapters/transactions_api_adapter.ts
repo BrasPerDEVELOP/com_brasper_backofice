@@ -258,6 +258,17 @@ export class TransactionsApiAdapter implements TransactionsRepository {
     return transactionFromApiRecord(item)
   }
 
+  async updateAccountingBillingDate(id: string, billingDate: string): Promise<Transaction> {
+    const response = await apiClient.put<unknown>(this.endpoint('accounting/billing-date'), {
+      id: id.trim(),
+      billing_date: billingDate
+    })
+    const raw = response.data
+    const obj = raw != null && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+    const item = (obj.data ?? obj) as Record<string, unknown>
+    return transactionFromApiRecord(item)
+  }
+
   async deleteTransaction(id: string): Promise<void> {
     // La ruta detail del backend no lleva barra final. Con `/`, el proxy responde
     // 307 hacia HTTP y el navegador bloquea el DELETE por contenido mixto.
