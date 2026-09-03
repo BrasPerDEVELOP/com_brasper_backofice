@@ -527,6 +527,13 @@
   ]
  },
  {
+  "method": "PUT",
+  "path": "/transactions/accounting/billing-date",
+  "permissions": [
+   "accounting.view"
+  ]
+ },
+ {
   "method": "GET",
   "path": "/transactions/bank-accounts",
   "permissions": []
