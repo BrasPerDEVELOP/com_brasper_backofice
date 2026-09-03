@@ -6,7 +6,8 @@ import {
   normalizePeriodRange,
   PERIOD_RANGE_HINTS,
   periodInputType,
-  periodValueToIsoDate
+  periodValueToIsoDate,
+  singleDayPeriodRange
 } from '../../domain/metrics_period_range'
 import {
   GRANULARITY_LABELS,
@@ -43,6 +44,10 @@ const invalidRange = computed(() =>
 )
 const inputType = computed(() => periodInputType(local.granularity))
 const periodHint = computed(() => PERIOD_RANGE_HINTS[local.granularity])
+const singleDayValue = computed({
+  get: () => dateToPeriodValue(local.dateFrom ?? local.dateTo, 'day'),
+  set: (value: string) => Object.assign(local, singleDayPeriodRange(value))
+})
 const dateFromValue = computed({
   get: () => dateToPeriodValue(local.dateFrom, local.granularity),
   set: (value: string) => {
@@ -60,19 +65,30 @@ watch(
   () => local.granularity,
   (granularity, previousGranularity) => {
     if (granularity === previousGranularity) return
+    if (granularity === 'day') {
+      Object.assign(local, singleDayPeriodRange(local.dateFrom ?? local.dateTo))
+      return
+    }
     Object.assign(local, normalizePeriodRange(local.dateFrom, local.dateTo, granularity))
   }
 )
 
 function apply() {
   if (invalidRange.value) return
-  emit('apply', { ...local, tagIds: [...local.tagIds] })
+  const period =
+    local.granularity === 'day'
+      ? singleDayPeriodRange(singleDayValue.value)
+      : { dateFrom: local.dateFrom, dateTo: local.dateTo }
+  emit('apply', { ...local, ...period, tagIds: [...local.tagIds] })
 }
 </script>
 
 <template>
   <section class="filters" aria-label="Filtros de métricas">
-    <div class="filters__primary">
+    <div
+      class="filters__primary"
+      :class="{ 'filters__primary--single-day': local.granularity === 'day' }"
+    >
       <div class="filters__field filters__corridors">
         <span class="filters__label">Corredor</span>
         <div class="filters__segments" role="radiogroup" aria-label="Corredor de cambio">
@@ -91,6 +107,24 @@ function apply() {
       </div>
 
       <label class="filters__field">
+        <span class="filters__label">Agrupar por</span>
+        <select v-model="local.granularity">
+          <option v-for="(label, key) in GRANULARITY_LABELS" :key="key" :value="key">
+            {{ label }}
+          </option>
+        </select>
+      </label>
+
+      <label v-if="local.granularity === 'day'" class="filters__field">
+        <span class="filters__label">Seleccionar día</span>
+        <input
+          v-model="singleDayValue"
+          class="filters__period-input"
+          type="date"
+          aria-label="Seleccionar día"
+        />
+      </label>
+      <label v-else class="filters__field">
         <span class="filters__label">Desde</span>
         <input
           v-model="dateFromValue"
@@ -101,7 +135,7 @@ function apply() {
           :aria-label="`Desde · ${GRANULARITY_LABELS[local.granularity]}`"
         />
       </label>
-      <label class="filters__field">
+      <label v-if="local.granularity !== 'day'" class="filters__field">
         <span class="filters__label">Hasta</span>
         <input
           v-model="dateToValue"
@@ -111,14 +145,6 @@ function apply() {
           :max="inputType === 'number' ? 2200 : undefined"
           :aria-label="`Hasta · ${GRANULARITY_LABELS[local.granularity]}`"
         />
-      </label>
-      <label class="filters__field">
-        <span class="filters__label">Agrupar por</span>
-        <select v-model="local.granularity">
-          <option v-for="(label, key) in GRANULARITY_LABELS" :key="key" :value="key">
-            {{ label }}
-          </option>
-        </select>
       </label>
     </div>
 
@@ -206,6 +232,9 @@ function apply() {
   grid-template-columns: minmax(360px, 1fr) repeat(3, minmax(135px, auto));
   gap: 12px;
   align-items: end;
+}
+.filters__primary--single-day {
+  grid-template-columns: minmax(360px, 1fr) repeat(2, minmax(135px, auto));
 }
 .filters__field {
   display: grid;
@@ -401,6 +430,9 @@ function apply() {
   }
   .filters__corridors {
     grid-column: 1 / -1;
+  }
+  .filters__primary--single-day {
+    grid-template-columns: 1fr 1fr;
   }
 }
 @media (max-width: 760px) {

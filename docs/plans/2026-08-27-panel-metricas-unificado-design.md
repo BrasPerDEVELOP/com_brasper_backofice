@@ -20,7 +20,7 @@ La experiencia está pensada para operadores y responsables de tesorería que ne
 ## Comportamiento
 
 1. El usuario elige una de las cinco rutas de cambio. El panel actualiza KPIs, series, monedas y distribuciones como un solo conjunto.
-2. Puede acotar un rango variable y agrupar por día, semana, mes o año. Los controles se adaptan: fechas exactas para día, semanas ISO completas, meses completos o años completos. La interfaz normaliza cada selección a fechas ISO antes de consultar el backend.
+2. Puede acotar un rango variable y agrupar por semana, mes o año. Al agrupar por día, elige una sola fecha y la interfaz la envía como inicio y fin del mismo día. Los demás controles se adaptan a semanas ISO completas, meses completos o años completos antes de consultar el backend.
 3. Puede filtrar por una o varias etiquetas. Las etiquetas activas se muestran primero; las inactivas solo deben aparecer si están presentes en datos históricos.
 4. El selector **Analizar por** cambia la forma de agrupar los datos:
    - **Evolución:** buckets de fecha.

@@ -3,7 +3,8 @@ import {
   dateToPeriodValue,
   normalizePeriodRange,
   periodInputType,
-  periodValueToIsoDate
+  periodValueToIsoDate,
+  singleDayPeriodRange
 } from './metrics_period_range'
 
 describe('metrics period range', () => {
@@ -13,6 +14,14 @@ describe('metrics period range', () => {
       dateTo: '2026-08-16'
     })
     expect(periodInputType('day')).toBe('date')
+  })
+
+  it('usa el día seleccionado como inicio y fin del filtro diario', () => {
+    expect(singleDayPeriodRange('2026-09-03')).toEqual({
+      dateFrom: '2026-09-03',
+      dateTo: '2026-09-03'
+    })
+    expect(singleDayPeriodRange('')).toEqual({ dateFrom: null, dateTo: null })
   })
 
   it('convierte una selección semanal a lunes y domingo', () => {
