@@ -103,8 +103,16 @@ export function normalizePeriodRange(
   }
 }
 
+export function singleDayPeriodRange(value: string | null | undefined): {
+  dateFrom: string | null
+  dateTo: string | null
+} {
+  const day = periodValueToIsoDate(value ?? '', 'day', 'start')
+  return { dateFrom: day, dateTo: day }
+}
+
 export const PERIOD_RANGE_HINTS: Record<Granularity, string> = {
-  day: 'Fechas exactas: puedes elegir cualquier rango, por ejemplo 15/06–16/08.',
+  day: 'Elige un único día; las métricas mostrarán solamente esa fecha.',
   week: 'Semanas completas: desde el lunes de la primera hasta el domingo de la última.',
   month: 'Meses completos: desde el primer día del mes inicial hasta el último del mes final.',
   year: 'Años completos: desde el 1 de enero del año inicial hasta el 31 de diciembre del final.'
