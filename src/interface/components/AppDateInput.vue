@@ -10,11 +10,14 @@ const props = withDefaults(
     class?: string
     /** Fecha y hora (input nativo `datetime-local`, minutos). */
     withTime?: boolean
+    /** Botón de limpiar a la derecha. */
+    clearable?: boolean
   }>(),
   {
     size: 'md',
     class: '',
-    withTime: false
+    withTime: false,
+    clearable: true
   }
 )
 
@@ -60,7 +63,7 @@ defineEmits<{
       @input="$emit('update:modelValue', ($event.target as HTMLInputElement).value)"
     />
     <button
-      v-if="modelValue"
+      v-if="clearable && modelValue"
       type="button"
       class="mr-2 rounded p-1 text-[#9ca3af] hover:bg-[#f3f4f6] hover:text-[#6b7280]"
       title="Limpiar"

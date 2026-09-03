@@ -32,6 +32,7 @@ function onChange(value: string) {
     :model-value="localValue"
     size="sm"
     :disabled="disabled"
+    :clearable="false"
     class="min-w-0 w-full"
     @update:model-value="onChange"
   />
