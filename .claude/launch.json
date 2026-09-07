@@ -4,8 +4,35 @@
     {
       "name": "backoffice-dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 5174,
+      "autoPort": true
+    },
+    {
+      "name": "emails-preview",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8765",
+        "--directory",
+        "emails"
+      ],
+      "port": 8765
+    },
+    {
+      "name": "www-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "/Users/nito/Documents/GitHub/com_brasper_www",
+        "run",
+        "dev"
+      ],
+      "port": 5173,
       "autoPort": true
     }
   ]
