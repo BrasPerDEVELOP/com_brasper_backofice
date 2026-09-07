@@ -40,6 +40,12 @@ npm run check    # typecheck + lint + test
 npm run build    # build producción
 ```
 
+## Planes de producto (diseño)
+
+| Plan | Estado | Doc |
+|------|--------|-----|
+| Notificaciones in-app, Observaciones `@`, Historial usuario, permisos por usuario | 🔲 Diseño validado | [2026-09-07-notificaciones-observaciones-historial-design.md](./2026-09-07-notificaciones-observaciones-historial-design.md) |
+
 ## Documentos de apoyo
 
 | Archivo | Uso |
@@ -48,7 +54,6 @@ npm run build    # build producción
 | [docs/ops/DEPLOYMENT-FLOW.md](../ops/DEPLOYMENT-FLOW.md) | 4 capas de validación |
 | [docs/TESTING.md](../TESTING.md) | Pirámide de tests |
 | [docs/PROMPT-FASES.md](../PROMPT-FASES.md) | Prompts listos para Cursor |
-| [docs/audits/AUDITORIA-2026-07-09.md](../audits/AUDITORIA-2026-07-09.md) | Hallazgos originales |
 
 ## Definition of Done global
 

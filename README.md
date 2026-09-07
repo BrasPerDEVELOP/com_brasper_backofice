@@ -110,6 +110,6 @@ Antes de codear una fase: leer su doc y correr `npm run check`.
 
 - [`CLAUDE.md`](CLAUDE.md) — guía detallada de arquitectura, comandos y convenciones.
 - [`AGENTS.md`](AGENTS.md) — skills y flujo de trabajo para agentes de IA.
-- [`docs/audits/`](docs/audits/) — auditorías de código.
 - [`docs/ops/DEPLOYMENT-FLOW.md`](docs/ops/DEPLOYMENT-FLOW.md) — 4 capas de validación.
 - [`docs/TESTING.md`](docs/TESTING.md) — Vitest + Playwright.
+- [`docs/plans/00-ROADMAP.md`](docs/plans/00-ROADMAP.md) — fases y planes de producto.
