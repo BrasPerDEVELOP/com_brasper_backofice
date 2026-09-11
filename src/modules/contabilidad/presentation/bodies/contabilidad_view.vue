@@ -38,6 +38,7 @@ import {
 } from '../../domain/accounting_commission'
 import { downloadTransactionAccountingPdf } from '../../infrastructure/pdf/download_transaction_accounting_pdf'
 import { useAccountingCommissionSettingsStore } from '../controllers/use_accounting_commission_settings_store'
+import { formatAccountingMoney } from '../composables/accounting_money'
 import AccountingBillingDateCell from '../components/AccountingBillingDateCell.vue'
 
 const transactionsStore = useTransactionsStore()
@@ -493,14 +494,9 @@ function formatDateTime(value: string | undefined): string {
   }
 }
 
-/** Contabilidad: moneda PEN como en reportes (S/ 0.00). */
-function formatPen(value: number | null | undefined): string {
-  if (value == null || Number.isNaN(Number(value))) return '—'
-  const n = Number(value)
-  return `S/ ${n.toLocaleString('es-PE', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  })}`
+/** Comisión, IGV y venta final: mismo símbolo que el monto de envío. */
+function formatOriginMoney(t: Transaction, value: number | null | undefined): string {
+  return formatAccountingMoney(value, getTransactionOriginCurrency(t))
 }
 
 /**
@@ -540,7 +536,9 @@ function descuentoEspecialLabel(t: Transaction): string {
   const monto = descuentoEspecialMonto(t)
   if (monto == null) return '—'
   // Un descuento negativo (consignado en la calculadora) es un recargo.
-  return monto < 0 ? `+${formatPen(Math.abs(monto))}` : `-${formatPen(monto)}`
+  return monto < 0
+    ? `+${formatOriginMoney(t, Math.abs(monto))}`
+    : `-${formatOriginMoney(t, monto)}`
 }
 
 
@@ -681,17 +679,17 @@ function internalSaleBreakdown(t: Transaction) {
 
 function internalCommissionLabel(t: Transaction): string {
   const breakdown = internalSaleBreakdown(t)
-  return breakdown ? formatPen(breakdown.net) : '—'
+  return breakdown ? formatOriginMoney(t, breakdown.net) : '—'
 }
 
 function internalTaxLabel(t: Transaction): string {
   const breakdown = internalSaleBreakdown(t)
-  return breakdown ? formatPen(breakdown.tax) : '—'
+  return breakdown ? formatOriginMoney(t, breakdown.tax) : '—'
 }
 
 function internalSaleLabel(t: Transaction): string {
   const breakdown = internalSaleBreakdown(t)
-  return breakdown ? formatPen(breakdown.sale) : '—'
+  return breakdown ? formatOriginMoney(t, breakdown.sale) : '—'
 }
 
 function internalSaleTitle(t: Transaction): string {
@@ -700,9 +698,9 @@ function internalSaleTitle(t: Transaction): string {
   const q = clientCommissionAmount(t)
   const v = variableDiscountPercentForInternalSale(t)
   return [
-    `Comisión cliente ${formatPen(q)}`,
+    `Comisión cliente ${formatOriginMoney(t, q)}`,
     `descuento variable ${formatPercent(v)}`,
-    `neta ${formatPen(breakdown.net)} + IGV ${formatPen(breakdown.tax)} = ${formatPen(breakdown.sale)}`
+    `neta ${formatOriginMoney(t, breakdown.net)} + IGV ${formatOriginMoney(t, breakdown.tax)} = ${formatOriginMoney(t, breakdown.sale)}`
   ].join(' · ')
 }
 
