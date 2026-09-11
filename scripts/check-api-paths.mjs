@@ -1,8 +1,8 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { extname, join, relative } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const root = new URL('../src/', import.meta.url)
-const sourceRoot = root.pathname
+const sourceRoot = fileURLToPath(new URL('../src/', import.meta.url))
 const sourceExtensions = new Set(['.ts', '.vue'])
 const forbidden = [
   /Domain\.apiPath\(\s*(['"`])[^'"`\n]*\/\1\s*\)/g,
