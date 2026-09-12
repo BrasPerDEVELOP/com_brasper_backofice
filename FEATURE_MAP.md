@@ -21,6 +21,12 @@ Vue View (*_view.vue)
 
 ## Mapa de módulos
 
+Contabilidad (2026-09-12): botón Exportar Excel con todas las páginas del filtro vigente mediante `GET /transactions/accounting` (`accounting.view`). Incluye documentos, fechas, importes numéricos y desglose contable, con monedas separadas. No requiere migración.
+
+Etiquetas (2026-09-12): `counts_as_new_client` admite varias etiquetas marcadas a la vez. El panel cuenta cada transacción una sola vez si tiene al menos una de ellas; las etiquetas borradas no cuentan. No requiere migración.
+
+Ampliación 2026-09-11: campanita (`notifications.view`) y avisos (`notifications.create`) usan `/notifications`, `/notifications/staff`, `/notifications/avisos` y rutas de lectura. Transacciones envía `observaciones` y `mentioned_user_ids`. Usuarios incorpora Historial (`users.view` + `transactions.view`) y Acceso (`users.update` + `roles.permissions.update`, sin edición propia); los deltas se guardan mediante PUT `/user`. Login y `/auth/me` usan exclusivamente los permisos efectivos recibidos del API, salvo bypass admin.
+
 | Módulo | Ruta Vue | Permiso view | Store Pinia | Adapter principal | API path (Domain.apiPath) | Capas |
 |--------|----------|--------------|-------------|-------------------|---------------------------|-------|
 | auth / login | `/` | público | `useAuthStore` | `auth_api_adapter` | `auth/login` | Completo |

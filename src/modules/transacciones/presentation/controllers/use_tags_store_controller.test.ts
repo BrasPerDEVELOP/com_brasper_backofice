@@ -60,11 +60,11 @@ describe('catálogo de etiquetas', () => {
     expect(store.tags).toHaveLength(2)
   })
 
-  it('newClientTag es null si ninguna tiene el flag', async () => {
+  it('newClientTags está vacío si ninguna tiene el flag', async () => {
     getTags.mockResolvedValue([tag({ id: 'a' })])
     const store = useTagsStore()
     await store.loadTags()
-    expect(store.newClientTag).toBeNull()
+    expect(store.newClientTags).toEqual([])
   })
 
   it('no repite la carga salvo que se fuerce', async () => {
@@ -77,7 +77,7 @@ describe('catálogo de etiquetas', () => {
     expect(getTags).toHaveBeenCalledTimes(2)
   })
 
-  it('al crear con el flag, ninguna otra sigue contando como nuevo', async () => {
+  it('al crear con el flag conserva las etiquetas ya marcadas', async () => {
     getTags.mockResolvedValue([
       tag({ id: 'vieja', label: 'Recurrente', counts_as_new_client: true })
     ])
@@ -94,11 +94,11 @@ describe('catálogo de etiquetas', () => {
       counts_as_new_client: true
     })
 
-    expect(store.newClientTag?.id).toBe('nueva')
-    expect(store.tagById('vieja')?.counts_as_new_client).toBe(false)
+    expect(store.newClientTags.map(t => t.id)).toEqual(['vieja', 'nueva'])
+    expect(store.tagById('vieja')?.counts_as_new_client).toBe(true)
   })
 
-  it('al editar moviendo el flag, la anterior lo pierde', async () => {
+  it('al editar el flag, la anterior lo conserva', async () => {
     getTags.mockResolvedValue([
       tag({ id: 'a', label: 'Cliente nuevo', counts_as_new_client: true }),
       tag({ id: 'b', label: 'Recurrente', position: 1 })
@@ -111,8 +111,8 @@ describe('catálogo de etiquetas', () => {
 
     await store.updateTag({ id: 'b', counts_as_new_client: true })
 
-    expect(store.newClientTag?.id).toBe('b')
-    expect(store.tagById('a')?.counts_as_new_client).toBe(false)
+    expect(store.newClientTags.map(t => t.id)).toEqual(['a', 'b'])
+    expect(store.tagById('a')?.counts_as_new_client).toBe(true)
     expect(store.tags).toHaveLength(2)
   })
 
@@ -127,7 +127,7 @@ describe('catálogo de etiquetas', () => {
 
     await store.updateTag({ id: 'b', label: 'Recurrentes' })
 
-    expect(store.newClientTag?.id).toBe('a')
+    expect(store.newClientTags.map(t => t.id)).toEqual(['a'])
   })
 
   it('borrar la saca del catálogo', async () => {

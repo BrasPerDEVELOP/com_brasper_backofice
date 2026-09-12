@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import MentionTextarea from "@/modules/notifications/presentation/MentionTextarea.vue"
+import { useRoute } from "vue-router"
 import {
   ref,
   computed,
@@ -550,6 +552,8 @@ const form = reactive<{
   commission_id: string
   status: string
   checked: boolean
+  observaciones: string
+  mentioned_user_ids: string[]
   tag_ids: string[]
   origin_amount: number
   destination_amount: number
@@ -574,6 +578,8 @@ const form = reactive<{
   commission_id: '',
   status: 'verification',
   checked: false,
+  observaciones: '',
+  mentioned_user_ids: [],
   tag_ids: [],
   origin_amount: 0,
   destination_amount: 0,
@@ -1672,6 +1678,8 @@ function resetForm() {
   form.commission_id = ''
   form.status = 'verification'
   form.checked = false
+  form.observaciones = ''
+  form.mentioned_user_ids = []
   form.tag_ids = []
   form.origin_amount = 0
   form.destination_amount = 0
@@ -2002,6 +2010,8 @@ async function hydrateEditForm(row: Transaction) {
     form.commission_id = row.commission_id ?? ''
     form.status = (row.status ?? 'verification').toLowerCase()
     form.checked = row.checked === true || (row.status ?? '').toLowerCase() === 'checked'
+    form.observaciones = row.observaciones ?? ''
+    form.mentioned_user_ids = []
     form.tag_ids = [...(row.tag_ids ?? [])]
     form.origin_amount = roundMoneyAmount(Number(row.origin_amount) || 0)
     form.destination_amount = roundMoneyAmount(Number(row.destination_amount) || 0)
@@ -2266,6 +2276,8 @@ async function submitForm() {
       checked_image: checkedImage,
       checked: form.checked,
       // Lista autoritativa: se envía siempre, también vacía (quita las etiquetas).
+      observaciones: form.observaciones,
+      mentioned_user_ids: [...form.mentioned_user_ids],
       tag_ids: [...form.tag_ids],
       ...bankMeta
     }
@@ -2644,6 +2656,11 @@ const editHeroAmounts = computed(() => {
   // parecía un recálculo en vivo al abrir el modal.
   return items
 })
+
+const notificationRoute = useRoute()
+watch(() => notificationRoute.query.transaction_id, (id) => {
+  if (typeof id === 'string' && id && authStore.hasPermission('transactions.view')) void openPreviewModal({ id })
+}, { immediate: true })
 
 async function openPreviewModal(t: Transaction | null) {
   if (!t) return
@@ -4196,6 +4213,7 @@ onActivated(() => {
             </p>
 
             <template v-else-if="previewTransaction">
+              <div v-if="previewTransaction.observaciones" class="whitespace-pre-wrap rounded border p-4 text-sm"><strong>Observaciones</strong><p>{{ previewTransaction.observaciones }}</p></div>
               <div
                 v-if="previewDetailWarning"
                 class="mx-6 mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
@@ -5386,6 +5404,7 @@ onActivated(() => {
                             :error="tagsStore.error"
                             class="mt-5"
                           />
+                          <MentionTextarea v-model="form.observaciones" v-model:mentioned-user-ids="form.mentioned_user_ids" class="mt-5" />
                         </section>
 
                         <section class="rounded-2xl border border-amber-200/60 bg-amber-50/45 p-5">
@@ -5595,6 +5614,7 @@ onActivated(() => {
               class="space-y-5"
               @submit.prevent="goCreateNext"
             >
+              <MentionTextarea v-model="form.observaciones" v-model:mentioned-user-ids="form.mentioned_user_ids" />
               <p class="text-sm leading-relaxed text-[#6b7280]">
                 Asocia el movimiento a un cliente y sus cuentas. Los montos y tasa vienen de la
                 cotización; ajústalos solo si hace falta.

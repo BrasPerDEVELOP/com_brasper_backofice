@@ -4,7 +4,7 @@
  *
  * Ventas usa las etiquetas al registrar envíos; aquí solo se administra el
  * catálogo. Dos reglas que la UI hace explícitas porque no son obvias:
- * - «Cuenta como cliente nuevo» es exclusivo: marcarlo en una lo quita de la otra.
+ * - Varias etiquetas pueden contar como cliente nuevo de forma independiente.
  * - Desactivar no es borrar: una etiqueta inactiva deja de ofrecerse al
  *   registrar, pero sigue visible en los envíos que ya la tenían.
  */
@@ -176,7 +176,7 @@ onMounted(() => {
     </div>
 
     <div
-      v-if="!tagsStore.newClientTag && tagsStore.hasLoadedOnce && tagsStore.tags.length"
+      v-if="!tagsStore.newClientTags.length && tagsStore.hasLoadedOnce && tagsStore.tags.length"
       class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
     >
       Ninguna etiqueta está marcada como «cuenta como cliente nuevo», así que el
@@ -253,8 +253,8 @@ onMounted(() => {
     </div>
 
     <p class="text-xs text-[#6b7280]">
-      Solo una etiqueta puede contar como «cliente nuevo»: al marcarla en una, se
-      desmarca de la otra. Desactivar no borra — la etiqueta deja de ofrecerse al
+      Varias etiquetas pueden contar como «cliente nuevo». Una transacción con varias
+      de ellas se cuenta una sola vez en el panel. Desactivar no borra — la etiqueta deja de ofrecerse al
       registrar, pero sigue visible en los envíos que ya la tenían.
     </p>
 
@@ -309,7 +309,7 @@ onMounted(() => {
               <span>
                 Cuenta como «cliente nuevo» en los indicadores del día
                 <span class="mt-0.5 block text-xs text-[#6b7280]">
-                  Solo una etiqueta puede tenerlo; se le quitará a la que lo tenga hoy.
+                  Puedes marcar varias etiquetas. Las demás conservarán su selección.
                 </span>
               </span>
             </label>

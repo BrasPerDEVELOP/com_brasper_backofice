@@ -1,6 +1,7 @@
 import { USER_ROLES, isAccountingRole, isAdminRole, type UserRole } from './user_roles'
 
 export const PERMISSION_MODULES = [
+  { key: 'notifications', label: 'Notificaciones', permissions: [{ key: 'notifications.view', label: 'Ver' }, { key: 'notifications.create', label: 'Publicar avisos' }] },
   {
     key: 'dashboard',
     label: 'Panel',
@@ -162,6 +163,14 @@ export const PERMISSION_MODULES = [
 export type PermissionKey =
   (typeof PERMISSION_MODULES)[number]['permissions'][number]['key']
 
+/** Effective session permissions never fall back to role defaults. */
+export function parseEffectivePermissions(value: unknown): PermissionKey[] {
+  return Array.isArray(value)
+    ? [...new Set(value.filter((p): p is PermissionKey =>
+        typeof p === 'string' && ALL_PERMISSIONS.includes(p as PermissionKey)))]
+    : []
+}
+
 export const ALL_PERMISSIONS: PermissionKey[] = PERMISSION_MODULES.flatMap((module) =>
   module.permissions.map((permission) => permission.key)
 )
@@ -184,7 +193,7 @@ const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
     'profile.update',
     'profile.change_password'
   ],
-  sales: [
+  sales: ['notifications.view',
     'dashboard.view',
     'metrics.view',
     'users.view',
@@ -205,7 +214,7 @@ const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
     'profile.update',
     'profile.change_password'
   ],
-  accounting: [
+  accounting: ['notifications.view',
     'dashboard.view',
     'metrics.view',
     'users.view',
@@ -227,7 +236,7 @@ const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
     'profile.update',
     'profile.change_password'
   ],
-  marketing: [
+  marketing: ['notifications.view',
     'dashboard.view',
     'coupons.view',
     'coupons.create',
@@ -242,7 +251,7 @@ const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
     'profile.update',
     'profile.change_password'
   ],
-  user: ['dashboard.view', 'profile.view', 'profile.update', 'profile.change_password']
+  user: ['notifications.view', 'dashboard.view', 'profile.view', 'profile.update', 'profile.change_password']
 }
 
 export function isUserRole(value: string | null | undefined): value is UserRole {
@@ -277,7 +286,7 @@ export function normalizePermissions(value: unknown, role?: string | null): Perm
         (item): item is PermissionKey => typeof item === 'string' && allowed.has(item)
       )
     : []
-  const base = parsed.length > 0 ? parsed : getDefaultPermissionsForRole(role)
+  const base = Array.isArray(value) ? parsed : getDefaultPermissionsForRole(role)
   return withGuaranteedRolePermissions(base, role)
 }
 

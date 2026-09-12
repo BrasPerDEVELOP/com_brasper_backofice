@@ -6,7 +6,7 @@ export interface TransactionTag {
   color: TagColorKey
   /** Inactiva deja de ofrecerse al registrar, pero sigue en los envíos que ya la tenían. */
   active: boolean
-  /** Solo una etiqueta puede tenerlo: es la que alimenta el conteo de clientes nuevos. */
+  /** Varias etiquetas pueden activarlo; cada transacción se cuenta una sola vez. */
   counts_as_new_client: boolean
   position: number
   created_at?: string

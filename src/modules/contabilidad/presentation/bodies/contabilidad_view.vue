@@ -39,6 +39,7 @@ import {
 import { downloadTransactionAccountingPdf } from '../../infrastructure/pdf/download_transaction_accounting_pdf'
 import { useAccountingCommissionSettingsStore } from '../controllers/use_accounting_commission_settings_store'
 import { formatAccountingMoney } from '../composables/accounting_money'
+import { useAccountingExport } from '../composables/use_accounting_export'
 import AccountingBillingDateCell from '../components/AccountingBillingDateCell.vue'
 
 const transactionsStore = useTransactionsStore()
@@ -452,6 +453,37 @@ const apiFilterParams = computed((): GetTransactionsParams => {
   return p
 })
 
+const { isExporting, exportError, exportAccountingToExcel } = useAccountingExport(
+  () => ({
+    filters: { ...apiFilterParams.value },
+    filename: transactionScope.value === 'day'
+      ? `contabilidad_${selectedDay.value}.xlsx`
+      : `contabilidad_todas_${todayDayKey()}.xlsx`
+  }),
+  [
+    { label: 'Código', value: (t) => formatTransactionCodeForDisplay(t.code) },
+    { label: 'Fecha envío', value: (t) => formatDateTime(t.send_date) },
+    { label: 'Fecha de facturación', value: (t) => formatDateTime(t.billing_date ?? undefined) },
+    { label: 'N° operación', value: (t) => t.operation_number },
+    { label: 'Cliente', value: (t) => getClientLabel(t.user_id) },
+    { label: 'Tipo de documento', value: getUserDocumentTypeLabel },
+    { label: 'Documento', value: getUserDocumentNumberLabel },
+    { label: 'Cuenta destino', value: (t) => getBankCurrencyTableLabel(t.bank_account_destination_id) },
+    { label: 'Razón social', value: transactionCompanyNameTable },
+    { label: 'Monto de envío', value: (t) => t.origin_amount },
+    { label: 'Moneda envío', value: (t) => getTransactionCurrencies(t).origin.toUpperCase() },
+    { label: 'Monto a recibir', value: (t) => t.destination_amount },
+    { label: 'Moneda destino', value: (t) => getTransactionCurrencies(t).destination.toUpperCase() },
+    { label: 'Tipo cambio', value: getTransactionExchangeRate },
+    { label: 'Descuento variable (%)', value: descuentoVariable },
+    { label: 'Comisión final interna', value: (t) => internalSaleBreakdown(t)?.net },
+    { label: 'Impuesto final interno', value: (t) => internalSaleBreakdown(t)?.tax },
+    { label: 'Venta final', value: (t) => internalSaleBreakdown(t)?.sale },
+    { label: 'Moneda comisión / impuesto / venta', value: (t) => getTransactionOriginCurrency(t).toUpperCase() },
+    { label: 'Comp. envío', value: (t) => voucherMediaHref(t.send_voucher) ? 'Sí' : 'No' },
+    { label: 'Comp. pago', value: (t) => voucherMediaHref(t.payment_voucher) ? 'Sí' : 'No' }
+  ]
+)
 /** Página actual (ya filtrada y paginada por el servidor). */
 const paginatedTransactions = computed(() => transactionsStore.transactions)
 
@@ -1123,6 +1155,17 @@ onMounted(() => {
       {{ transactionsStore.error }}
     </p>
 
+    <div class="flex flex-wrap items-center justify-end gap-3">
+      <span v-if="exportError" role="alert" class="text-sm text-[#dc3545]">{{ exportError }}</span>
+      <button
+        type="button"
+        class="rounded-lg border border-[#dbe7fb] bg-white px-4 py-2 text-sm font-medium text-brasper-indigoStrong hover:bg-[#eef5ff] disabled:cursor-not-allowed disabled:opacity-50"
+        :disabled="isExporting || transactionsStore.isLoading"
+        @click="exportAccountingToExcel"
+      >
+        {{ isExporting ? 'Exportando…' : 'Exportar Excel' }}
+      </button>
+    </div>
     <p v-if="pdfError" class="rounded-lg bg-[#dc3545]/10 px-4 py-3 text-sm text-[#dc3545]">
       {{ pdfError }}
     </p>

@@ -12,6 +12,8 @@ export type TransactionAttachmentPayload =
   | null
 
 export interface CreateTransactionPayload {
+  observaciones?: string
+  mentioned_user_ids?: string[]
   /** Opcional: el flujo permite crear sin cuenta de origen asignada. */
   bank_account_origin?: string
   bank_account_destination: string

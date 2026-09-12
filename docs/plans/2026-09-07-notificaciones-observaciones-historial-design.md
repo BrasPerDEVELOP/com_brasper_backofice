@@ -1,7 +1,7 @@
 # Plan — Notificaciones in-app, Observaciones @, Historial y permisos por usuario
 
 **Fecha:** 2026-09-07  
-**Estado:** Diseño validado (pendiente de implementación)  
+**Estado:** Implementado y validado localmente el 2026-09-11; despliegue pendiente.
 **Alcance:** `com_brasper_backofice` + `com_brasper_api`  
 **Objetivo:** bandeja de avisos en la campanita, observaciones con menciones `@Nombre` a roles internos, historial de transacciones en Usuarios, y permisos configurables también por usuario.
 
@@ -242,14 +242,30 @@ Las @menciones siguen filtrando por rol interno, no por estos permisos.
 
 ## Checklist de implementación
 
-- API: tabla `notifications` + endpoints inbox/read/avisos
-- API: permisos `notifications.view` / `notifications.create`
-- API: columna `observaciones` + `mentioned_user_ids` en TX
-- API: `users.permissions_granted` / `permissions_revoked` JSONB + `_load_permissions` con deltas y garantizados
-- API: `GUARANTEED_ROLE_PERMISSIONS` espejo de `ACCOUNTING_PERMISSION_KEYS` + test de paridad
-- FE: `hasPermission` sin bypass por rol (solo admin); `normalizePermissions` acotado a matriz de roles
-- FE: módulo notifications + campanita real
-- FE: `MentionTextarea` con `@Nombre` (solo roles internos)
-- FE: tab Historial en Usuarios
-- FE: tab/sección Acceso por usuario
+- [x] API: tabla `notifications` + endpoints inbox/read/avisos
+- [x] API: permisos `notifications.view` / `notifications.create`
+- [x] API: columna `observaciones` + `mentioned_user_ids` en TX
+- [x] API: `users.permissions_granted` / `permissions_revoked` JSONB + `_load_permissions` con deltas y garantizados
+- [x] API: `GUARANTEED_ROLE_PERMISSIONS` espejo de `ACCOUNTING_PERMISSION_KEYS` + snapshots de paridad
+- [x] FE: `hasPermission` sin bypass por rol (solo admin); `normalizePermissions` acotado a matriz de roles
+- [x] FE: módulo notifications + campanita real
+- [x] FE: `MentionTextarea` con `@Nombre` (solo roles internos)
+- [x] FE: tab Historial en Usuarios
+- [x] FE: tab/sección Acceso por usuario
+
+## Cierre y verificación local — 2026-09-11
+
+- API: 300 pruebas aprobadas en suite aislada sin R2 real; permisos, destinatarios, lectura propia, JSON/multipart de observaciones y migraciones.
+- Frontend: `pnpm run check` correcto (tipos, lint, 384 pruebas y rutas canónicas). Lint conserva 15 advertencias anteriores.
+- Build de producción con Vite correcto; conserva advertencias por tamaño de bundles.
+- Chromium: 3 pruebas con API simulada cubren bandeja, publicación/lectura, historial, guardado de acceso y campanita por permiso.
+- Login normal y social resuelven permisos por el mismo servicio. Guardar solo acceso conserva los datos de perfil.
+- Endpoints adicionales: `GET /notifications/staff`, limitado a usuarios internos activos y sin datos de contacto.
+- Migraciones 079 y 080: columnas de permisos, observaciones, notificaciones y habilitación inicial de la bandeja para roles internos.
+
+### Despliegue y límites de la validación
+
+Las migraciones se comprobaron mediante sus operaciones upgrade/downgrade y compilación SQL PostgreSQL; no se ejecutaron contra una base PostgreSQL real. Las pruebas Chromium usan respuestas simuladas. Dos pruebas de integración R2 quedan excluidas porque requieren el servicio real.
+
+Antes de publicar: aplicar `alembic upgrade head` en el entorno de despliegue con su configuración y respaldo habituales; desplegar la API y después el frontend. No se modificó producción desde esta tarea.
 

@@ -145,6 +145,8 @@ export class TransactionsApiAdapter implements TransactionsRepository {
     if (payload.checked != null) {
       formData.append('checked', payload.checked ? 'true' : 'false')
     }
+    if (payload.observaciones != null) formData.append('observaciones', payload.observaciones)
+    if (payload.mentioned_user_ids != null) formData.append('mentioned_user_ids', JSON.stringify(payload.mentioned_user_ids))
     if (payload.tag_ids != null) {
       // JSON array: el backend lo parsea con `_parse_uuid_list`. Una lista vacía
       // es significativa (deja el envío sin etiquetas), por eso se envía igual.

@@ -137,19 +137,19 @@ describe('parseUser (dominio)', () => {
     expect(user?.document_type).toBeUndefined()
   })
 
-  it('deriva permisos por rol cuando no vienen en el payload', () => {
+  it('no inventa permisos cuando no vienen en el payload', () => {
     const u = parseUser({ id: 1, role: 'admin' })
     expect(Array.isArray(u?.permissions)).toBe(true)
-    expect(u?.permissions.length).toBeGreaterThan(0)
+    expect(u?.permissions).toEqual([])
   })
 
-  it('conserva accounting.view para el rol contabilidad aunque el API no lo liste', () => {
+  it('respeta los permisos efectivos del API para contabilidad', () => {
     const u = parseUser({
       id: 1,
       role: 'accounting',
       permissions: ['dashboard.view', 'users.view']
     })
-    expect(u?.permissions).toContain('accounting.view')
+    expect(u?.permissions).not.toContain('accounting.view')
     expect(u?.permissions).toContain('dashboard.view')
   })
 })

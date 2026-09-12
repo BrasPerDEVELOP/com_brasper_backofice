@@ -1,10 +1,8 @@
 import { defineStore } from 'pinia'
 import {
   ALL_PERMISSIONS,
-  getDefaultPermissionsForRole,
   isAdminRole,
   normalizeStoredRole,
-  roleGrantsPermission,
   type PermissionKey,
   type User
 } from '../../domain/models'
@@ -61,10 +59,7 @@ export const useAuthStore = defineStore('auth', {
   getters: {
     isAuthenticated: (state) => state.user !== null,
     isAdmin: (state) => isAdminRole(state.user?.role),
-    // `parseUser` ya sustituye una lista vacía por los defaults del rol, así que
-    // aquí solo queda cubrir el caso sin usuario cargado.
-    permissions: (state) =>
-      state.user?.permissions ?? getDefaultPermissionsForRole(state.user?.role)
+    permissions: (state) => state.user?.permissions ?? []
   },
 
   actions: {
@@ -114,7 +109,7 @@ export const useAuthStore = defineStore('auth', {
     },
 
     hasPermission(permission: PermissionKey | string): boolean {
-      if (roleGrantsPermission(this.user?.role, permission)) return true
+      if (isAdminRole(this.user?.role)) return true
       return this.permissions.includes(permission)
     },
 

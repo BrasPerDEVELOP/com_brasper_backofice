@@ -16,5 +16,7 @@ export interface User {
   phone: number | null
   code_phone: string | null
   permissions: string[]
+  permissions_granted?: string[]
+  permissions_revoked?: string[]
   must_change_password: boolean
 }

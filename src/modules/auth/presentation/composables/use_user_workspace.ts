@@ -1,10 +1,10 @@
 import { computed, shallowRef, watch, type Ref } from 'vue'
 import type { LocationQuery, Router } from 'vue-router'
 
-export type UserWorkspaceTab = 'profile' | 'accounts'
+export type UserWorkspaceTab = 'profile' | 'accounts' | 'historial' | 'access'
 
 export function normalizeUserWorkspaceTab(value: unknown): UserWorkspaceTab {
-  return value === 'accounts' ? 'accounts' : 'profile'
+  return value === 'accounts' || value === 'historial' || value === 'access' ? value : 'profile'
 }
 export function queryString(value: unknown): string | null {
   const candidate = Array.isArray(value) ? value[0] : value

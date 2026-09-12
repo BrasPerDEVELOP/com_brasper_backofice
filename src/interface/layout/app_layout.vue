@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import NotificationBell from "@/modules/notifications/presentation/NotificationBell.vue";
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter, RouterLink, RouterView } from "vue-router";
 import { useAuthStore } from "@modules/auth/presentation/controllers/use_auth_store_controller";
@@ -9,8 +10,7 @@ const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 
-const messageBadgeCount = ref(2);
-const notifyBadgeCount = ref(2);
+
 
 const userInitial = computed(() => {
   const email = authStore.user?.email;
@@ -167,73 +167,7 @@ watch(showSidebar, (vis) => {
         </div>
       </div>
       <div class="flex items-center gap-1 sm:gap-2">
-        <button
-          type="button"
-          class="relative flex h-10 w-10 items-center justify-center rounded-xl text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-800"
-          title="Calendario"
-        >
-          <svg
-            class="h-5 w-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-            />
-          </svg>
-        </button>
-        <RouterLink
-          to="/app/cupones"
-          class="relative flex h-10 w-10 items-center justify-center rounded-xl text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-800"
-          title="Mensajes"
-        >
-          <svg
-            class="h-5 w-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-            />
-          </svg>
-          <span
-            v-if="messageBadgeCount > 0"
-            class="absolute right-1 top-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-brasper-indigoStrong px-1 text-[10px] font-bold leading-none text-white"
-            >{{ messageBadgeCount > 9 ? "9+" : messageBadgeCount }}</span
-          >
-        </RouterLink>
-        <button
-          type="button"
-          class="relative flex h-10 w-10 items-center justify-center rounded-xl text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-800"
-          title="Notificaciones"
-        >
-          <svg
-            class="h-5 w-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-            />
-          </svg>
-          <span
-            v-if="notifyBadgeCount > 0"
-            class="absolute right-1 top-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-brasper-indigoStrong px-1 text-[10px] font-bold leading-none text-white"
-            >{{ notifyBadgeCount > 9 ? "9+" : notifyBadgeCount }}</span
-          >
-        </button>
+        <NotificationBell v-if="authStore.hasPermission('notifications.view')" :key="authStore.user?.id" />
         <RouterLink
           to="/app/perfil"
           class="ml-1 flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-neutral-200/90 bg-gradient-to-br from-brasper-cyanLight/25 to-brasper-indigoStrong/20 text-sm font-bold text-brasper-indigoDark ring-offset-2 transition hover:ring-2 hover:ring-brasper-indigoStrong/35"

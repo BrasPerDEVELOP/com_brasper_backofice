@@ -3,7 +3,8 @@
 // duplicada en auth_api_adapter, users_management_api_adapter y (cuentas)
 // users_api_adapter. El comportamiento es idéntico al previo.
 
-import { type User, normalizePermissions, normalizeStoredRole } from '../domain/models'
+import { type User, normalizeStoredRole } from '../domain/models'
+import { parseEffectivePermissions } from '../domain/models/permissions'
 
 /**
  * Fila ligera de usuario para listados/selectores (GET /user/, name-list).
@@ -115,7 +116,9 @@ export function parseUser(data: unknown): User | null {
     role: roleNorm,
     phone: Number.isFinite(phone) ? phone : null,
     code_phone: codePhone != null ? String(codePhone) : null,
-    permissions: normalizePermissions(o.permissions, roleNorm),
+    permissions: parseEffectivePermissions(o.permissions),
+    permissions_granted: parseEffectivePermissions(o.permissions_granted),
+    permissions_revoked: parseEffectivePermissions(o.permissions_revoked),
     must_change_password: Boolean(o.must_change_password)
   }
 }

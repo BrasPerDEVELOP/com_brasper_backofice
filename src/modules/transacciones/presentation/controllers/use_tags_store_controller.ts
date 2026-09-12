@@ -56,9 +56,9 @@ export const useTagsStore = defineStore('transaction-tags', {
       (state) =>
       (id: string): TransactionTag | undefined =>
         state.tags.find((t) => t.id === id),
-    /** Etiqueta que alimenta el conteo de clientes nuevos; `null` si nadie la tiene. */
-    newClientTag: (state): TransactionTag | null =>
-      state.tags.find((t) => t.counts_as_new_client) ?? null
+    /** Todas las etiquetas que alimentan el conteo de clientes nuevos. */
+    newClientTags: (state): TransactionTag[] =>
+      state.tags.filter((t) => t.counts_as_new_client)
   },
 
   actions: {
@@ -81,7 +81,7 @@ export const useTagsStore = defineStore('transaction-tags', {
       this.error = null
       try {
         const created = await getAdapter().createTag(payload)
-        this.tags = sortTags([...this.applyExclusiveNewFlag(created), created])
+        this.tags = sortTags([...this.tags, created])
         return created
       } catch (e) {
         this.error = errorMessageFromCatch(e, 'Error al crear la etiqueta')
@@ -96,7 +96,7 @@ export const useTagsStore = defineStore('transaction-tags', {
       this.error = null
       try {
         const updated = await getAdapter().updateTag(payload)
-        const rest = this.applyExclusiveNewFlag(updated).filter(
+        const rest = this.tags.filter(
           (t) => t.id !== updated.id
         )
         this.tags = sortTags([...rest, updated])
@@ -118,18 +118,6 @@ export const useTagsStore = defineStore('transaction-tags', {
         this.error = errorMessageFromCatch(e, 'Error al eliminar la etiqueta')
         throw e
       }
-    },
-
-    /**
-     * Refleja en local la exclusividad que el servidor ya aplicó: si la etiqueta
-     * guardada cuenta como cliente nuevo, ninguna otra puede seguir contando.
-     * Sin esto la tabla mostraría dos ★ hasta el siguiente refresco.
-     */
-    applyExclusiveNewFlag(saved: TransactionTag): TransactionTag[] {
-      if (!saved.counts_as_new_client) return this.tags
-      return this.tags.map((t) =>
-        t.id === saved.id ? t : { ...t, counts_as_new_client: false }
-      )
     }
   }
 })

@@ -473,9 +473,54 @@
  },
  {
   "method": "GET",
+  "path": "/metrics/overview",
+  "permissions": [
+   "metrics.view"
+  ]
+ },
+ {
+  "method": "GET",
   "path": "/metrics/weekly",
   "permissions": [
    "metrics.view"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/notifications",
+  "permissions": [
+   "notifications.view"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/notifications/avisos",
+  "permissions": [
+   "notifications.create"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/notifications/read-all",
+  "permissions": [
+   "notifications.view"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/notifications/staff",
+  "permissions": [
+   "notifications.create",
+   "notifications.view",
+   "transactions.create",
+   "transactions.update"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/notifications/{notification_id}/read",
+  "permissions": [
+   "notifications.view"
   ]
  },
  {
@@ -492,6 +537,7 @@
   "method": "GET",
   "path": "/roles/permissions",
   "permissions": [
+   "roles.permissions.update",
    "roles.permissions.view"
   ]
  },

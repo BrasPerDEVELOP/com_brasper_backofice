@@ -28,10 +28,10 @@ describe('auth store permissions', () => {
     setActivePinia(createPinia())
   })
 
-  it('lets the accounting role open Contabilidad even if accounting.view is missing from the list', () => {
+  it('uses only the effective list for accounting', () => {
     const store = useAuthStore()
     store.user = user({ role: 'accounting', permissions: ['dashboard.view'] })
-    expect(store.hasPermission('accounting.view')).toBe(true)
+    expect(store.hasPermission('accounting.view')).toBe(false)
   })
 
   it('does not let sales open Contabilidad without accounting.view', () => {

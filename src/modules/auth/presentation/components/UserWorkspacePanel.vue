@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useAuthStore } from '../controllers/use_auth_store_controller'
+import UserTransactionHistory from './UserTransactionHistory.vue'
+import UserAccessPanel from './UserAccessPanel.vue'
 import type { UserListItem } from '../../infrastructure/adapters/users_management_api_adapter'
 import { USER_ROLE_LABELS } from '../../domain/models'
 import UserBankAccountsPanel from '@/modules/cuentas-bancarias/presentation/components/UserBankAccountsPanel.vue'
@@ -31,6 +34,9 @@ const emit = defineEmits<{
   deleteAccount: [account: BankAccount]
 }>()
 
+const auth = useAuthStore()
+const canViewHistory = computed(() => auth.hasPermission('users.view') && auth.hasPermission('transactions.view'))
+const canEditAccess = computed(() => props.user && ['sales', 'accounting', 'marketing', 'user'].includes(props.user.role ?? '') && props.user.id !== auth.user?.id && auth.hasPermission('users.update') && auth.hasPermission('roles.permissions.update'))
 const isClient = computed(() => ['client', 'cliente'].includes((props.user?.role ?? '').toLowerCase()))
 const accountGroup = computed<UserBankAccountGroup | null>(() => {
   if (!props.user || !isClient.value) return null
@@ -70,10 +76,14 @@ const primaryIdentification = computed(
         <nav class="mt-4 flex gap-1" aria-label="Detalle del usuario">
           <button type="button" class="rounded-lg px-3 py-2 text-sm font-medium" :class="tab === 'profile' ? 'bg-[#eef2ff] text-brasper-indigoStrong' : 'text-[#6b7280] hover:bg-[#f9fafb]'" @click="emit('update:tab', 'profile')">Datos</button>
           <button v-if="isClient && canViewAccounts" type="button" class="rounded-lg px-3 py-2 text-sm font-medium" :class="tab === 'accounts' ? 'bg-[#eef2ff] text-brasper-indigoStrong' : 'text-[#6b7280] hover:bg-[#f9fafb]'" @click="emit('update:tab', 'accounts')">Cuentas bancarias</button>
+          <button v-if="canViewHistory" type="button" class="rounded-lg px-3 py-2 text-sm" @click="emit('update:tab', 'historial')">Historial</button>
+          <button v-if="canEditAccess" type="button" class="rounded-lg px-3 py-2 text-sm" @click="emit('update:tab', 'access')">Acceso</button>
         </nav>
       </header>
 
-      <div v-if="tab === 'profile' || !isClient || !canViewAccounts" class="space-y-4 p-5">
+      <UserTransactionHistory v-if="tab === 'historial' && canViewHistory" :user-id="user.id" />
+      <UserAccessPanel v-else-if="tab === 'access' && canEditAccess" :key="user.id" :user-id="user.id" :role="user.role ?? ''" />
+      <div v-else-if="tab !== 'accounts' || !isClient || !canViewAccounts" class="space-y-4 p-5">
         <dl class="space-y-3 text-sm">
           <div><dt class="text-xs font-semibold uppercase text-[#9ca3af]">Rol</dt><dd class="mt-1 font-medium text-[#374151]">{{ USER_ROLE_LABELS[user.role as keyof typeof USER_ROLE_LABELS] ?? user.role ?? '—' }}</dd></div>
           <div><dt class="text-xs font-semibold uppercase text-[#9ca3af]">Identificación principal</dt><dd class="mt-1 font-medium text-[#374151]">{{ primaryIdentification ? `${primaryIdentification.document_type.toUpperCase()} ${primaryIdentification.document_number}` : 'No registrada' }}</dd></div>

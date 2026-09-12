@@ -238,9 +238,11 @@ export const useTransactionsStore = defineStore('transactions', {
      * el mismo conjunto que anuncia el contador de resultados. No toca el
      * estado del store para no pisar la tabla mientras se descarga.
      */
-    async fetchAllForExport(params?: GetTransactionsParams): Promise<Transaction[]> {
+    async fetchAllForExport(params?: GetTransactionsParams, options?: Pick<LoadTransactionsOptions, 'accounting'>): Promise<Transaction[]> {
       const repo = getTransactionsRepository()
-      const useCase = new GetTransactionsUseCase(repo)
+      const useCase = options?.accounting
+        ? new GetAccountingTransactionsUseCase(repo)
+        : new GetTransactionsUseCase(repo)
       const { skip: _skip, limit: _limit, ...filters } = params ?? {}
       const all: Transaction[] = []
       let skip = 0

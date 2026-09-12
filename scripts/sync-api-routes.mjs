@@ -28,7 +28,7 @@ if (!existsSync(apiRepo)) {
 // sistema es el único que puede importar la app.
 const python =
   process.env.API_PYTHON ??
-  ['venv/bin/python', '.venv/bin/python', 'python3']
+  ['venv/bin/python', '.venv/bin/python', '.venv/Scripts/python.exe', 'python3']
     .map((candidate) => (candidate.includes('/') ? join(apiRepo, candidate) : candidate))
     .find((candidate) => candidate === 'python3' || existsSync(candidate))
 
@@ -38,6 +38,7 @@ const script = `
 import json, os, sys
 sys.path.insert(0, ${JSON.stringify(apiRepo)})
 from app.main import app
+from fastapi import routing
 
 GUARDS = {
     "require_permission.<locals>.dependency",
@@ -64,7 +65,7 @@ def permissions_of(route):
     return sorted(found)
 
 rows = []
-for route in app.routes:
+for route in getattr(routing, "iter_route_contexts", lambda routes: routes)(app.routes):
     path = getattr(route, "path", None)
     methods = getattr(route, "methods", None) or []
     if not path:

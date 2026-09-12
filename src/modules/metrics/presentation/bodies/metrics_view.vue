@@ -228,7 +228,7 @@ onMounted(async () => {
         accent="#13a37f"
         :help="{
           what: 'Transacciones identificadas como captación de cliente nuevo.',
-          calculation: 'Cuenta transacciones con la etiqueta marcada como counts_as_new_client.',
+          calculation: 'Cuenta una vez cada transacción con al menos una etiqueta marcada como cliente nuevo.',
           interpretation: 'Si ninguna etiqueta tiene esa configuración, el indicador será cero.'
         }"
       />
@@ -313,7 +313,7 @@ onMounted(async () => {
         :help="{
           what: 'Evolución de captaciones identificadas por el equipo.',
           calculation:
-            'Agrupa por periodo las transacciones con la etiqueta configurada para cliente nuevo.',
+            'Agrupa por periodo las transacciones con al menos una etiqueta configurada para cliente nuevo, sin duplicarlas.',
           interpretation: 'Un aumento muestra más captaciones registradas en ese periodo.'
         }"
         @update:chart-type="chartTypes.clientes = $event"
