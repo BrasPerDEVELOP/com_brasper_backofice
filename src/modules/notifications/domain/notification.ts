@@ -1,6 +1,6 @@
 export interface Notification {
   id: string
-  type: 'aviso' | 'mention'
+  type: 'aviso' | 'aviso_html' | 'mention'
   title: string
   body: string
   entity_type: string | null
@@ -22,6 +22,9 @@ export interface NoticeInput {
   title: string
   body: string
   recipient_user_ids: string[]
+  audience?: 'users' | 'roles' | 'all'
+  roles?: string[]
+  body_format?: 'plain' | 'html'
 }
 export interface NotificationsRepository {
   inbox(page: number): Promise<Inbox>

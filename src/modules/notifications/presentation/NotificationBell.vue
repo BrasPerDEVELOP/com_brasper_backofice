@@ -3,6 +3,7 @@ import { shallowRef } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/modules/auth/presentation/controllers/use_auth_store_controller'
 import { useNotifications } from './use_notifications'
+import { safeNoticeHtml } from './notice_html'
 import NoticeForm from './NoticeForm.vue'
 import type { Notification } from '../domain/notification'
 const auth = useAuthStore()
@@ -84,7 +85,7 @@ function created() {
               @click="select(item)"
             >
               <strong class="block text-sm">{{ item.title }}</strong
-              ><span class="block whitespace-pre-wrap text-sm">{{ item.body }}</span
+              ><span v-if="item.type === 'aviso_html'" class="notice-html block text-sm" v-html="safeNoticeHtml(item.body)"></span><span v-else class="block whitespace-pre-wrap text-sm">{{ item.body }}</span
               ><time class="text-xs text-gray-500">{{
                 new Date(item.created_at).toLocaleString('es-PE')
               }}</time>

@@ -104,3 +104,5 @@ defensivos en los handlers).
 ## Plan de mejoras
 
 Ver [docs/plans/00-ROADMAP.md](docs/plans/00-ROADMAP.md).
+
+Avisos: destinatarios por usuarios, roles o todo el equipo; editor visual/HTML con formato seguro. Observaciones al final del paso Datos. La pestaña de acceso individual se muestra como Permisos.

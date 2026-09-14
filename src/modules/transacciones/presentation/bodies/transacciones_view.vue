@@ -5614,7 +5614,6 @@ onActivated(() => {
               class="space-y-5"
               @submit.prevent="goCreateNext"
             >
-              <MentionTextarea v-model="form.observaciones" v-model:mentioned-user-ids="form.mentioned_user_ids" />
               <p class="text-sm leading-relaxed text-[#6b7280]">
                 Asocia el movimiento a un cliente y sus cuentas. Los montos y tasa vienen de la
                 cotización; ajústalos solo si hace falta.
@@ -5977,6 +5976,7 @@ onActivated(() => {
                   <strong>completed</strong> en el servidor (salvo <strong>failed</strong>).
                 </p>
               </section>
+              <MentionTextarea v-model="form.observaciones" v-model:mentioned-user-ids="form.mentioned_user_ids" />
             </form>
 
             <form v-else-if="createStepIndex === 2" class="space-y-5" @submit.prevent="submitForm">

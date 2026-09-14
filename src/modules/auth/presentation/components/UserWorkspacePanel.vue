@@ -77,7 +77,7 @@ const primaryIdentification = computed(
           <button type="button" class="rounded-lg px-3 py-2 text-sm font-medium" :class="tab === 'profile' ? 'bg-[#eef2ff] text-brasper-indigoStrong' : 'text-[#6b7280] hover:bg-[#f9fafb]'" @click="emit('update:tab', 'profile')">Datos</button>
           <button v-if="isClient && canViewAccounts" type="button" class="rounded-lg px-3 py-2 text-sm font-medium" :class="tab === 'accounts' ? 'bg-[#eef2ff] text-brasper-indigoStrong' : 'text-[#6b7280] hover:bg-[#f9fafb]'" @click="emit('update:tab', 'accounts')">Cuentas bancarias</button>
           <button v-if="canViewHistory" type="button" class="rounded-lg px-3 py-2 text-sm" @click="emit('update:tab', 'historial')">Historial</button>
-          <button v-if="canEditAccess" type="button" class="rounded-lg px-3 py-2 text-sm" @click="emit('update:tab', 'access')">Acceso</button>
+          <button v-if="canEditAccess" type="button" class="rounded-lg px-3 py-2 text-sm" @click="emit('update:tab', 'access')">Permisos</button>
         </nav>
       </header>
 

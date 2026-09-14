@@ -110,7 +110,10 @@ test('bandeja, lectura y publicación de un aviso', async ({ page }) => {
   expect((await request).postDataJSON()).toEqual({
     title: 'Nuevo mensaje',
     body: 'Texto para Ana',
-    recipient_user_ids: ['staff']
+    recipient_user_ids: ['staff'],
+    audience: 'users',
+    roles: [],
+    body_format: 'html'
   })
 })
 
@@ -120,7 +123,7 @@ test('historial filtrado por usuario y guardado de acceso sin datos de perfil', 
   await mockPlan(page)
   await page.goto('/app/usuarios?user=staff&tab=historial')
   await expect(page.getByText('TX-PRUEBA')).toBeVisible()
-  await page.getByRole('button', { name: 'Acceso', exact: true }).click()
+  await page.getByRole('button', { name: 'Permisos', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Guardar acceso' })).toBeVisible()
   const request = page.waitForRequest(
     (r) => new URL(r.url()).pathname === '/user' && r.method() === 'PUT'
@@ -139,3 +142,24 @@ test('sin permiso de notificaciones no muestra campanita', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Usuarios y cuentas' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Notificaciones', exact: true })).toHaveCount(0)
 })
+
+for (const audience of ['roles', 'all']) {
+  test(`aviso HTML para ${audience}`, async ({ page }) => {
+    await mockPlan(page)
+    await page.goto('/app/usuarios')
+    await page.getByRole('button', { name: 'Notificaciones', exact: true }).click()
+    await page.getByRole('button', { name: 'Nuevo aviso' }).click()
+    await page.getByLabel('Título', { exact: true }).fill('Aviso de equipo')
+    await page.getByLabel('Enviar a', { exact: true }).selectOption(audience)
+    if (audience === 'roles') await page.getByLabel('Roles', { exact: true }).selectOption('sales')
+    await page.getByRole('button', { name: 'Código HTML', exact: true }).click()
+    await page.getByLabel('Código HTML del mensaje').fill('<p onclick="alert(1)"><strong>Equipo</strong></p><img src=x onerror=alert(1)>')
+    await page.getByRole('button', { name: 'Editor visual', exact: true }).click()
+    const editor = page.getByRole('textbox', { name: 'Mensaje', exact: true })
+    await expect(editor.locator('strong')).toHaveText('Equipo')
+    await expect(editor.locator('img, [onclick]')).toHaveCount(0)
+    const request = page.waitForRequest(r => r.url().endsWith('/notifications/avisos') && r.method() === 'POST')
+    await page.getByRole('button', { name: 'Publicar aviso' }).click()
+    expect((await request).postDataJSON()).toMatchObject({ audience, roles: audience === 'roles' ? ['sales'] : [], recipient_user_ids: [], body_format: 'html' })
+  })
+}
