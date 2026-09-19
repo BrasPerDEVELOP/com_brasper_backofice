@@ -1,5 +1,5 @@
 #!/bin/sh
-# Capa 1 Stemis — bloquea el push si `npm run check` falla (typecheck + lint + test).
+# Capa 1 Stemis — bloquea el push si `pnpm run check` falla (typecheck + lint + test).
 # Emergencias: SKIP_PREPUSH=1 git push
 if [ "$SKIP_PREPUSH" = "1" ]; then
   echo "pre-push: omitido (SKIP_PREPUSH=1)"
@@ -8,7 +8,7 @@ fi
 
 # Clientes GUI (GitHub Desktop, SourceTree, IDEs) no cargan el perfil del shell,
 # así que un node instalado con nvm/homebrew no está en el PATH del hook.
-if ! command -v npm >/dev/null 2>&1; then
+if ! command -v pnpm >/dev/null 2>&1; then
   # nvm: usa la versión del .nvmrc si existe, si no la default, si no la última.
   export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
   if [ -s "$NVM_DIR/nvm.sh" ]; then
@@ -18,16 +18,17 @@ if ! command -v npm >/dev/null 2>&1; then
   fi
   # Homebrew (Apple Silicon e Intel) y node del sistema.
   for dir in /opt/homebrew/bin /usr/local/bin; do
-    [ -x "$dir/npm" ] && PATH="$dir:$PATH"
+    [ -x "$dir/pnpm" ] && PATH="$dir:$PATH"
   done
   export PATH
 fi
 
-if ! command -v npm >/dev/null 2>&1; then
-  echo "pre-push: no encuentro npm en el PATH."
+if ! command -v pnpm >/dev/null 2>&1; then
+  echo "pre-push: no encuentro pnpm en el PATH."
   echo "  PATH=$PATH"
-  echo "  Haz el push desde la terminal, o usa SKIP_PREPUSH=1 git push."
+  echo "  Instala con: corepack enable && corepack prepare pnpm@10.15.1 --activate"
+  echo "  O haz el push desde la terminal, o usa SKIP_PREPUSH=1 git push."
   exit 1
 fi
 
-npm run check
+pnpm run check

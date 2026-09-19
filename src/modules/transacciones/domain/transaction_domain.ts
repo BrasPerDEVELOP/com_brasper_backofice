@@ -357,7 +357,8 @@ export interface SpecialDiscountCatalogLookup {
     coin_b: string;
     percentage: number;
     min_amount: number;
-    max_amount: number;
+    /** `null` = tramo "a más", sin límite superior. */
+    max_amount: number | null;
   }>;
   taxRates: Array<{
     id: string;
@@ -387,7 +388,9 @@ function pickCommissionBracketForAmount(
 ): SpecialDiscountCatalogLookup["commissions"][number] | null {
   if (pairCommissions.length === 0) return null;
   const match = pairCommissions.find(
-    (c) => grossSend >= c.min_amount && grossSend <= c.max_amount,
+    (c) =>
+      grossSend >= c.min_amount &&
+      (c.max_amount == null || grossSend <= c.max_amount),
   );
   return match ?? pairCommissions[pairCommissions.length - 1] ?? null;
 }

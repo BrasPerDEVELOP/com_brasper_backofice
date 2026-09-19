@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test'
 
 /**
  * Fase D — Activar cuando @playwright/test esté instalado:
- *   npm install -D @playwright/test && npx playwright install chromium
+ *   pnpm add -D @playwright/test && pnpm exec playwright install chromium
  */
 export default defineConfig({
   testDir: './e2e',
@@ -17,7 +17,7 @@ export default defineConfig({
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
-    command: 'npm run dev',
+    command: 'pnpm run dev',
     url: 'http://localhost:5173',
     reuseExistingServer: !process.env.CI,
   },

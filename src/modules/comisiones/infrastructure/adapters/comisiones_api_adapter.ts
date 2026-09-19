@@ -1,12 +1,26 @@
 import { apiClient } from '@/interface/api/client'
 import { Domain } from '@/interface/infrastructure/services'
-import type { ComisionesRepository } from './comisiones_repository'
+import type {
+  ComisionesRepository,
+  CommissionCreateBody,
+  CommissionUpdateBody
+} from './comisiones_repository'
 import type { Commission, CommissionHistoryEntry, CommissionResource } from '../../domain/models'
+
+/**
+ * `max_amount` nulo o ausente significa "sin límite superior" y se conserva
+ * como `null`. Antes se convertía a `0`, lo que rompía el tramo "a más":
+ * la calculadora nunca lo elegía y editarlo lo guardaba con máximo 0.
+ */
+function parseOptionalAmount(value: unknown): number | null {
+  if (value == null || value === '') return null
+  const n = Number(value)
+  return Number.isNaN(n) ? null : n
+}
 
 function parseCommission(item: Record<string, unknown>): Commission {
   const percentage = Number(item.percentage ?? 0)
   const minAmount = Number(item.min_amount ?? 0)
-  const maxAmount = Number(item.max_amount ?? 0)
   return {
     id: String(item.id ?? ''),
     coin_a: String(item.coin_a ?? '').toUpperCase(),
@@ -14,7 +28,7 @@ function parseCommission(item: Record<string, unknown>): Commission {
     percentage: Number.isNaN(percentage) ? 0 : percentage,
     reverse: String(item.reverse ?? '0'),
     min_amount: Number.isNaN(minAmount) ? 0 : minAmount,
-    max_amount: Number.isNaN(maxAmount) ? 0 : maxAmount,
+    max_amount: parseOptionalAmount(item.max_amount),
     created_at: typeof item.created_at === 'string' ? item.created_at : undefined,
     created_by: item.created_by === null ? null : String(item.created_by ?? ''),
     updated_at: typeof item.updated_at === 'string' ? item.updated_at : undefined
@@ -59,33 +73,19 @@ export class ComisionesApiAdapter implements ComisionesRepository {
     return parseCommissions(data)
   }
 
-  async createCommission(payload: {
-    coin_a: string
-    coin_b: string
-    percentage: string
-    reverse: string
-    min_amount: string
-    max_amount: string
-  }): Promise<Commission> {
+  async createCommission(payload: CommissionCreateBody): Promise<Commission> {
     const url = this.endpoint()
     const response = await apiClient.post<unknown>(url, payload)
     return parseCommission(
       response.data != null && typeof response.data === 'object'
         ? (response.data as Record<string, unknown>)
-        : {
-            id: '',
-            ...payload
-          }
+        : { id: '', ...payload }
     )
   }
 
-  async updateCommission(
-    id: string,
-    body: import('./comisiones_repository').CommissionUpdateBody
-  ): Promise<Commission> {
+  async updateCommission(id: string, body: CommissionUpdateBody): Promise<Commission> {
     const url = this.endpoint()
-    const requestBody: import('./comisiones_repository').CommissionUpdateBody = { ...body }
-    requestBody.id = id
+    const requestBody: CommissionUpdateBody = { ...body, id }
     const response = await apiClient.put<unknown>(url, requestBody)
     return parseCommission(
       response.data != null && typeof response.data === 'object'

@@ -674,8 +674,9 @@ function salesCommissionPercentage(t: Transaction): number | null {
   const amount = Number(t.origin_amount)
   const bracket =
     Number.isFinite(amount) && amount > 0
-      ? (pair.find((c) => amount >= c.min_amount && amount <= c.max_amount) ??
-        pair[pair.length - 1])
+      ? (pair.find(
+          (c) => amount >= c.min_amount && (c.max_amount == null || amount <= c.max_amount)
+        ) ?? pair[pair.length - 1])
       : pair[0]
   const n = Number(bracket?.percentage)
   return Number.isFinite(n) ? n : null

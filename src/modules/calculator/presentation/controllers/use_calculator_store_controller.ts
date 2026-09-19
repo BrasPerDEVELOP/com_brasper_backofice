@@ -5,26 +5,23 @@ import type { CurrencyReadDTO } from '../../infrastructure/adapters/calculator_r
 import { getCurrencyPairKey, CURRENCY_OPTIONS } from '../../domain/models'
 import { LoadCalculatorDataUseCase } from '../../application/use_cases'
 import { CalculatorApiAdapter } from '../../infrastructure/adapters'
+import { findRangeForAmount, sortRanges } from '@modules/comisiones/domain/commission_ranges'
 
-/** Tramo de comisión según monto bruto enviado (origen). */
+/**
+ * Tramo de comisión según monto bruto enviado (origen). La lógica pura vive
+ * en el dominio de comisiones para que el panel de configuración, la
+ * calculadora y contabilidad elijan siempre el mismo tramo (`max_amount`
+ * nulo = sin límite superior).
+ */
 function sortCommissionBrackets(commissions: CommissionRange[]): CommissionRange[] {
-  return [...commissions].sort(
-    (a, b) => a.min_amount - b.min_amount || a.max_amount - b.max_amount
-  )
+  return sortRanges(commissions)
 }
 
 function pickCommissionBracket(
   grossSend: number,
   pairCommissions: CommissionRange[]
 ): CommissionRange | null {
-  if (pairCommissions.length === 0) return null
-  const sorted = sortCommissionBrackets(pairCommissions)
-  const match = sorted.find(
-    (c) => grossSend >= c.min_amount && grossSend <= c.max_amount
-  )
-  if (match) return match
-  if (grossSend < sorted[0]!.min_amount) return sorted[0]!
-  return sorted[sorted.length - 1]!
+  return findRangeForAmount(pairCommissions, grossSend)
 }
 
 /**
@@ -45,7 +42,7 @@ function resolveGrossFromReceive(
     const p = c.percentage / 100
     if (p >= 1) continue
     const S = net / (1 - p)
-    if (S + 1e-9 >= c.min_amount && S - 1e-9 <= c.max_amount) {
+    if (S + 1e-9 >= c.min_amount && (c.max_amount == null || S - 1e-9 <= c.max_amount)) {
       candidates.push(S)
     }
   }
@@ -516,10 +513,15 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
       return Math.min(...pair.map((c) => c.min_amount))
     },
 
+    /**
+     * Mayor máximo finito del par. Si el único tramo es abierto ("a más"),
+     * no hay tope real y se devuelve el valor por defecto de la UI.
+     */
     maxAmount(_state): number {
       const pair = this.commissionsForPair
-      if (pair.length === 0) return 50000
-      return Math.max(...pair.map((c) => c.max_amount))
+      const finite = pair.map((c) => c.max_amount).filter((m): m is number => m != null)
+      if (finite.length === 0) return 50000
+      return Math.max(...finite)
     }
   },
 

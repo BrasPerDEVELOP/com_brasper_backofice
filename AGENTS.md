@@ -15,7 +15,7 @@ Vue 3 + TypeScript + Pinia + Vite. Backoffice Brasper (API Django externa). Clea
 Mapa módulos: [FEATURE_MAP.md](FEATURE_MAP.md)  
 Prompts Cursor: [docs/PROMPT-FASES.md](docs/PROMPT-FASES.md)
 
-**Gate local:** `npm run check` antes de cada PR.
+**Gate local:** `pnpm run check` antes de cada PR.
 
 ## Skills (`.agents/skills/` y `.cursor/skills/`)
 
@@ -30,7 +30,7 @@ Prompts Cursor: [docs/PROMPT-FASES.md](docs/PROMPT-FASES.md)
 
 | Capa | Estado | Qué |
 |------|--------|-----|
-| 1 Local | A ✅ / D 🔲 husky | `npm run check` |
+| 1 Local | A ✅ / D 🔲 husky | `pnpm run check` |
 | 2 CI PR | A ✅ | `.github` + `.gitea/workflows/ci.yml` |
 | 3 Gate merge | D 🔲 | Playwright + tests permisos |
 | 4 Deploy | D 🔲 | `scripts/smoke.sh` |
@@ -64,5 +64,5 @@ modules/*/presentation/bodies/*_view.vue  → orquestador (<500 líneas objetivo
 ## Invocación Cursor
 
 ```
-Implementa Fase B según docs/plans/FASE-B.md. npm run check verde. Sin diseño visual.
+Implementa Fase B según docs/plans/FASE-B.md. pnpm run check verde. Sin diseño visual.
 ```

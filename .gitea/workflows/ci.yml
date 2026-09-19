@@ -15,15 +15,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.1
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm run lint
-      - run: npm run test
-      - run: npm run build
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run typecheck
+      - run: pnpm run lint
+      - run: pnpm run test
+      - run: pnpm run build
 
   e2e:
     name: e2e (Playwright)
@@ -33,13 +36,16 @@ jobs:
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.1
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm run test:e2e
         env:
           E2E_BASE_URL: http://localhost:5173
           E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}

@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "backoffice-dev",
-      "runtimeExecutable": "npm",
+      "runtimeExecutable": "pnpm",
       "runtimeArgs": [
         "run",
         "dev"
@@ -25,9 +25,9 @@
     },
     {
       "name": "www-dev",
-      "runtimeExecutable": "npm",
+      "runtimeExecutable": "pnpm",
       "runtimeArgs": [
-        "--prefix",
+        "--dir",
         "/Users/nito/Documents/GitHub/com_brasper_www",
         "run",
         "dev"

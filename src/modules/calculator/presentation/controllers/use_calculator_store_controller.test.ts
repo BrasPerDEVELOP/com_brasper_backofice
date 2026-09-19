@@ -154,6 +154,48 @@ describe('selección de tramo de comisión fuera de los límites configurados', 
     expect(store.selectedCommissionId).toBe('cm-high')
     expect(store.result?.commissionRate).toBe(2.5)
   })
+
+  describe('tramo "a más" (max_amount null)', () => {
+    const openBracket: CommissionRange = {
+      ...COMMISSION_PEN_BRL,
+      id: 'cm-open',
+      percentage: 1.5,
+      min_amount: 10_001,
+      max_amount: null
+    }
+
+    function storeWithOpenBracket() {
+      const store = useCalculatorStore()
+      seed(store, { commissions: [openBracket, higherBracket, lowerBracket] })
+      return store
+    }
+
+    it('un monto grande cae en el tramo abierto', () => {
+      const store = storeWithOpenBracket()
+      store.setAmountSend(250_000)
+      expect(store.currentCommission?.id).toBe('cm-open')
+      expect(store.result?.commissionRate).toBe(1.5)
+    })
+
+    it('el tramo abierto no captura montos por debajo de su mínimo', () => {
+      const store = storeWithOpenBracket()
+      store.setAmountSend(5_000)
+      expect(store.currentCommission?.id).toBe('cm-high')
+    })
+
+    it('al indicar cuánto recibe, resuelve el bruto dentro del tramo abierto', () => {
+      const store = storeWithOpenBracket()
+      // bruto 200 000 al 1.5 % → neto 197 000 × 1.438
+      store.setAmountReceive(197_000 * 1.438)
+      expect(store.currentCommission?.id).toBe('cm-open')
+      expect(store.result?.amountSend).toBeCloseTo(200_000, 3)
+    })
+
+    it('maxAmount devuelve el mayor máximo finito, ignorando el tramo abierto', () => {
+      const store = storeWithOpenBracket()
+      expect(store.maxAmount).toBe(10_000)
+    })
+  })
 })
 
 describe('setCalculationMode conserva overrides especiales sin afectar normal', () => {

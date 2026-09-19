@@ -4,33 +4,34 @@ Backoffice de **Brasper** (fintech de cambio de divisas). SPA en **Vue 3 + TypeS
 
 ## Requisitos
 
-- **Node.js 22+** y **npm** (el proyecto usa `package-lock.json`; no usar pnpm/yarn).
+- **Node.js 22+** y **pnpm 10.15+** (el proyecto usa `pnpm-lock.yaml`; no usar npm/yarn).
+- Si no tienes pnpm: `corepack enable && corepack prepare pnpm@10.15.1 --activate`
 
 ## Setup
 
 ```bash
-npm ci                # instalar dependencias (reproducible, desde el lockfile)
+pnpm install          # instalar dependencias (reproducible, desde el lockfile)
 cp .env.example .env  # si existe; configurar variables VITE_* (ver más abajo)
-npm run dev           # servidor de desarrollo (Vite + PWA)
+pnpm run dev          # servidor de desarrollo (Vite + PWA)
 ```
 
 ## Scripts
 
-| Script                 | Qué hace                                      |
-| ---------------------- | --------------------------------------------- |
-| `npm run dev`          | Servidor de desarrollo (Vite + PWA)           |
-| `npm run build`        | Type-check (`vue-tsc`) + build de producción  |
-| `npm run preview`      | Previsualizar el build de producción          |
-| `npm run typecheck`    | Solo verificación de tipos (`vue-tsc -b`)     |
-| `npm run lint`         | ESLint (Vue 3 + TS, flat config)              |
-| `npm run lint:fix`     | ESLint con autofix                            |
-| `npm run format`       | Prettier (escribe cambios)                    |
-| `npm run format:check` | Prettier en modo verificación                 |
-| `npm run test`         | Vitest una sola vez (CI)                      |
-| `npm run test:watch`   | Vitest en modo watch                          |
-| `npm run check`        | **Gate local**: `typecheck` + `lint` + `test` |
+| Script                  | Qué hace                                      |
+| ----------------------- | --------------------------------------------- |
+| `pnpm run dev`          | Servidor de desarrollo (Vite + PWA)           |
+| `pnpm run build`        | Type-check (`vue-tsc`) + build de producción  |
+| `pnpm run preview`      | Previsualizar el build de producción          |
+| `pnpm run typecheck`    | Solo verificación de tipos (`vue-tsc -b`)     |
+| `pnpm run lint`         | ESLint (Vue 3 + TS, flat config)              |
+| `pnpm run lint:fix`     | ESLint con autofix                            |
+| `pnpm run format`       | Prettier (escribe cambios)                    |
+| `pnpm run format:check` | Prettier en modo verificación                 |
+| `pnpm run test`         | Vitest una sola vez (CI)                      |
+| `pnpm run test:watch`   | Vitest en modo watch                          |
+| `pnpm run check`        | **Gate local**: `typecheck` + `lint` + `test` |
 
-Antes de abrir un PR: `npm run check` en verde.
+Antes de abrir un PR: `pnpm run check` en verde.
 
 ## Arquitectura
 
@@ -104,7 +105,7 @@ npx vitest run src/modules/calculator/presentation/controllers/use_calculator_st
 Mapa módulos: [`FEATURE_MAP.md`](FEATURE_MAP.md)  
 Prompts para Cursor: [`docs/PROMPT-FASES.md`](docs/PROMPT-FASES.md)
 
-Antes de codear una fase: leer su doc y correr `npm run check`.
+Antes de codear una fase: leer su doc y correr `pnpm run check`.
 
 ## Documentación relacionada
 

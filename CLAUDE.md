@@ -5,15 +5,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-npm run dev       # Start dev server (Vite + PWA)
-npm run build     # Type-check with vue-tsc, then Vite build
-npm run preview   # Preview production build locally
-npx vitest        # Run all tests (watch mode)
-npx vitest run    # Run tests once (CI mode)
-npx vitest run src/modules/calculator/presentation/controllers/use_calculator_store_controller.test.ts  # Run single test file
+pnpm run dev       # Start dev server (Vite + PWA)
+pnpm run build     # Type-check with vue-tsc, then Vite build
+pnpm run preview   # Preview production build locally
+pnpm run test      # Run all tests once (CI mode)
+pnpm run test:watch  # Vitest watch mode
+pnpm run test -- src/modules/calculator/presentation/controllers/use_calculator_store_controller.test.ts  # Single test file
 ```
 
-Vitest is configured in `vitest.config.ts` with `environment: 'node'`. Tests use `@pinia/testing` via `setActivePinia(createPinia())` in `beforeEach`. There is no `test` npm script — invoke via `npx vitest`.
+Vitest is configured in `vitest.config.ts` with `environment: 'node'`. Tests use `@pinia/testing` via `setActivePinia(createPinia())` in `beforeEach`. Package manager: **pnpm** (`pnpm-lock.yaml`).
 
 ## Architecture
 

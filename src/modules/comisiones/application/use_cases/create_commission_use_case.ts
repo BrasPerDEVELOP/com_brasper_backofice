@@ -1,17 +1,13 @@
-import type { ComisionesRepository } from '../../infrastructure/adapters/comisiones_repository'
+import type {
+  ComisionesRepository,
+  CommissionCreateBody
+} from '../../infrastructure/adapters/comisiones_repository'
 import type { Commission } from '../../domain/models'
 
 export class CreateCommissionUseCase {
   constructor(private readonly repository: ComisionesRepository) {}
 
-  async execute(payload: {
-    coin_a: string
-    coin_b: string
-    percentage: string
-    reverse: string
-    min_amount: string
-    max_amount: string
-  }): Promise<Commission> {
+  async execute(payload: CommissionCreateBody): Promise<Commission> {
     return this.repository.createCommission(payload)
   }
 }

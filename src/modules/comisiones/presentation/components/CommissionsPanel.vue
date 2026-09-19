@@ -1,9 +1,22 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useAuthStore } from '@modules/auth/presentation/controllers/use_auth_store_controller'
 import { ConfirmDialog } from '@interface/widgets'
-import type { CommissionForm, ComisionesStoreLike } from '../controllers/use_comisiones_store_controller'
+import {
+  commissionToForm,
+  emptyCommissionForm,
+  type CommissionForm,
+  type ComisionesStoreLike
+} from '../controllers/use_comisiones_store_controller'
 import type { Commission } from '../../domain/models'
+import {
+  findRangeForAmount,
+  formatRangeBounds,
+  sortRanges,
+  suggestNextRange,
+  validateRanges,
+  type RangeIssue
+} from '../../domain/commission_ranges'
 
 const props = withDefaults(
   defineProps<{
@@ -16,22 +29,16 @@ const props = withDefaults(
 )
 
 const authStore = useAuthStore()
+const canCreateCommission = computed(() => authStore.hasPermission('commissions.create'))
 const canUpdateCommission = computed(() => authStore.hasPermission('commissions.update'))
 const canDeleteCommission = computed(() => authStore.hasPermission('commissions.delete'))
-const activePair = ref<'usd-brl' | 'brl-pen' | 'brl-usd' | 'pen-brl'>('usd-brl')
+
+type PairKey = 'usd-brl' | 'brl-pen' | 'brl-usd' | 'pen-brl'
+const activePair = ref<PairKey>('usd-brl')
 const editingId = ref<string | null>(null)
 const expandedHistoryId = ref<string | null>(null)
 
-const emptyForm: CommissionForm = {
-  coin_a: '',
-  coin_b: '',
-  percentage: '',
-  reverse: '0',
-  min_amount: '',
-  max_amount: ''
-}
-
-const editingForm = ref<CommissionForm>({ ...emptyForm })
+const editingForm = ref<CommissionForm>(emptyCommissionForm())
 
 const defaultPair = { key: 'usd-brl' as const, label: 'USD-BRL', coin_a: 'USD', coin_b: 'BRL' }
 
@@ -44,19 +51,94 @@ const pairs = [
 
 const activePairConfig = computed(() => pairs.find((p) => p.key === activePair.value) ?? defaultPair)
 
+/** Tramos del par activo ordenados por mínimo, con el abierto al final. */
 const activeCommissions = computed(() => {
   const cfg = activePairConfig.value
-  return props.store.commissions.filter(
-    (c: Commission) => c.coin_a === cfg.coin_a && c.coin_b === cfg.coin_b
+  return sortRanges(
+    props.store.commissions.filter((c: Commission) => c.coin_a === cfg.coin_a && c.coin_b === cfg.coin_b)
   )
 })
+
+/** Escalera del par: solapes y tramos abiertos mal ubicados bloquean; los huecos solo avisan. */
+const rangeValidation = computed(() => validateRanges(activeCommissions.value))
+
+function issueTouches(issue: RangeIssue, commissionId: string): boolean {
+  return issue.rangeIds.includes(commissionId)
+}
+
+function hasError(commissionId: string): boolean {
+  return rangeValidation.value.errors.some((issue) => issueTouches(issue, commissionId))
+}
+
+function hasWarning(commissionId: string): boolean {
+  return rangeValidation.value.warnings.some((issue) => issueTouches(issue, commissionId))
+}
+
+// ── Probar monto ─────────────────────────────────────────────────────────────
+
+const testAmountInput = ref('')
+
+const testAmount = computed(() => {
+  const n = Number(testAmountInput.value.trim())
+  return testAmountInput.value.trim() !== '' && Number.isFinite(n) && n >= 0 ? n : null
+})
+
+const testResult = computed<Commission | null>(() => {
+  if (testAmount.value == null) return null
+  return findRangeForAmount(activeCommissions.value, testAmount.value)
+})
+
+// ── Crear tramo ──────────────────────────────────────────────────────────────
+
+const isCreating = ref(false)
+const createForm = ref<CommissionForm>(emptyCommissionForm())
+
+function startCreating(): void {
+  if (!canCreateCommission.value) return
+  cancelEditing()
+  const cfg = activePairConfig.value
+  const suggestion = suggestNextRange(activeCommissions.value)
+  const last = activeCommissions.value[activeCommissions.value.length - 1]
+  createForm.value = {
+    ...emptyCommissionForm(),
+    coin_a: cfg.coin_a,
+    coin_b: cfg.coin_b,
+    percentage: last ? String(last.percentage) : '',
+    reverse: last ? last.reverse : '0',
+    min_amount: String(suggestion.min_amount),
+    max_amount: suggestion.max_amount == null ? '' : String(suggestion.max_amount),
+    unlimited: suggestion.max_amount == null
+  }
+  isCreating.value = true
+}
+
+function cancelCreating(): void {
+  isCreating.value = false
+  createForm.value = emptyCommissionForm()
+}
+
+async function saveNewCommission(): Promise<void> {
+  if (!canCreateCommission.value) return
+  const ok = await props.store.validateAndCreateCommission(createForm.value)
+  if (ok) cancelCreating()
+}
+
+// Al cambiar de par, se cierra cualquier formulario abierto para no guardar en el par equivocado.
+watch(activePair, () => {
+  cancelCreating()
+  cancelEditing()
+  testAmountInput.value = ''
+})
+
+// ── Formato ──────────────────────────────────────────────────────────────────
 
 function formatPercentage(value: number): string {
   if (Number.isNaN(value) || value === 0) return '0'
   return value.toFixed(2)
 }
 
-function formatAmount(value: number): string {
+function formatAmount(value: number | null): string {
+  if (value == null) return 'Sin límite'
   if (Number.isNaN(value) || value === 0) return '0'
   return new Intl.NumberFormat('es-PE', {
     minimumFractionDigits: 0,
@@ -70,22 +152,18 @@ function formatReverse(value: string): string {
   return num.toFixed(6)
 }
 
+// ── Editar tramo ─────────────────────────────────────────────────────────────
+
 function startEditing(commission: Commission): void {
   if (!canUpdateCommission.value) return
+  cancelCreating()
   editingId.value = commission.id
-  editingForm.value = {
-    coin_a: commission.coin_a,
-    coin_b: commission.coin_b,
-    percentage: String(commission.percentage),
-    reverse: commission.reverse,
-    min_amount: String(commission.min_amount),
-    max_amount: String(commission.max_amount)
-  }
+  editingForm.value = commissionToForm(commission)
 }
 
 function cancelEditing(): void {
   editingId.value = null
-  editingForm.value = { ...emptyForm }
+  editingForm.value = emptyCommissionForm()
 }
 
 async function saveCommission(id: string): Promise<void> {
@@ -93,6 +171,8 @@ async function saveCommission(id: string): Promise<void> {
   const ok = await props.store.validateAndSaveCommission(id, editingForm.value)
   if (ok) cancelEditing()
 }
+
+// ── Eliminar tramo ───────────────────────────────────────────────────────────
 
 const pendingDeleteId = ref<string | null>(null)
 const showDeleteConfirm = ref(false)
@@ -111,6 +191,8 @@ async function confirmDelete(): Promise<void> {
   await props.store.deleteCommission(id)
   if (editingId.value === id) cancelEditing()
 }
+
+// ── Historial ────────────────────────────────────────────────────────────────
 
 function getHistoryEntries(commissionId: string): Array<Record<string, unknown>> {
   return props.store.historyByCommissionId[commissionId] ?? []
@@ -165,6 +247,9 @@ async function toggleHistory(commissionId: string): Promise<void> {
 onMounted(() => {
   props.store.loadCommissions()
 })
+
+const inputClass =
+  'mt-1 w-full rounded-lg border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#333] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20 disabled:cursor-not-allowed disabled:bg-[#f3f6fb] disabled:text-[#888]'
 </script>
 
 <template>
@@ -193,66 +278,205 @@ onMounted(() => {
       </div>
 
       <div class="mt-6">
-        <h2 class="mb-3 text-lg font-semibold text-[#232b4d]">{{ activePairConfig.label }}</h2>
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <h2 class="text-lg font-semibold text-[#232b4d]">{{ activePairConfig.label }}</h2>
+          <button
+            v-if="canCreateCommission && !isCreating"
+            type="button"
+            data-testid="add-range"
+            class="cursor-pointer rounded-lg bg-gradient-to-r from-brasper-cyanLight to-brasper-indigoStrong px-3 py-2 text-sm font-semibold text-white hover:opacity-90"
+            @click="startCreating"
+          >
+            + Agregar rango
+          </button>
+        </div>
 
-        <div v-if="activeCommissions.length === 0" class="text-[#666]">
+        <!-- Escalera de tramos + probar monto -->
+        <div
+          v-if="activeCommissions.length > 0"
+          class="mb-4 grid gap-3 rounded-xl border border-[#dbe7fb] bg-white p-4 lg:grid-cols-[1fr_auto]"
+        >
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-wide text-[#666]">Escalera de tramos</p>
+            <ol class="mt-2 space-y-1 text-sm">
+              <li
+                v-for="commission in activeCommissions"
+                :key="`ladder-${commission.id}`"
+                :class="[
+                  'flex items-center justify-between gap-3 rounded-md px-2 py-1',
+                  testResult?.id === commission.id
+                    ? 'bg-brasper-indigoStrong/10 font-semibold text-brasper-indigoDark'
+                    : hasError(commission.id)
+                      ? 'bg-[#dc3545]/10 text-[#dc3545]'
+                      : hasWarning(commission.id)
+                        ? 'bg-amber-50 text-amber-800'
+                        : 'text-[#333]'
+                ]"
+              >
+                <span>{{ formatRangeBounds(commission) }}</span>
+                <span class="tabular-nums">{{ formatPercentage(commission.percentage) }}%</span>
+              </li>
+            </ol>
+          </div>
+
+          <div class="lg:w-64">
+            <label for="test-amount" class="text-xs font-semibold uppercase tracking-wide text-[#666]">
+              Probar monto
+            </label>
+            <input
+              id="test-amount"
+              v-model="testAmountInput"
+              type="text"
+              inputmode="decimal"
+              placeholder="Ej. 2500"
+              :class="inputClass"
+            />
+            <p v-if="testAmount != null && testResult" class="mt-2 text-sm text-[#333]">
+              Aplica el tramo <span class="font-semibold">{{ formatRangeBounds(testResult) }}</span> con
+              <span class="font-semibold">{{ formatPercentage(testResult.percentage) }}%</span>.
+            </p>
+            <p v-else-if="testAmountInput.trim() !== ''" class="mt-2 text-sm text-[#dc3545]">
+              Ingresa un monto válido.
+            </p>
+          </div>
+        </div>
+
+        <!-- Problemas de la escalera -->
+        <div v-if="rangeValidation.errors.length > 0" class="mb-4 space-y-1">
+          <p
+            v-for="(issue, index) in rangeValidation.errors"
+            :key="`err-${index}`"
+            class="rounded-lg bg-[#dc3545]/10 px-3 py-2 text-sm text-[#dc3545]"
+          >
+            {{ issue.message }}
+          </p>
+        </div>
+        <div v-if="rangeValidation.warnings.length > 0" class="mb-4 space-y-1">
+          <p
+            v-for="(issue, index) in rangeValidation.warnings"
+            :key="`warn-${index}`"
+            class="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800"
+          >
+            {{ issue.message }}
+          </p>
+        </div>
+
+        <!-- Formulario de creación -->
+        <div
+          v-if="isCreating"
+          data-testid="create-range-form"
+          class="mb-4 rounded-xl border border-brasper-indigoStrong/40 bg-[#f7faff] p-4"
+        >
+          <h3 class="mb-3 text-sm font-semibold text-[#232b4d]">
+            Nuevo rango {{ activePairConfig.label }}
+          </h3>
+          <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <div class="text-xs text-on-surface/70">
+              <label for="new-min_amount" class="block">Monto mínimo</label>
+              <input id="new-min_amount" v-model="createForm.min_amount" type="text" inputmode="decimal" :class="inputClass" />
+            </div>
+            <div class="text-xs text-on-surface/70">
+              <label for="new-max_amount" class="block">Monto máximo</label>
+              <input
+                id="new-max_amount"
+                v-model="createForm.max_amount"
+                type="text"
+                inputmode="decimal"
+                :disabled="createForm.unlimited"
+                :placeholder="createForm.unlimited ? 'Sin límite' : ''"
+                :class="inputClass"
+              />
+              <label class="mt-1 flex items-center gap-2 text-xs text-[#333]">
+                <input v-model="createForm.unlimited" type="checkbox" class="accent-brasper-indigoStrong" />
+                Sin límite superior ("a más")
+              </label>
+            </div>
+            <div class="text-xs text-on-surface/70">
+              <label for="new-percentage" class="block">Porcentaje</label>
+              <input id="new-percentage" v-model="createForm.percentage" type="text" inputmode="decimal" :class="inputClass" />
+            </div>
+            <div class="text-xs text-on-surface/70">
+              <label for="new-reverse" class="block">Reverse</label>
+              <input id="new-reverse" v-model="createForm.reverse" type="text" inputmode="decimal" :class="inputClass" />
+            </div>
+          </div>
+          <div class="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              class="cursor-pointer rounded-lg bg-gradient-to-r from-brasper-cyanLight to-brasper-indigoStrong px-3 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+              :disabled="store.savingId === 'new'"
+              @click.stop.prevent="saveNewCommission"
+            >
+              {{ store.savingId === 'new' ? 'Guardando...' : 'Crear rango' }}
+            </button>
+            <button
+              type="button"
+              class="rounded-lg border border-brasper-indigoStrong/30 bg-brasper-indigoStrong/10 px-3 py-2 text-sm text-brasper-indigoDark hover:bg-brasper-indigoStrong/20"
+              @click="cancelCreating"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+
+        <div v-if="activeCommissions.length === 0 && !isCreating" class="text-[#666]">
           No hay comisiones disponibles para este par.
+          <span v-if="canCreateCommission">Usa "Agregar rango" para crear el primer tramo.</span>
         </div>
 
         <div v-else class="space-y-3">
           <div
             v-for="commission in activeCommissions"
             :key="commission.id"
-            class="rounded-xl border border-[#dbe7fb] bg-[#fbfdff] p-4"
+            :class="[
+              'rounded-xl border p-4',
+              hasError(commission.id)
+                ? 'border-[#dc3545]/50 bg-[#fff6f6]'
+                : hasWarning(commission.id)
+                  ? 'border-amber-300 bg-amber-50/40'
+                  : 'border-[#dbe7fb] bg-[#fbfdff]'
+            ]"
           >
-            <div class="mb-3 flex flex-wrap items-center justify-end gap-2">
-              <button
-                v-if="showHistory"
-                type="button"
-                class="rounded-lg border border-[#bcd7ff] bg-[#eef5ff] px-3 py-1.5 text-sm font-medium text-brasper-indigoStrong hover:bg-[#e2eeff]"
-                @click="toggleHistory(commission.id)"
-              >
-                {{ expandedHistoryId === commission.id ? 'Ocultar historial' : 'Historial' }}
-              </button>
-              <button
-                v-if="canUpdateCommission && editingId !== commission.id"
-                type="button"
-                class="rounded-lg border border-brasper-indigoStrong/30 bg-brasper-indigoStrong/10 px-3 py-1.5 text-sm font-medium text-brasper-indigoDark hover:bg-brasper-indigoStrong/20"
-                @click="startEditing(commission)"
-              >
-                Editar
-              </button>
-              <button
-                v-if="canDeleteCommission"
-                type="button"
-                class="rounded-lg border border-[#dc3545]/30 bg-[#dc3545]/10 px-3 py-1.5 text-sm font-medium text-[#dc3545] hover:bg-[#dc3545]/20 disabled:opacity-60"
-                :disabled="store.deletingId === commission.id || store.savingId === commission.id"
-                @click="deleteCommission(commission.id)"
-              >
-                {{ store.deletingId === commission.id ? 'Eliminando...' : 'Eliminar' }}
-              </button>
+            <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <p class="text-sm font-semibold text-[#232b4d]">{{ formatRangeBounds(commission) }}</p>
+              <div class="flex flex-wrap items-center gap-2">
+                <button
+                  v-if="showHistory"
+                  type="button"
+                  class="rounded-lg border border-[#bcd7ff] bg-[#eef5ff] px-3 py-1.5 text-sm font-medium text-brasper-indigoStrong hover:bg-[#e2eeff]"
+                  @click="toggleHistory(commission.id)"
+                >
+                  {{ expandedHistoryId === commission.id ? 'Ocultar historial' : 'Historial' }}
+                </button>
+                <button
+                  v-if="canUpdateCommission && editingId !== commission.id"
+                  type="button"
+                  class="rounded-lg border border-brasper-indigoStrong/30 bg-brasper-indigoStrong/10 px-3 py-1.5 text-sm font-medium text-brasper-indigoDark hover:bg-brasper-indigoStrong/20"
+                  @click="startEditing(commission)"
+                >
+                  Editar
+                </button>
+                <button
+                  v-if="canDeleteCommission"
+                  type="button"
+                  class="rounded-lg border border-[#dc3545]/30 bg-[#dc3545]/10 px-3 py-1.5 text-sm font-medium text-[#dc3545] hover:bg-[#dc3545]/20 disabled:opacity-60"
+                  :disabled="store.deletingId === commission.id || store.savingId === commission.id"
+                  @click="deleteCommission(commission.id)"
+                >
+                  {{ store.deletingId === commission.id ? 'Eliminando...' : 'Eliminar' }}
+                </button>
+              </div>
             </div>
 
             <div v-if="editingId === commission.id" class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              <!-- Las monedas definen el par: mover un tramo de par se hace eliminando y creando. -->
               <div class="text-xs text-on-surface/70">
                 <label :for="`${commission.id}-coin_a`" class="block">Moneda origen</label>
-                <input
-                  :id="`${commission.id}-coin_a`"
-                  v-model="editingForm.coin_a"
-                  type="text"
-                  maxlength="3"
-                  class="mt-1 w-full rounded-lg border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#333] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
-                />
+                <input :id="`${commission.id}-coin_a`" :value="editingForm.coin_a" type="text" disabled :class="inputClass" />
               </div>
               <div class="text-xs text-on-surface/70">
                 <label :for="`${commission.id}-coin_b`" class="block">Moneda destino</label>
-                <input
-                  :id="`${commission.id}-coin_b`"
-                  v-model="editingForm.coin_b"
-                  type="text"
-                  maxlength="3"
-                  class="mt-1 w-full rounded-lg border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#333] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
-                />
+                <input :id="`${commission.id}-coin_b`" :value="editingForm.coin_b" type="text" disabled :class="inputClass" />
               </div>
               <div class="text-xs text-on-surface/70">
                 <label :for="`${commission.id}-percentage`" class="block">Porcentaje</label>
@@ -261,7 +485,7 @@ onMounted(() => {
                   v-model="editingForm.percentage"
                   type="text"
                   inputmode="decimal"
-                  class="mt-1 w-full rounded-lg border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#333] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
+                  :class="inputClass"
                 />
               </div>
               <div class="text-xs text-on-surface/70">
@@ -271,7 +495,7 @@ onMounted(() => {
                   v-model="editingForm.reverse"
                   type="text"
                   inputmode="decimal"
-                  class="mt-1 w-full rounded-lg border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#333] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
+                  :class="inputClass"
                 />
               </div>
               <div class="text-xs text-on-surface/70">
@@ -281,7 +505,7 @@ onMounted(() => {
                   v-model="editingForm.min_amount"
                   type="text"
                   inputmode="decimal"
-                  class="mt-1 w-full rounded-lg border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#333] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
+                  :class="inputClass"
                 />
               </div>
               <div class="text-xs text-on-surface/70">
@@ -291,8 +515,14 @@ onMounted(() => {
                   v-model="editingForm.max_amount"
                   type="text"
                   inputmode="decimal"
-                  class="mt-1 w-full rounded-lg border border-[#cfdbef] bg-white px-3 py-2 text-sm text-[#333] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
+                  :disabled="editingForm.unlimited"
+                  :placeholder="editingForm.unlimited ? 'Sin límite' : ''"
+                  :class="inputClass"
                 />
+                <label class="mt-1 flex items-center gap-2 text-xs text-[#333]">
+                  <input v-model="editingForm.unlimited" type="checkbox" class="accent-brasper-indigoStrong" />
+                  Sin límite superior ("a más")
+                </label>
               </div>
 
               <div class="sm:col-span-2 lg:col-span-3 mt-2 flex flex-wrap items-center gap-2">

@@ -47,7 +47,8 @@ function parseCommissions(data: unknown): CommissionRange[] {
       percentage: Number(item.percentage ?? 0),
       reverse: Boolean(item.reverse ?? false),
       min_amount: Number(item.min_amount ?? 0),
-      max_amount: Number(item.max_amount ?? 0)
+      // null = tramo "a más", sin límite superior. No convertir a 0.
+      max_amount: item.max_amount == null || item.max_amount === '' ? null : Number(item.max_amount)
     }))
     .filter((c) => c.id)
 }
