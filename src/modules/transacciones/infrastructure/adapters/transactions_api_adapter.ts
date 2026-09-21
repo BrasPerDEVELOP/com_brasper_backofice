@@ -67,6 +67,10 @@ export class TransactionsApiAdapter implements TransactionsRepository {
       search.set('origin_currency', params.origin_currency.trim())
     if (params?.destination_currency?.trim())
       search.set('destination_currency', params.destination_currency.trim())
+    for (const tagId of params?.tag_ids ?? []) {
+      const id = tagId.trim()
+      if (id) search.append('tag_ids', id)
+    }
     if (typeof params?.skip === 'number' && params.skip >= 0)
       search.set('skip', String(params.skip))
     if (typeof params?.limit === 'number' && params.limit > 0)

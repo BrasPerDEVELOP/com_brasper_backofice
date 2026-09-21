@@ -47,4 +47,11 @@ describe('normalizeGetTransactionsParams', () => {
     })
     expect(out).toEqual({ skip: 10, limit: 25 })
   })
+
+  it('propaga tag_ids únicos y recortados (filtro OR)', () => {
+    const out = normalizeGetTransactionsParams({
+      tag_ids: ['  t1  ', 't2', 't1', '', '  '],
+    })
+    expect(out).toEqual({ tag_ids: ['t1', 't2'] })
+  })
 })

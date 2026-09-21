@@ -93,6 +93,11 @@ export interface GetTransactionsParams {
   origin_currency?: string | null
   /** Moneda destino de la tasa (coin_b). */
   destination_currency?: string | null
+  /**
+   * Filtro OR de etiquetas: el envío entra si tiene al menos una.
+   * El adapter lo serializa como `tag_ids` repetido, igual que métricas.
+   */
+  tag_ids?: string[] | null
   /** Paginación de servidor. */
   skip?: number | null
   limit?: number | null

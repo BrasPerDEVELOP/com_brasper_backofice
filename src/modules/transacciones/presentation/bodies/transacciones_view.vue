@@ -76,6 +76,7 @@ import { fetchUsers } from '@modules/auth/infrastructure/adapters/users_manageme
 import TransactionDestinationsEditor from '../components/TransactionDestinationsEditor.vue'
 import TableColumnResizeHandle from '../components/TableColumnResizeHandle.vue'
 import TransactionTagSelector from '../components/TransactionTagSelector.vue'
+import TransactionTagFilter from '../components/TransactionTagFilter.vue'
 import TransactionVoucherFileList from '../components/TransactionVoucherFileList.vue'
 import TransactionClientDataIndicators from '../components/TransactionClientDataIndicators.vue'
 import { useTransactionsRealtime } from '../composables/use_transactions_realtime'
@@ -347,6 +348,7 @@ const userFilter = ref<string>('')
 const bankAccountFilter = ref<string>('')
 /** Par origen-destino (p. ej. `brl-pen`); vacío = todas las monedas. */
 const currencyPairFilter = ref<string>('')
+const tagFilter = ref<string[]>([])
 const createdAtFrom = ref<string>('')
 const createdAtTo = ref<string>('')
 
@@ -1567,6 +1569,7 @@ const apiFilterParams = computed((): GetTransactionsParams => {
   if (toMs != null) p.send_date_to = new Date(toMs).toISOString()
   const q = debouncedSearch.value.trim()
   if (q) p.search = q
+  if (tagFilter.value.length) p.tag_ids = [...tagFilter.value]
   return p
 })
 
@@ -3387,6 +3390,7 @@ watch(
     transactionScope,
     selectedDay,
     debouncedSearch,
+    tagFilter,
     perPage
   ],
   () => {
@@ -3743,6 +3747,12 @@ onActivated(() => {
           </div>
         </div>
       </div>
+      <TransactionTagFilter
+        v-model="tagFilter"
+        class="mt-3"
+        :tags="tagsStore.tags"
+        :error="tagsStore.error"
+      />
     </div>
 
     <!-- Search -->

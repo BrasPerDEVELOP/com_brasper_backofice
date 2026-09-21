@@ -232,6 +232,7 @@ const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
     'commissions.create',
     'commissions.update',
     'commissions.delete',
+    'tags.view',
     'profile.view',
     'profile.update',
     'profile.change_password'
@@ -276,7 +277,7 @@ function withGuaranteedRolePermissions(
   role?: string | null
 ): PermissionKey[] {
   if (!isAccountingRole(role)) return permissions
-  return uniquePermissions([...permissions, ...ACCOUNTING_PERMISSION_KEYS])
+  return uniquePermissions([...permissions, ...ACCOUNTING_PERMISSION_KEYS, 'tags.view'])
 }
 
 export function normalizePermissions(value: unknown, role?: string | null): PermissionKey[] {

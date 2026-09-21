@@ -72,6 +72,15 @@ export function matchesCurrentFilters(tx: Transaction, filters?: GetTransactions
     }
   }
 
+  // Filtro OR de etiquetas: basta con una de las seleccionadas.
+  if (filters.tag_ids?.length) {
+    const selected = new Set(filters.tag_ids.map((id) => String(id).trim()).filter(Boolean))
+    const txTags = Array.isArray(tx.tag_ids) ? tx.tag_ids.map((id) => String(id)) : []
+    if (![...selected].some((id) => txTags.includes(id))) {
+      return false
+    }
+  }
+
   // Filtro por texto / búsqueda
   if (filters.search && filters.search.trim()) {
     const q = filters.search.trim().toLowerCase()

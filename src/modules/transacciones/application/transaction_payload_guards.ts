@@ -41,6 +41,13 @@ export function normalizeGetTransactionsParams(
   const destination_currency = trimOrUndef(
     params.destination_currency ?? undefined,
   );
+  const tag_ids = Array.from(
+    new Set(
+      (params.tag_ids ?? [])
+        .map((id) => String(id ?? '').trim())
+        .filter(Boolean),
+    ),
+  );
   if (status) o.status = status;
   if (user_id) o.user_id = user_id;
   if (bank_account_id) o.bank_account_id = bank_account_id;
@@ -55,6 +62,7 @@ export function normalizeGetTransactionsParams(
   if (currency) o.currency = currency;
   if (origin_currency) o.origin_currency = origin_currency;
   if (destination_currency) o.destination_currency = destination_currency;
+  if (tag_ids.length) o.tag_ids = tag_ids;
   if (typeof params.skip === "number" && params.skip >= 0) o.skip = params.skip;
   if (typeof params.limit === "number" && params.limit > 0)
     o.limit = params.limit;

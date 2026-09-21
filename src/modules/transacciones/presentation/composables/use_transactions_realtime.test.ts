@@ -34,4 +34,12 @@ describe('matchesCurrentFilters', () => {
     expect(matchesCurrentFilters(baseTx, { search: 'Ana' })).toBe(true)
     expect(matchesCurrentFilters(baseTx, { search: 'Inexistente' })).toBe(false)
   })
+
+  it('filtra por etiquetas con OR: basta una coincidencia', () => {
+    const tagged = { ...baseTx, tag_ids: ['nuevo', 'vip'] }
+    expect(matchesCurrentFilters(tagged, { tag_ids: ['vip'] })).toBe(true)
+    expect(matchesCurrentFilters(tagged, { tag_ids: ['referido', 'vip'] })).toBe(true)
+    expect(matchesCurrentFilters(tagged, { tag_ids: ['campaña'] })).toBe(false)
+    expect(matchesCurrentFilters(baseTx, { tag_ids: ['vip'] })).toBe(false)
+  })
 })

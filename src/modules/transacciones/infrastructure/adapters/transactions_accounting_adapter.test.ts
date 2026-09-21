@@ -66,6 +66,16 @@ describe('TransactionsApiAdapter listado contable', () => {
     expect(query.get('limit')).toBe('10')
   })
 
+  it('serializa tag_ids repetidos como OR, igual que métricas', async () => {
+    await adapter.getAccountingTransactions({
+      tag_ids: ['t1', 't2']
+    })
+
+    const url = getMock.mock.calls[0][0] as string
+    const query = new URLSearchParams(url.split('?')[1])
+    expect(query.getAll('tag_ids')).toEqual(['t1', 't2'])
+  })
+
   it('mapea accounting_percentage (descuento variable) al modelo', async () => {
     const { items, total } = await adapter.getAccountingTransactions()
 

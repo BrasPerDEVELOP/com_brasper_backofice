@@ -28,6 +28,7 @@ import {
 import AppDropdown from '@/interface/components/AppDropdown.vue'
 import AppDateInput from '@/interface/components/AppDateInput.vue'
 import TableColumnResizeHandle from '@modules/transacciones/presentation/components/TableColumnResizeHandle.vue'
+import TransactionTagFilter from '@modules/transacciones/presentation/components/TransactionTagFilter.vue'
 import { MediaViewerDialog } from '@interface/widgets'
 import { Domain } from '@/interface/infrastructure/services'
 import {
@@ -41,6 +42,7 @@ import { useAccountingCommissionSettingsStore } from '../controllers/use_account
 import { formatAccountingMoney } from '../composables/accounting_money'
 import { useAccountingExport } from '../composables/use_accounting_export'
 import AccountingBillingDateCell from '../components/AccountingBillingDateCell.vue'
+import { useTagsStore } from '@modules/transacciones/presentation/controllers/use_tags_store_controller'
 
 const transactionsStore = useTransactionsStore()
 const cuentasStore = useCuentasBancariasStore()
@@ -48,12 +50,14 @@ const tasasStore = useTasasStore()
 const comisionesStore = useComisionesStore()
 const comisionesContabilidadStore = useComisionesContabilidadStore()
 const accountingCommissionSettingsStore = useAccountingCommissionSettingsStore()
+const tagsStore = useTagsStore()
 
 const searchQuery = ref('')
 const userFilter = ref<string>('')
 const bankAccountFilter = ref<string>('')
 /** Par origen-destino (p. ej. `brl-pen`); vacío = todas las monedas. */
 const currencyPairFilter = ref<string>('')
+const tagFilter = ref<string[]>([])
 const createdAtFrom = ref<string>('')
 const createdAtTo = ref<string>('')
 
@@ -450,6 +454,7 @@ const apiFilterParams = computed((): GetTransactionsParams => {
   if (toMs != null) p.send_date_to = new Date(toMs).toISOString()
   const q = debouncedSearch.value.trim()
   if (q) p.search = q
+  if (tagFilter.value.length) p.tag_ids = [...tagFilter.value]
   return p
 })
 
@@ -938,6 +943,7 @@ watch(
     transactionScope,
     selectedDay,
     debouncedSearch,
+    tagFilter,
     perPage
   ],
   () => {
@@ -967,7 +973,8 @@ onMounted(() => {
     tasasStore.loadTaxRates(),
     comisionesStore.loadCommissions(),
     comisionesContabilidadStore.loadCommissions(),
-    accountingCommissionSettingsStore.loadSettings()
+    accountingCommissionSettingsStore.loadSettings(),
+    tagsStore.loadTags()
   ])
 })
 </script>
@@ -1123,6 +1130,12 @@ onMounted(() => {
           </div>
         </div>
       </div>
+      <TransactionTagFilter
+        v-model="tagFilter"
+        class="mt-3"
+        :tags="tagsStore.tags"
+        :error="tagsStore.error"
+      />
     </div>
 
     <div class="mb-6">

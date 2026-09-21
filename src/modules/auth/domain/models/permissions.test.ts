@@ -31,6 +31,7 @@ describe('default role permissions', () => {
     expect(permissions).toContain('commissions.create')
     expect(permissions).toContain('commissions.update')
     expect(permissions).toContain('commissions.delete')
+    expect(permissions).toContain('tags.view')
   })
 
   it('gives accounting every Contabilidad permission so they can open the table', () => {
@@ -52,6 +53,7 @@ describe('normalizePermissions', () => {
     expect(permissions).toContain('dashboard.view')
     expect(permissions).toContain('commissions.view')
     expect(permissions).toEqual(expect.arrayContaining([...ACCOUNTING_PERMISSION_KEYS]))
+    expect(permissions).toContain('tags.view')
   })
 
   it('does not grant Contabilidad access to other roles from a partial API list', () => {
