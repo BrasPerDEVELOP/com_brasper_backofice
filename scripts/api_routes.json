@@ -360,6 +360,55 @@
  },
  {
   "method": "GET",
+  "path": "/finance/expense-categories",
+  "permissions": [
+   "expenses.view"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/finance/expenses",
+  "permissions": [
+   "expenses.view"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/finance/expenses",
+  "permissions": [
+   "expenses.create"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/finance/expenses",
+  "permissions": [
+   "expenses.update"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/finance/expenses/{expense_id}",
+  "permissions": [
+   "expenses.delete"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/finance/fx-rates",
+  "permissions": [
+   "fx_rates.view"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/finance/fx-rates",
+  "permissions": [
+   "fx_rates.update"
+  ]
+ },
+ {
+  "method": "GET",
   "path": "/health",
   "permissions": []
  },
@@ -470,6 +519,13 @@
   "method": "GET",
   "path": "/media/{file_path:path}",
   "permissions": []
+ },
+ {
+  "method": "GET",
+  "path": "/metrics/management",
+  "permissions": [
+   "management.view"
+  ]
  },
  {
   "method": "GET",

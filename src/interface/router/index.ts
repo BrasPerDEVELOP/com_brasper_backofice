@@ -5,6 +5,8 @@ import { useAuthStore } from '@modules/auth/presentation/controllers/use_auth_st
 function firstPermittedAppPath(authStore: ReturnType<typeof useAuthStore>): string {
   const candidates = [
     { path: '/app/dashboard', permissions: ['dashboard.view', 'metrics.view'] },
+    { path: '/app/gerencia', permission: 'management.view' },
+    { path: '/app/egresos', permissions: ['expenses.view', 'fx_rates.view'] },
     { path: '/app/usuarios', permissions: ['users.view', 'bank_accounts.view'] },
     { path: '/app/transacciones', permission: 'transactions.view' },
     { path: '/app/contabilidad', permission: 'accounting.view' },
@@ -54,6 +56,47 @@ const routes: RouteRecordRaw[] = [
         meta: {
           breadcrumb: 'Panel > Métricas',
           permissionAny: ['dashboard.view', 'metrics.view']
+        }
+      },
+      {
+        path: 'gerencia',
+        component: () => import('@modules/gerencia/presentation/bodies/gerencia_view.vue'),
+        meta: { breadcrumb: 'Gerencia > Dashboard', permission: 'management.view' },
+        children: [
+          { path: '', redirect: '/app/gerencia/envios' },
+          {
+            path: 'envios',
+            name: 'gerencia-envios',
+            component: () => import('@modules/gerencia/presentation/bodies/gerencia_envios_view.vue'),
+            meta: { breadcrumb: 'Gerencia > Envíos', permission: 'management.view' }
+          },
+          {
+            path: 'clientes',
+            name: 'gerencia-clientes',
+            component: () => import('@modules/gerencia/presentation/bodies/gerencia_clientes_view.vue'),
+            meta: { breadcrumb: 'Gerencia > Clientes', permission: 'management.view' }
+          },
+          {
+            path: 'montos',
+            name: 'gerencia-montos',
+            component: () => import('@modules/gerencia/presentation/bodies/gerencia_montos_view.vue'),
+            meta: { breadcrumb: 'Gerencia > Montos', permission: 'management.view' }
+          },
+          {
+            path: 'resultados',
+            name: 'gerencia-resultados',
+            component: () => import('@modules/gerencia/presentation/bodies/gerencia_resultados_view.vue'),
+            meta: { breadcrumb: 'Gerencia > Resultados', permission: 'management.view' }
+          }
+        ]
+      },
+      {
+        path: 'egresos',
+        name: 'egresos',
+        component: () => import('@modules/egresos/presentation/bodies/egresos_view.vue'),
+        meta: {
+          breadcrumb: 'Contabilidad > Egresos y tasas',
+          permissionAny: ['expenses.view', 'fx_rates.view']
         }
       },
       {

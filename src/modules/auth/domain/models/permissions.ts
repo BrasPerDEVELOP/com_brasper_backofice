@@ -13,6 +13,29 @@ export const PERMISSION_MODULES = [
     permissions: [{ key: 'metrics.view', label: 'Ver' }]
   },
   {
+    key: 'management',
+    label: 'Gerencia',
+    permissions: [{ key: 'management.view', label: 'Ver' }]
+  },
+  {
+    key: 'fx_rates',
+    label: 'Tasas mensuales a soles',
+    permissions: [
+      { key: 'fx_rates.view', label: 'Ver' },
+      { key: 'fx_rates.update', label: 'Registrar' }
+    ]
+  },
+  {
+    key: 'expenses',
+    label: 'Egresos',
+    permissions: [
+      { key: 'expenses.view', label: 'Ver' },
+      { key: 'expenses.create', label: 'Crear' },
+      { key: 'expenses.update', label: 'Editar' },
+      { key: 'expenses.delete', label: 'Eliminar' }
+    ]
+  },
+  {
     key: 'users',
     label: 'Usuarios',
     permissions: [
@@ -223,6 +246,13 @@ const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
     'users.delete',
     'users.reset_password',
     'accounting.view',
+    'management.view',
+    'fx_rates.view',
+    'fx_rates.update',
+    'expenses.view',
+    'expenses.create',
+    'expenses.update',
+    'expenses.delete',
     'transactions.view',
     'bank_accounts.view',
     'bank_accounts.create',

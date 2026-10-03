@@ -41,9 +41,11 @@ const showSidebar = computed(() => route.path.startsWith("/app"));
 
 const allNavItems = [
   { to: "/app/dashboard", label: "Panel", icon: "metrics", permissions: ["dashboard.view", "metrics.view"] },
+  { to: "/app/gerencia", label: "Gerencia", icon: "chart", permission: "management.view" },
   { to: "/app/usuarios", label: "Usuarios y cuentas", icon: "users", permissions: ["users.view", "bank_accounts.view"] },
   { to: "/app/transacciones", label: "Transacciones", icon: "transactions", permission: "transactions.view" },
   { to: "/app/contabilidad", label: "Contabilidad", icon: "ledger", permission: "accounting.view" },
+  { to: "/app/egresos", label: "Egresos", icon: "ledger", permissions: ["expenses.view", "fx_rates.view"] },
   { to: "/app/calculator", label: "Calculadora", icon: "calc", permission: "calculator.view" },
   { to: "/app/cupones", label: "Cupones", icon: "ticket", permission: "coupons.view" },
   { to: "/app/comisiones", label: "Comisiones", icon: "folder", permission: "commissions.view" },
