@@ -95,6 +95,90 @@
  },
  {
   "method": "GET",
+  "path": "/billing/invoices",
+  "permissions": [
+   "billing.view"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/billing/invoices/by-transactions",
+  "permissions": [
+   "billing.view"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/billing/invoices/{invoice_id}",
+  "permissions": [
+   "billing.view"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/billing/invoices/{invoice_id}/pdf",
+  "permissions": [
+   "billing.view"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/billing/invoices/{invoice_id}/refresh",
+  "permissions": [
+   "billing.view"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/billing/invoices/{invoice_id}/retry",
+  "permissions": [
+   "billing.issue"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/billing/invoices/{invoice_id}/void",
+  "permissions": [
+   "billing.void"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/billing/series/align",
+  "permissions": [
+   "billing.issue"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/billing/status",
+  "permissions": [
+   "billing.view"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/billing/transactions/{transaction_id}/invoice",
+  "permissions": [
+   "billing.view"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/billing/transactions/{transaction_id}/issue",
+  "permissions": [
+   "billing.issue"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/billing/transactions/{transaction_id}/preview",
+  "permissions": [
+   "billing.view"
+  ]
+ },
+ {
+  "method": "GET",
   "path": "/blog",
   "permissions": []
  },
@@ -143,7 +227,27 @@
  },
  {
   "method": "GET",
+  "path": "/brasper/ai/clients/{user_id}/history",
+  "permissions": []
+ },
+ {
+  "method": "GET",
+  "path": "/brasper/ai/clients/{user_id}/operations",
+  "permissions": []
+ },
+ {
+  "method": "GET",
   "path": "/brasper/ai/deposit-accounts",
+  "permissions": []
+ },
+ {
+  "method": "POST",
+  "path": "/brasper/ai/identity-links/redeem",
+  "permissions": []
+ },
+ {
+  "method": "GET",
+  "path": "/brasper/ai/identity-links/{user_id}/operations",
   "permissions": []
  },
  {
@@ -156,6 +260,16 @@
  {
   "method": "POST",
   "path": "/brasper/contact-form",
+  "permissions": []
+ },
+ {
+  "method": "DELETE",
+  "path": "/brasper/identity-links",
+  "permissions": []
+ },
+ {
+  "method": "POST",
+  "path": "/brasper/identity-links",
   "permissions": []
  },
  {

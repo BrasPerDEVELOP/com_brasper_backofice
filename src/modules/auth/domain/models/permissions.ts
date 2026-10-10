@@ -70,6 +70,15 @@ export const PERMISSION_MODULES = [
     permissions: [{ key: 'accounting.view', label: 'Ver' }]
   },
   {
+    key: 'billing',
+    label: 'Facturación electrónica',
+    permissions: [
+      { key: 'billing.view', label: 'Ver comprobantes' },
+      { key: 'billing.issue', label: 'Emitir y reintentar' },
+      { key: 'billing.void', label: 'Anular' }
+    ]
+  },
+  {
     key: 'calculator',
     label: 'Calculadora',
     permissions: [{ key: 'calculator.view', label: 'Ver' }]
@@ -246,6 +255,8 @@ const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
     'users.delete',
     'users.reset_password',
     'accounting.view',
+    'billing.view',
+    'billing.issue',
     'management.view',
     'fx_rates.view',
     'fx_rates.update',

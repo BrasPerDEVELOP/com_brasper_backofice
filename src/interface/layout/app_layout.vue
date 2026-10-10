@@ -45,6 +45,7 @@ const allNavItems = [
   { to: "/app/usuarios", label: "Usuarios y cuentas", icon: "users", permissions: ["users.view", "bank_accounts.view"] },
   { to: "/app/transacciones", label: "Transacciones", icon: "transactions", permission: "transactions.view" },
   { to: "/app/contabilidad", label: "Contabilidad", icon: "ledger", permission: "accounting.view" },
+  { to: "/app/facturacion", label: "Facturación", icon: "ledger", permission: "billing.view" },
   { to: "/app/egresos", label: "Egresos", icon: "ledger", permissions: ["expenses.view", "fx_rates.view"] },
   { to: "/app/calculator", label: "Calculadora", icon: "calc", permission: "calculator.view" },
   { to: "/app/cupones", label: "Cupones", icon: "ticket", permission: "coupons.view" },

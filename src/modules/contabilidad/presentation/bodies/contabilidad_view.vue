@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, shallowRef, watch } from 'vue'
+import { ref, computed, onBeforeUnmount, onMounted, shallowRef, watch } from 'vue'
 import { useTransactionsStore } from '@modules/transacciones/presentation/controllers/use_transactions_store_controller'
 import { useTableDragScroll } from '@modules/transacciones/presentation/composables/use_table_drag_scroll'
 import {
@@ -43,6 +43,12 @@ import { formatAccountingMoney } from '../composables/accounting_money'
 import { useAccountingExport } from '../composables/use_accounting_export'
 import AccountingBillingDateCell from '../components/AccountingBillingDateCell.vue'
 import { useTagsStore } from '@modules/transacciones/presentation/controllers/use_tags_store_controller'
+import { useAuthStore } from '@modules/auth/presentation/controllers/use_auth_store_controller'
+import type { Invoice } from '@modules/facturacion/domain/models'
+import { useBillingStore } from '@modules/facturacion/presentation/controllers/use_billing_store'
+import InvoiceCell from '@modules/facturacion/presentation/components/InvoiceCell.vue'
+import IssueInvoiceDialog from '@modules/facturacion/presentation/components/IssueInvoiceDialog.vue'
+import InvoiceDetailDialog from '@modules/facturacion/presentation/components/InvoiceDetailDialog.vue'
 
 const transactionsStore = useTransactionsStore()
 const cuentasStore = useCuentasBancariasStore()
@@ -51,6 +57,31 @@ const comisionesStore = useComisionesStore()
 const comisionesContabilidadStore = useComisionesContabilidadStore()
 const accountingCommissionSettingsStore = useAccountingCommissionSettingsStore()
 const tagsStore = useTagsStore()
+const authStore = useAuthStore()
+const billingStore = useBillingStore()
+
+/* ---- Facturación electrónica (comprobante SUNAT por operación) ---- */
+const canViewBilling = computed(() => authStore.hasPermission('billing.view'))
+const canIssueBilling = computed(() => authStore.hasPermission('billing.issue'))
+const issueDialogOpen = ref(false)
+const issueTarget = ref<Transaction | null>(null)
+const invoiceDetailOpen = ref(false)
+const invoiceDetailId = ref<string | null>(null)
+
+function openIssueDialog(t: Transaction) {
+  issueTarget.value = t
+  issueDialogOpen.value = true
+}
+
+function openInvoiceDetail(invoice: Invoice) {
+  invoiceDetailId.value = invoice.id
+  invoiceDetailOpen.value = true
+}
+
+function onInvoiceIssued(invoice: Invoice) {
+  // Abre el detalle: el operador ve que está "En SUNAT" y cómo pasa a Aceptado.
+  openInvoiceDetail(invoice)
+}
 
 const searchQuery = ref('')
 const userFilter = ref<string>('')
@@ -142,6 +173,7 @@ type AccountingTableColumnKey =
   | 'internalCommission'
   | 'internalTax'
   | 'internalSale'
+  | 'invoice'
   | 'sendVoucher'
   | 'paymentVoucher'
 
@@ -304,6 +336,17 @@ const ACCOUNTING_TABLE_COLUMNS: readonly AccountingTableColumn<AccountingTableCo
     headerLines: ['Venta', 'Final']
   },
   {
+    key: 'invoice',
+    label: 'Comprobante SUNAT',
+    defaultWidth: 128,
+    minWidth: 104,
+    maxWidth: 360,
+    headerClass:
+      'whitespace-nowrap px-1.5 py-3 text-center text-xs font-semibold leading-tight text-brasper-indigoDark',
+    title: 'Boleta o factura electrónica por la comisión (APISUNAT)',
+    headerLines: ['Comprobante', 'SUNAT']
+  },
+  {
     key: 'sendVoucher',
     label: 'Comprobante de envío',
     defaultWidth: 72,
@@ -336,7 +379,7 @@ const {
   resizeBy: resizeAccountingColumnBy
 } = useResizableTableColumns({
   columns: ACCOUNTING_TABLE_COLUMNS,
-  storageKey: 'brasper:accounting:table-column-widths:v5',
+  storageKey: 'brasper:accounting:table-column-widths:v6',
   fixedWidth: ACCOUNTING_TABLE_ACTIONS_WIDTH
 })
 
@@ -954,6 +997,33 @@ watch(
 // Cualquier cambio de filtros o de página recarga desde el servidor.
 watch(apiFilterParams, () => loadTransactions(), { deep: true })
 
+// Comprobante SUNAT de las operaciones visibles: una sola petición por página.
+const visibleTransactionIds = computed(() =>
+  paginatedTransactions.value.map((t) => t.id ?? '').filter(Boolean)
+)
+watch(
+  [visibleTransactionIds, canViewBilling],
+  ([ids, canView]) => {
+    if (canView && ids.length) void billingStore.loadForTransactions(ids)
+  },
+  { immediate: true }
+)
+
+// Mientras algún comprobante visible espera a SUNAT, se relee cada 15 s.
+let billingPollTimer: ReturnType<typeof setInterval> | null = null
+watch(
+  () => billingStore.pendingTransactionIds.some((id) => visibleTransactionIds.value.includes(id)),
+  (hasPending) => {
+    if (billingPollTimer) clearInterval(billingPollTimer)
+    billingPollTimer = hasPending
+      ? setInterval(() => void billingStore.loadForTransactions(visibleTransactionIds.value), 15_000)
+      : null
+  }
+)
+onBeforeUnmount(() => {
+  if (billingPollTimer) clearInterval(billingPollTimer)
+})
+
 watch(currencyPairFilterOptions, (options) => {
   const current = currencyPairFilter.value
   if (!current) return
@@ -1393,6 +1463,17 @@ onMounted(() => {
             >
               {{ internalSaleLabel(t) }}
             </td>
+            <td class="overflow-hidden px-1.5 py-2 align-middle text-center">
+              <InvoiceCell
+                v-if="canViewBilling && t.id"
+                :invoice="billingStore.invoiceFor(t.id)"
+                :can-issue="canIssueBilling"
+                :loading="billingStore.loadingInvoices"
+                @issue="openIssueDialog(t)"
+                @open="openInvoiceDetail"
+              />
+              <span v-else class="text-[#9ca3af]">—</span>
+            </td>
             <td class="overflow-hidden px-2 py-2 align-middle text-center">
               <template v-if="voucherMediaHref(t.send_voucher)">
                 <button
@@ -1534,5 +1615,13 @@ onMounted(() => {
       :source="mediaViewerSource"
       :title="mediaViewerTitle"
     />
+
+    <IssueInvoiceDialog
+      v-model="issueDialogOpen"
+      :transaction-id="issueTarget?.id ?? null"
+      :transaction-code="issueTarget ? formatTransactionCodeForDisplay(issueTarget.code) : null"
+      @issued="onInvoiceIssued"
+    />
+    <InvoiceDetailDialog v-model="invoiceDetailOpen" :invoice-id="invoiceDetailId" />
   </div>
 </template>
