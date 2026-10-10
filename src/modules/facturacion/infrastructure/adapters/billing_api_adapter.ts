@@ -73,6 +73,8 @@ export function invoiceFromApi(raw: unknown): Invoice {
   return {
     id: str(o.id),
     transactionId: str(o.transaction_id),
+    issuerRuc: str(o.issuer_ruc),
+    issuerName: str(o.issuer_name) || str(o.issuer_ruc),
     documentType: str(o.document_type),
     documentTypeLabel: str(o.document_type_label),
     series: str(o.series),
@@ -116,6 +118,8 @@ export function previewFromApi(raw: unknown): InvoicePreview {
     reason: optStr(o.reason),
     enabled: o.enabled === true,
     environment: str(o.environment),
+    issuerRuc: optStr(o.issuer_ruc),
+    issuerName: optStr(o.issuer_name),
     documentType: optStr(o.document_type),
     documentTypeLabel: optStr(o.document_type_label),
     series: optStr(o.series),
@@ -147,7 +151,16 @@ export function statusFromApi(raw: unknown): BillingStatus {
     commissionIncludesIgv: o.commission_includes_igv === true,
     igvRate: num(o.igv_rate),
     startDate: optStr(o.start_date),
+    defaultIssuerRuc: optStr(o.default_issuer_ruc),
+    issuers: records(o.issuers).map((i) => ({
+      ruc: str(i.ruc),
+      name: str(i.name),
+      tradeName: optStr(i.trade_name),
+      isDefault: i.is_default === true,
+      configured: i.configured === true
+    })),
     series: records(o.series).map((s) => ({
+      issuerRuc: str(s.issuer_ruc),
       documentType: str(s.document_type),
       series: str(s.series),
       environment: str(s.environment),
@@ -161,6 +174,7 @@ export function issueInputToApi(input: IssueInvoiceInput | undefined): Record<st
   const out: Record<string, string> = {}
   const pairs: Array<[string, string | null | undefined]> = [
     ['document_type', input?.documentType],
+    ['issuer_ruc', input?.issuerRuc],
     ['customer_name', input?.customerName],
     ['customer_address', input?.customerAddress],
     ['customer_email', input?.customerEmail],
@@ -185,6 +199,7 @@ export class BillingApiAdapter {
       skip: filters.skip ?? 0,
       limit: filters.limit ?? 50
     }
+    if (filters.issuerRuc) params.issuer_ruc = filters.issuerRuc
     if (filters.status) params.status = filters.status
     if (filters.documentType) params.document_type = filters.documentType
     if (filters.dateFrom) params.date_from = filters.dateFrom

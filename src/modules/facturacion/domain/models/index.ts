@@ -116,6 +116,9 @@ export interface InvoiceEvent {
 export interface Invoice {
   id: string
   transactionId: string
+  /** Empresa emisora (cada una con su token de APISUNAT y su numeración). */
+  issuerRuc: string
+  issuerName: string
   documentType: string
   documentTypeLabel: string
   series: string
@@ -165,6 +168,8 @@ export interface InvoicePreview {
   reason: string | null
   enabled: boolean
   environment: string
+  issuerRuc: string | null
+  issuerName: string | null
   documentType: string | null
   documentTypeLabel: string | null
   series: string | null
@@ -185,6 +190,8 @@ export interface InvoicePreview {
 export interface IssueInvoiceInput {
   /** `03` boleta o `01` factura. Vacío = automático (RUC → factura). */
   documentType?: '01' | '03' | null
+  /** RUC de la empresa emisora. Vacío = la empresa por defecto. */
+  issuerRuc?: string | null
   customerName?: string | null
   customerAddress?: string | null
   customerEmail?: string | null
@@ -192,7 +199,17 @@ export interface IssueInvoiceInput {
   customerDocNumber?: string | null
 }
 
+export interface BillingIssuerInfo {
+  ruc: string
+  name: string
+  tradeName: string | null
+  isDefault: boolean
+  /** Tiene personaId y token de APISUNAT cargados en el servidor. */
+  configured: boolean
+}
+
 export interface BillingSeriesStatus {
+  issuerRuc: string
   documentType: string
   series: string
   environment: string
@@ -211,10 +228,13 @@ export interface BillingStatus {
   commissionIncludesIgv: boolean
   igvRate: number
   startDate: string | null
+  defaultIssuerRuc: string | null
+  issuers: BillingIssuerInfo[]
   series: BillingSeriesStatus[]
 }
 
 export interface InvoiceListFilters {
+  issuerRuc?: string | null
   status?: string | null
   documentType?: string | null
   dateFrom?: string | null

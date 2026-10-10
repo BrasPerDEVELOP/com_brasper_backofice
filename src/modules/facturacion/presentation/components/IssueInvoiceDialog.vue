@@ -31,10 +31,13 @@ const error = ref<string | null>(null)
 const showDocumentFix = ref(false)
 /** Tipo elegido. Arranca con el que propone el API (RUC → factura) y el operador lo cambia. */
 const documentType = ref<'01' | '03' | null>(null)
+/** Empresa emisora elegida (BRASPER 21, INGENITECH…). Arranca en la de por defecto. */
+const issuerRuc = ref<string | null>(null)
+const issuers = computed(() => store.status?.issuers ?? [])
 /** Documento original del cliente (antes de correcciones): decide si hace falta pedir RUC. */
 const originalDocType = ref<string | null>(null)
 const rucInput = ref('')
-const form = reactive<Omit<Required<IssueInvoiceInput>, 'documentType'>>({
+const form = reactive<Omit<Required<IssueInvoiceInput>, 'documentType' | 'issuerRuc'>>({
   customerName: '',
   customerAddress: '',
   customerEmail: '',
@@ -55,6 +58,7 @@ function resetForm() {
   error.value = null
   preview.value = null
   documentType.value = null
+  issuerRuc.value = store.status?.defaultIssuerRuc ?? null
   originalDocType.value = null
   rucInput.value = ''
 }
@@ -66,7 +70,8 @@ async function loadPreview() {
   try {
     const result = await store.preview(props.transactionId, {
       ...form,
-      documentType: documentType.value
+      documentType: documentType.value,
+      issuerRuc: issuerRuc.value
     })
     if (requestId === previewRequest) {
       preview.value = result
@@ -91,14 +96,21 @@ function schedulePreview() {
 
 watch(
   open,
-  (isOpen) => {
+  async (isOpen) => {
     if (isOpen) {
+      if (!store.status) await store.loadStatus()
       resetForm()
       void loadPreview()
     }
   },
   { immediate: true }
 )
+
+function selectIssuer(ruc: string) {
+  if (issuerRuc.value === ruc || issuing.value) return
+  issuerRuc.value = ruc
+  void loadPreview()
+}
 
 watch(form, () => {
   if (open.value) schedulePreview()
@@ -155,7 +167,8 @@ async function confirm() {
   try {
     const invoice = await store.issue(props.transactionId, {
       ...form,
-      documentType: documentType.value
+      documentType: documentType.value,
+      issuerRuc: issuerRuc.value
     })
     open.value = false
     emit('issued', invoice)
@@ -225,6 +238,35 @@ const inputClass =
             </template>
           </div>
 
+          <fieldset v-if="issuers.length > 1" class="space-y-1.5">
+            <legend class="text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
+              Empresa emisora
+            </legend>
+            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <button
+                v-for="issuer in issuers"
+                :key="issuer.ruc"
+                type="button"
+                role="radio"
+                :aria-checked="issuerRuc === issuer.ruc"
+                class="rounded-xl border px-3 py-2.5 text-left transition"
+                :class="
+                  issuerRuc === issuer.ruc
+                    ? 'border-brasper-indigoStrong bg-[#eef5ff] ring-1 ring-brasper-indigoStrong'
+                    : 'border-[#e5e7eb] bg-white hover:border-[#bcd7ff]'
+                "
+                :disabled="issuing"
+                @click="selectIssuer(issuer.ruc)"
+              >
+                <span class="block text-sm font-semibold text-[#1f2937]">{{ issuer.name }}</span>
+                <span class="block font-mono text-[11px] text-[#6b7280]">RUC {{ issuer.ruc }}</span>
+                <span v-if="!issuer.configured" class="mt-0.5 block text-[11px] font-medium text-red-600">
+                  Sin token de APISUNAT
+                </span>
+              </button>
+            </div>
+          </fieldset>
+
           <div
             v-if="documentType"
             class="grid grid-cols-2 gap-1 rounded-xl border border-[#dbe7fb] bg-[#f5f8ff] p-1"
@@ -269,6 +311,13 @@ const inputClass =
 
             <section v-if="preview.totalAmount != null" class="rounded-xl border border-[#dbe7fb] bg-[#f8fbff]">
               <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 px-4 py-3 text-sm">
+                <template v-if="preview.issuerName">
+                  <dt class="text-[#6b7280]">Emisor</dt>
+                  <dd class="text-right text-[#1f2937]">
+                    {{ preview.issuerName }}
+                    <span class="font-mono text-xs text-[#6b7280]">· RUC {{ preview.issuerRuc }}</span>
+                  </dd>
+                </template>
                 <dt class="text-[#6b7280]">Serie</dt>
                 <dd class="text-right font-mono text-[#1f2937]">{{ preview.series }}-········</dd>
                 <dt class="text-[#6b7280]">Detalle</dt>

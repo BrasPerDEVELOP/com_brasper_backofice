@@ -19,6 +19,7 @@ defineOptions({ name: 'FacturacionView' })
 const store = useBillingStore()
 const authStore = useAuthStore()
 
+const issuerFilter = ref('')
 const statusFilter = ref('')
 const documentTypeFilter = ref('')
 const dateFrom = ref('')
@@ -32,8 +33,10 @@ const detailId = ref<string | null>(null)
 const canSeeAccounting = computed(() => authStore.hasPermission('accounting.view'))
 const totalPages = computed(() => Math.max(1, Math.ceil(store.list.total / perPage)))
 const status = computed(() => store.status)
-const lastNumber = (documentType: string) =>
-  status.value?.series.find((s) => s.documentType === documentType)?.lastNumber ?? 0
+const issuers = computed(() => status.value?.issuers ?? [])
+const lastNumber = (issuerRuc: string, documentType: string) =>
+  status.value?.series.find((s) => s.issuerRuc === issuerRuc && s.documentType === documentType)
+    ?.lastNumber ?? 0
 
 /** Límites del día en hora de Lima (UTC−5) para filtrar por fecha de emisión. */
 function limaDayStart(day: string): string {
@@ -45,6 +48,7 @@ function limaDayEnd(day: string): string {
 
 async function load() {
   await store.loadList({
+    issuerRuc: issuerFilter.value || null,
     status: statusFilter.value || null,
     documentType: documentTypeFilter.value || null,
     dateFrom: dateFrom.value ? limaDayStart(dateFrom.value) : null,
@@ -54,7 +58,7 @@ async function load() {
   })
 }
 
-watch([statusFilter, documentTypeFilter, dateFrom, dateTo], () => {
+watch([issuerFilter, statusFilter, documentTypeFilter, dateFrom, dateTo], () => {
   if (page.value !== 1) page.value = 1
   else void load()
 })
@@ -108,7 +112,7 @@ const inputClass =
     <!-- Configuración vigente: ambiente, emisor y correlativos. -->
     <section
       v-if="status"
-      class="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-xl border px-4 py-3 text-sm"
+      class="space-y-2 rounded-xl border px-4 py-3 text-sm"
       :class="
         !status.enabled
           ? 'border-[#e5e7eb] bg-[#f9fafb] text-[#4b5563]'
@@ -117,21 +121,28 @@ const inputClass =
             : 'border-amber-200 bg-amber-50 text-amber-900'
       "
     >
-      <span class="font-semibold">
-        <template v-if="!status.enabled">Facturación apagada</template>
-        <template v-else-if="status.isProduction">Producción · con validez tributaria</template>
-        <template v-else>Desarrollo · pruebas sin validez tributaria</template>
-      </span>
-      <span>{{ status.issuerName }} · RUC <span class="font-mono">{{ status.issuerRuc }}</span></span>
-      <span>
-        Boletas <span class="font-mono">{{ status.seriesBoleta }}</span>
-        (último {{ lastNumber('03') }})
-      </span>
-      <span>
-        Facturas <span class="font-mono">{{ status.seriesFactura }}</span>
-        (último {{ lastNumber('01') }})
-      </span>
-      <span>Emisión {{ status.autoIssue ? 'automática al finalizar' : 'manual' }}</span>
+      <p class="flex flex-wrap gap-x-6 gap-y-1">
+        <span class="font-semibold">
+          <template v-if="!status.enabled">Facturación apagada</template>
+          <template v-else-if="status.isProduction">Producción · con validez tributaria</template>
+          <template v-else>Desarrollo · pruebas sin validez tributaria</template>
+        </span>
+        <span>Emisión {{ status.autoIssue ? 'automática al finalizar' : 'manual' }}</span>
+      </p>
+      <ul class="grid gap-x-6 gap-y-1 sm:grid-cols-2">
+        <li v-for="issuer in issuers" :key="issuer.ruc" class="min-w-0">
+          <span class="font-medium">{{ issuer.name }}</span>
+          <span class="font-mono text-xs"> · RUC {{ issuer.ruc }}</span>
+          <span v-if="issuer.isDefault && issuers.length > 1" class="text-xs"> · por defecto</span>
+          <span v-if="!issuer.configured" class="text-xs font-semibold text-red-700"> · sin token</span>
+          <span class="block text-xs">
+            Boletas <span class="font-mono">{{ status.seriesBoleta }}</span> (último
+            {{ lastNumber(issuer.ruc, '03') }}) · Facturas
+            <span class="font-mono">{{ status.seriesFactura }}</span> (último
+            {{ lastNumber(issuer.ruc, '01') }})
+          </span>
+        </li>
+      </ul>
     </section>
     <p v-else-if="store.statusError" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
       {{ store.statusError }}
@@ -142,6 +153,13 @@ const inputClass =
     </p>
 
     <div class="flex flex-wrap items-end gap-3">
+      <label v-if="issuers.length > 1" class="space-y-1">
+        <span class="block text-xs font-medium text-[#4b5563]">Empresa</span>
+        <select id="billing-filter-issuer" v-model="issuerFilter" :class="inputClass">
+          <option value="">Todas</option>
+          <option v-for="issuer in issuers" :key="issuer.ruc" :value="issuer.ruc">{{ issuer.name }}</option>
+        </select>
+      </label>
       <label class="space-y-1">
         <span class="block text-xs font-medium text-[#4b5563]">Estado</span>
         <select id="billing-filter-status" v-model="statusFilter" :class="inputClass">
@@ -173,10 +191,11 @@ const inputClass =
     </p>
 
     <div class="overflow-x-auto rounded-xl border border-[#e5e7eb] bg-white">
-      <table class="w-full min-w-[56rem] text-sm">
+      <table class="w-full min-w-[64rem] text-sm">
         <thead>
           <tr class="bg-[#dbeafe] text-left text-xs font-semibold text-brasper-indigoDark">
             <th class="px-4 py-3">Comprobante</th>
+            <th class="px-4 py-3">Emisor</th>
             <th class="px-4 py-3">Emisión (Lima)</th>
             <th class="px-4 py-3">Cliente</th>
             <th class="px-4 py-3 text-right">Valor de venta</th>
@@ -187,7 +206,7 @@ const inputClass =
         </thead>
         <tbody>
           <tr v-if="!store.list.items.length && !store.listLoading">
-            <td colspan="7" class="px-6 py-12 text-center text-[#6b7280]">
+            <td colspan="8" class="px-6 py-12 text-center text-[#6b7280]">
               No hay comprobantes con estos filtros. Se emiten desde Contabilidad, en la columna
               «Comprobante SUNAT» de cada operación finalizada.
             </td>
@@ -203,6 +222,10 @@ const inputClass =
             <td class="px-4 py-3">
               <span class="block font-mono font-medium text-[#1f2937]">{{ invoice.fullNumber }}</span>
               <span class="text-xs text-[#6b7280]">{{ invoice.documentTypeLabel }}</span>
+            </td>
+            <td class="max-w-[12rem] px-4 py-3">
+              <span class="block truncate text-[#1f2937]" :title="invoice.issuerName">{{ invoice.issuerName }}</span>
+              <span class="font-mono text-xs text-[#6b7280]">{{ invoice.issuerRuc }}</span>
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-[#374151]">{{ formatLimaDateTime(invoice.issueDate) }}</td>
             <td class="max-w-[16rem] px-4 py-3">

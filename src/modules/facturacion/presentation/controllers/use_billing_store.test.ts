@@ -18,6 +18,8 @@ function invoice(overrides: Partial<Invoice>): Invoice {
   return {
     id: 'inv',
     transactionId: 'tx',
+    issuerRuc: '20608550454',
+    issuerName: 'brasper transferencias',
     documentType: '03',
     documentTypeLabel: 'Boleta de venta',
     series: 'B001',

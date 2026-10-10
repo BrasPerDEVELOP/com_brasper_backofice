@@ -237,6 +237,11 @@ const actionButton =
             <section>
               <h3 class="mb-2 text-sm font-semibold text-[#1f2937]">Cliente</h3>
               <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+                <dt class="text-[#6b7280]">Emisor</dt>
+                <dd class="text-right">
+                  {{ invoice.issuerName }}
+                  <span class="block font-mono text-xs text-[#6b7280]">RUC {{ invoice.issuerRuc }}</span>
+                </dd>
                 <dt class="text-[#6b7280]">{{ sunatIdentityLabel(invoice.customerDocType) }}</dt>
                 <dd class="text-right font-mono">{{ invoice.customerDocNumber }}</dd>
                 <dt class="text-[#6b7280]">Nombre</dt>
