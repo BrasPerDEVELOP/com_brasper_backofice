@@ -20,7 +20,7 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      injectRegister: 'auto',
+      injectRegister: false,
       manifest: {
         name: 'Brasper Backoffice',
         short_name: 'Backoffice',
@@ -35,15 +35,15 @@ export default defineConfig({
             src: '/assets/logos/logo.png',
             sizes: '192x192',
             type: 'image/png',
-            purpose: 'any',
+            purpose: 'any'
           },
           {
             src: '/assets/logos/logo.png',
             sizes: '512x512',
             type: 'image/png',
-            purpose: 'any',
-          },
-        ],
+            purpose: 'any'
+          }
+        ]
       },
       // Los íconos del manifest (/assets/logos/logo.png) ya los captura
       // `globPatterns` de abajo. Si además los agrega el manifest, la misma URL
@@ -53,20 +53,35 @@ export default defineConfig({
       // sirviendo la app indefinidamente.
       includeManifestIcons: false,
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        navigateFallback: 'index.html',
-        navigateFallbackDenylist: [/^\/api\//],
+        globPatterns: ['**/*.{js,css,ico,png,svg,woff2}'],
+        globIgnores: ['**/registerSW.js'],
+        navigateFallback: null,
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
+        runtimeCaching: [
+          {
+            urlPattern: ({ request, url, sameOrigin }) =>
+              sameOrigin && request.mode === 'navigate' && !url.pathname.startsWith('/api/'),
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'brasper-navigation-v1',
+              cacheableResponse: { statuses: [200] },
+              expiration: { maxEntries: 40, maxAgeSeconds: 86400 }
+            }
+          }
+        ]
       },
       devOptions: {
-        enabled: false,
-      },
-    }),
+        enabled: false
+      }
+    })
   ],
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
       '@interface': resolve(__dirname, 'src/interface'),
-      '@modules': resolve(__dirname, 'src/modules'),
-    },
-  },
+      '@modules': resolve(__dirname, 'src/modules')
+    }
+  }
 })
