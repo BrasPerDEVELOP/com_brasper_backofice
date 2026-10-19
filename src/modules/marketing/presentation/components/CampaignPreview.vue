@@ -49,7 +49,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section class="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3">
+  <section class="email-preview rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3">
     <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
       <h3 class="font-semibold">Vista previa del correo</h3>
       <div class="flex flex-wrap gap-2">
@@ -83,7 +83,7 @@ onUnmounted(() => {
       El contenido cambió. Actualiza la vista previa para revisar la última versión.
     </p>
     <p v-if="error" role="alert" class="text-sm text-red-700">{{ error }}</p>
-    <div v-if="html" class="overflow-x-auto">
+    <div v-if="html" class="preview-canvas overflow-x-auto">
       <iframe
         :srcdoc="html"
         sandbox=""

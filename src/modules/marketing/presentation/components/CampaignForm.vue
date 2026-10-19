@@ -109,114 +109,129 @@ function save() {
 </script>
 
 <template>
-  <form class="rounded-2xl border border-slate-200 bg-white p-6 space-y-4" @submit.prevent="save">
-    <h2 class="text-lg font-semibold">Nueva campaña</h2>
-    <label class="block"
-      >Diseño del correo
-      <select v-model="form.template_key" class="mt-1 w-full rounded-lg border p-2">
-        <option v-for="item in templates" :key="item.key" :value="item.key">{{ item.name }}</option>
-        <option :value="null">Mensaje sencillo</option>
-      </select>
-    </label>
-    <p v-if="form.template_key" class="text-sm text-slate-500">
-      Incluye los banners, el logo, los beneficios y el enlace de baja. El mensaje se mostrará
-      debajo del banner principal.
-    </p>
-    <label class="block"
-      >Nombre interno<input
-        v-model="form.name"
-        required
-        maxlength="150"
-        class="mt-1 w-full rounded-lg border p-2"
-        placeholder="Promoción de octubre"
-    /></label>
-    <label class="block"
-      >Asunto<input
-        v-model="form.subject"
-        required
-        maxlength="200"
-        class="mt-1 w-full rounded-lg border p-2"
-    /></label>
-    <label class="block"
-      >Mensaje de la campaña<textarea
-        v-model="form.body"
-        required
-        maxlength="100000"
-        rows="7"
-        class="mt-1 w-full rounded-lg border p-2"
-        placeholder="Escribe el contenido del correo…"
-      />
-    </label>
-    <CampaignPreview
-      v-if="templatesLoaded"
-      :template-key="form.template_key"
-      :subject="form.subject"
-      :body="form.body"
-    />
-    <label class="block"
-      >Destinatarios ({{ emails.length }} únicos)<textarea
-        v-model="form.emails"
-        rows="4"
-        class="mt-1 w-full rounded-lg border p-2"
-        placeholder="Un correo por línea, o separados por coma"
-      />
-    </label>
-    <label class="block text-sm"
-      >Importar correos desde Excel o CSV<input
-        type="file"
-        accept=".xlsx,.xls,.csv"
-        class="mt-2 block w-full"
-        @change="importFile"
-    /></label>
-    <details class="rounded-lg border p-3">
-      <summary class="cursor-pointer">Seleccionar clientes de Brasper</summary>
-      <div class="my-3 flex gap-2">
-        <input
-          v-model="search"
-          class="min-w-0 flex-1 rounded border p-2"
-          placeholder="Buscar correo"
-        /><button type="button" :disabled="loading" @click="searchClients(0)">Buscar</button>
-      </div>
-      <div class="max-h-48 overflow-auto">
-        <label v-for="email in clients" :key="email" class="block py-1"
-          ><input
-            type="checkbox"
-            :checked="emails.includes(email.toLowerCase())"
-            @change="
-              form.emails = ($event.target as HTMLInputElement).checked
-                ? [...emails, email].join('\n')
-                : emails.filter((item) => item !== email.toLowerCase()).join('\n')
-            "
+  <form class="campaign-editor" @submit.prevent="save">
+    <div class="editor-heading">
+      <span class="section-kicker">CREAR CAMPAÑA</span>
+      <h2>Nueva campaña</h2>
+      <p>Prepara tu mensaje y revisa cómo lo recibirán tus clientes.</p>
+    </div>
+    <div class="editor-grid">
+      <div class="editor-fields">
+        <h3 class="step-heading"><span>1</span> Contenido del correo</h3>
+        <label class="block"
+          >Diseño del correo
+          <select v-model="form.template_key" class="mt-1 w-full rounded-lg border p-2">
+            <option v-for="item in templates" :key="item.key" :value="item.key">
+              {{ item.name }}
+            </option>
+            <option :value="null">Mensaje sencillo</option>
+          </select>
+        </label>
+        <p v-if="form.template_key" class="text-sm text-slate-500">
+          Incluye los banners, el logo, los beneficios y el enlace de baja. El mensaje se mostrará
+          debajo del banner principal.
+        </p>
+        <label class="block"
+          >Nombre interno<input
+            v-model="form.name"
+            required
+            maxlength="150"
+            class="mt-1 w-full rounded-lg border p-2"
+            placeholder="Promoción de octubre"
+        /></label>
+        <label class="block"
+          >Asunto<input
+            v-model="form.subject"
+            required
+            maxlength="200"
+            class="mt-1 w-full rounded-lg border p-2"
+        /></label>
+        <label class="block"
+          >Mensaje de la campaña<textarea
+            v-model="form.body"
+            required
+            maxlength="100000"
+            rows="7"
+            class="mt-1 w-full rounded-lg border p-2"
+            placeholder="Escribe el contenido del correo…"
           />
-          {{ email }}</label
+        </label>
+        <h3 class="step-heading"><span>2</span> Tu audiencia</h3>
+        <label class="block"
+          >Destinatarios ({{ emails.length }} únicos)<textarea
+            v-model="form.emails"
+            rows="4"
+            class="mt-1 w-full rounded-lg border p-2"
+            placeholder="Un correo por línea, o separados por coma"
+          />
+        </label>
+        <label class="block text-sm"
+          >Importar correos desde Excel o CSV<input
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            class="mt-2 block w-full"
+            @change="importFile"
+        /></label>
+        <details class="rounded-lg border p-3">
+          <summary class="cursor-pointer">Seleccionar clientes de Brasper</summary>
+          <div class="my-3 flex gap-2">
+            <input
+              v-model="search"
+              class="min-w-0 flex-1 rounded border p-2"
+              placeholder="Buscar correo"
+            /><button type="button" :disabled="loading" @click="searchClients(0)">Buscar</button>
+          </div>
+          <div class="max-h-48 overflow-auto">
+            <label v-for="email in clients" :key="email" class="block py-1"
+              ><input
+                type="checkbox"
+                :checked="emails.includes(email.toLowerCase())"
+                @change="
+                  form.emails = ($event.target as HTMLInputElement).checked
+                    ? [...emails, email].join('\n')
+                    : emails.filter((item) => item !== email.toLowerCase()).join('\n')
+                "
+              />
+              {{ email }}</label
+            >
+          </div>
+          <div class="mt-2 flex gap-4">
+            <button
+              type="button"
+              :disabled="loading || clientPage === 0"
+              @click="searchClients(clientPage - 1)"
+            >
+              Anterior</button
+            ><button
+              type="button"
+              :disabled="loading || clients.length < 100"
+              @click="searchClients(clientPage + 1)"
+            >
+              Siguiente
+            </button>
+          </div>
+        </details>
+        <label class="consent-field flex items-start gap-2 text-sm"
+          ><input v-model="form.consent" type="checkbox" required class="mt-1" />Confirmo que estos
+          destinatarios autorizaron recibir comunicaciones de marketing.</label
         >
-      </div>
-      <div class="mt-2 flex gap-4">
+        <p v-if="error" role="alert" class="text-red-700">{{ error }}</p>
         <button
-          type="button"
-          :disabled="loading || clientPage === 0"
-          @click="searchClients(clientPage - 1)"
+          :disabled="busy"
+          class="rounded-lg bg-emerald-700 px-5 py-2 text-white disabled:opacity-50"
         >
-          Anterior</button
-        ><button
-          type="button"
-          :disabled="loading || clients.length < 100"
-          @click="searchClients(clientPage + 1)"
-        >
-          Siguiente
+          {{ busy ? 'Guardando…' : 'Guardar borrador' }}
         </button>
+        <p class="save-note">Podrás enviar una prueba antes de lanzar la campaña.</p>
       </div>
-    </details>
-    <label class="flex items-start gap-2 text-sm"
-      ><input v-model="form.consent" type="checkbox" required class="mt-1" />Confirmo que estos
-      destinatarios autorizaron recibir comunicaciones de marketing.</label
-    >
-    <p v-if="error" role="alert" class="text-red-700">{{ error }}</p>
-    <button
-      :disabled="busy"
-      class="rounded-lg bg-emerald-700 px-5 py-2 text-white disabled:opacity-50"
-    >
-      Guardar borrador
-    </button>
+      <aside class="editor-preview">
+        <CampaignPreview
+          v-if="templatesLoaded"
+          :template-key="form.template_key"
+          :subject="form.subject"
+          :body="form.body"
+        />
+      </aside>
+    </div>
   </form>
 </template>

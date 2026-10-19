@@ -114,3 +114,5 @@ Marketing (2026-10-19): `/app/marketing`, permisos `marketing.view/create/send`,
 Plantillas de marketing (2026-10-19): campañas persisten `template_key`; diseño por defecto `brasper_peru_pt_v1` (portugués) con alternativa de mensaje sencillo. `GET marketing/templates`, `POST marketing/preview`. Vista previa aislada para escritorio/móvil y mismo renderer para prueba y envío masivo; migración API 089.
 
 Marketing: selector de público Brasil/portugués y Perú/español; textos predeterminados localizados y preservación de textos personalizados.
+
+Marketing: editor y audiencia en columna izquierda, vista previa a la derecha e historial debajo; controles adaptables a móvil.

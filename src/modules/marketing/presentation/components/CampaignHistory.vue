@@ -20,10 +20,12 @@ function confirmSend(id: string) {
 <template>
   <section class="space-y-4">
     <h2 class="text-lg font-semibold">Campañas e historial</h2>
-    <p v-if="!campaigns.length" class="rounded-xl border bg-white p-6 text-slate-500">
-      Todavía no hay campañas.
-    </p>
-    <label v-if="canSend" class="block text-sm"
+    <div v-if="!campaigns.length" class="history-empty">
+      <span aria-hidden="true">✉</span>
+      <h3>Tu primera campaña empieza aquí</h3>
+      <p>Guarda un borrador para enviar una prueba y consultar sus resultados.</p>
+    </div>
+    <label v-if="canSend && campaigns.length" class="block text-sm"
       >Correo para las pruebas<input
         v-model="testEmail"
         type="email"
