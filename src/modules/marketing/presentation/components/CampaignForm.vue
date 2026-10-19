@@ -1,12 +1,22 @@
 <script setup lang="ts">
-import { computed, reactive, shallowRef } from 'vue'
-import type { CampaignInput } from '../../domain/models'
+import { computed, reactive, shallowRef, onMounted } from 'vue'
+import CampaignPreview from './CampaignPreview.vue'
+import type { CampaignInput, TemplateKey, EmailTemplate } from '../../domain/models'
 import { parseRecipients } from '../../domain/recipients'
 import { marketingActions } from '../../application/use_cases/marketing'
 import { MarketingApiAdapter } from '../../infrastructure/marketing_api_adapter'
 defineProps<{ busy: boolean }>()
 const emit = defineEmits<{ save: [input: CampaignInput] }>()
-const form = reactive({ name: '', subject: '', body: '', emails: '', consent: false })
+const form = reactive({
+  name: '',
+  subject: '',
+  body: '',
+  emails: '',
+  consent: false,
+  template_key: 'brasper_peru_pt_v1' as TemplateKey | null
+})
+const templates = shallowRef<EmailTemplate[]>([])
+const templatesLoaded = shallowRef(false)
 const emails = computed(() => parseRecipients(form.emails))
 const clients = shallowRef<string[]>([])
 const search = shallowRef('')
@@ -14,6 +24,20 @@ const clientPage = shallowRef(0)
 const error = shallowRef('')
 const loading = shallowRef(false)
 const actions = marketingActions(new MarketingApiAdapter())
+onMounted(async () => {
+  try {
+    templates.value = await actions.templates()
+    const initial = templates.value.find((item) => item.key === form.template_key)
+    if (initial) {
+      if (!form.subject) form.subject = initial.default_subject
+      if (!form.body) form.body = initial.default_body
+    }
+  } catch {
+    error.value = 'No se pudo cargar la plantilla. Actualiza la página para volver a intentarlo.'
+  } finally {
+    templatesLoaded.value = true
+  }
+})
 async function searchClients(page = 0) {
   loading.value = true
   error.value = ''
@@ -68,6 +92,7 @@ function save() {
     subject: form.subject,
     body: form.body,
     emails: emails.value,
+    template_key: form.template_key,
     consent_confirmed: form.consent
   })
 }
@@ -76,6 +101,17 @@ function save() {
 <template>
   <form class="rounded-2xl border border-slate-200 bg-white p-6 space-y-4" @submit.prevent="save">
     <h2 class="text-lg font-semibold">Nueva campaña</h2>
+    <label class="block"
+      >Diseño del correo
+      <select v-model="form.template_key" class="mt-1 w-full rounded-lg border p-2">
+        <option value="brasper_peru_pt_v1">BrasPer · Brasil → Perú (portugués)</option>
+        <option :value="null">Mensaje sencillo</option>
+      </select>
+    </label>
+    <p v-if="form.template_key" class="text-sm text-slate-500">
+      Incluye los banners, el logo, los beneficios y el enlace de baja. El mensaje se mostrará
+      debajo del banner principal.
+    </p>
     <label class="block"
       >Nombre interno<input
         v-model="form.name"
@@ -92,7 +128,7 @@ function save() {
         class="mt-1 w-full rounded-lg border p-2"
     /></label>
     <label class="block"
-      >Mensaje<textarea
+      >Mensaje de la campaña<textarea
         v-model="form.body"
         required
         maxlength="100000"
@@ -101,14 +137,12 @@ function save() {
         placeholder="Escribe el contenido del correo…"
       />
     </label>
-    <details class="rounded-lg bg-slate-50 p-3">
-      <summary class="cursor-pointer">Vista previa del mensaje</summary>
-      <h3 class="my-3 font-bold">Brasper Transferencias</h3>
-      <p class="whitespace-pre-wrap break-words">{{ form.body }}</p>
-      <p class="mt-4 text-xs text-slate-500">
-        Se incluirá un enlace para dejar de recibir correos.
-      </p>
-    </details>
+    <CampaignPreview
+      v-if="templatesLoaded"
+      :template-key="form.template_key"
+      :subject="form.subject"
+      :body="form.body"
+    />
     <label class="block"
       >Destinatarios ({{ emails.length }} únicos)<textarea
         v-model="form.emails"

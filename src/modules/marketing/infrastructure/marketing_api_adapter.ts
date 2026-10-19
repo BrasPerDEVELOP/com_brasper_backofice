@@ -1,9 +1,22 @@
 import { apiClient } from '@/interface/api/client'
 import { Domain } from '@/interface/infrastructure/services'
-import type { Campaign, CampaignInput, MarketingRepository, Recipient } from '../domain/models'
+import type {
+  Campaign,
+  CampaignInput,
+  MarketingRepository,
+  Recipient,
+  EmailTemplate,
+  EmailPreviewInput
+} from '../domain/models'
 
 const endpoint = (path: string) => Domain.apiPath(`marketing/${path}`)
 export class MarketingApiAdapter implements MarketingRepository {
+  async templates() {
+    return (await apiClient.get<{ items: EmailTemplate[] }>(endpoint('templates'))).data.items
+  }
+  async preview(input: EmailPreviewInput) {
+    return (await apiClient.post<{ html: string }>(endpoint('preview'), input)).data.html
+  }
   async list(skip = 0) {
     return (
       await apiClient.get<{ items: Campaign[]; total: number }>(endpoint('campaigns'), {

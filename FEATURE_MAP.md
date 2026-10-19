@@ -110,3 +110,5 @@ Ver [docs/plans/00-ROADMAP.md](docs/plans/00-ROADMAP.md).
 Avisos: destinatarios por usuarios, roles o todo el equipo; editor visual/HTML con formato seguro. Observaciones al final del paso Datos. La pestaña de acceso individual se muestra como Permisos.
 
 Marketing (2026-10-19): `/app/marketing`, permisos `marketing.view/create/send`, API `marketing/configuration`, `marketing/clients`, `marketing/campaigns` y subrutas `{id}/test`, `{id}/send`, `{id}/recipients`. Baja pública firmada en `marketing/unsubscribe`. Importación local Excel/CSV y selección paginada de clientes; credenciales solo en backend.
+
+Plantillas de marketing (2026-10-19): campañas persisten `template_key`; diseño por defecto `brasper_peru_pt_v1` (portugués) con alternativa de mensaje sencillo. `GET marketing/templates`, `POST marketing/preview`. Vista previa aislada para escritorio/móvil y mismo renderer para prueba y envío masivo; migración API 089.

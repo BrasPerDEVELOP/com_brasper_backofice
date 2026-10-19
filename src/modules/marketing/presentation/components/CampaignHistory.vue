@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { shallowRef } from 'vue'
+import CampaignPreview from './CampaignPreview.vue'
 import type { Campaign } from '../../domain/models'
 import { statusLabel } from '../../domain/recipients'
 defineProps<{ campaigns: Campaign[]; busy: boolean; canSend: boolean; ready: boolean }>()
@@ -10,6 +11,7 @@ const emit = defineEmits<{
 }>()
 const testEmail = shallowRef('')
 const confirming = shallowRef('')
+const previewing = shallowRef('')
 function confirmSend(id: string) {
   emit('send', id)
   confirming.value = ''
@@ -47,10 +49,19 @@ function confirmSend(id: string) {
           >{{ statusLabel(String(status)) }}: {{ count }}</span
         >
       </div>
-      <details>
-        <summary class="cursor-pointer text-sm">Ver contenido</summary>
-        <p class="mt-2 whitespace-pre-wrap break-words text-sm">{{ campaign.body }}</p>
-      </details>
+      <button
+        type="button"
+        class="text-sm underline"
+        @click="previewing = previewing === campaign.id ? '' : campaign.id"
+      >
+        {{ previewing === campaign.id ? 'Cerrar vista previa' : 'Ver correo completo' }}
+      </button>
+      <CampaignPreview
+        v-if="previewing === campaign.id"
+        :template-key="campaign.template_key ?? null"
+        :subject="campaign.subject"
+        :body="campaign.body"
+      />
       <div class="flex flex-wrap gap-3 text-sm">
         <button :disabled="busy" class="underline" @click="emit('history', campaign.id)">
           Ver destinatarios
