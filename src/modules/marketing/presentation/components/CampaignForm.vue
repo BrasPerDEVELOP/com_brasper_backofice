@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, shallowRef, onMounted } from 'vue'
+import { computed, reactive, shallowRef, onMounted, watch } from 'vue'
 import CampaignPreview from './CampaignPreview.vue'
 import type { CampaignInput, TemplateKey, EmailTemplate } from '../../domain/models'
 import { parseRecipients } from '../../domain/recipients'
@@ -38,6 +38,16 @@ onMounted(async () => {
     templatesLoaded.value = true
   }
 })
+watch(
+  () => form.template_key,
+  (key, previous) => {
+    const next = templates.value.find((item) => item.key === key)
+    const old = templates.value.find((item) => item.key === previous)
+    if (!next) return
+    if (!form.subject || form.subject === old?.default_subject) form.subject = next.default_subject
+    if (!form.body || form.body === old?.default_body) form.body = next.default_body
+  }
+)
 async function searchClients(page = 0) {
   loading.value = true
   error.value = ''
@@ -104,7 +114,7 @@ function save() {
     <label class="block"
       >Diseño del correo
       <select v-model="form.template_key" class="mt-1 w-full rounded-lg border p-2">
-        <option value="brasper_peru_pt_v1">BrasPer · Brasil → Perú (portugués)</option>
+        <option v-for="item in templates" :key="item.key" :value="item.key">{{ item.name }}</option>
         <option :value="null">Mensaje sencillo</option>
       </select>
     </label>

@@ -1,4 +1,4 @@
-export type TemplateKey = 'brasper_peru_pt_v1'
+export type TemplateKey = 'brasper_peru_pt_v1' | 'brasper_brasil_es_v1'
 export interface EmailTemplate {
   key: TemplateKey
   name: string
