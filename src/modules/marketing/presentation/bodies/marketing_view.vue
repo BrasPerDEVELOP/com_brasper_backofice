@@ -245,7 +245,7 @@ onUnmounted(() => {
   color: #5356bb;
   font-size: 12px;
 }
-.marketing-workspace :deep(input:not([type='checkbox']):not([type='file'])),
+.marketing-workspace :deep(input:not([type='checkbox']):not([type='radio']):not([type='file'])),
 .marketing-workspace :deep(select),
 .marketing-workspace :deep(textarea) {
   width: 100%;

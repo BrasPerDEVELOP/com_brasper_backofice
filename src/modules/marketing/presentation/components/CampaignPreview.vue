@@ -51,7 +51,12 @@ onUnmounted(() => {
 <template>
   <section class="email-preview rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3">
     <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
-      <h3 class="font-semibold">Vista previa del correo</h3>
+      <div class="preview-heading">
+        <h3 class="font-semibold">Vista previa del correo</h3>
+        <span v-if="html" class="preview-state" :class="{ pending: dirty }">{{
+          dirty ? 'Cambios pendientes' : 'Actualizada'
+        }}</span>
+      </div>
       <div class="flex flex-wrap gap-2">
         <button
           type="button"
@@ -83,6 +88,7 @@ onUnmounted(() => {
       El contenido cambió. Actualiza la vista previa para revisar la última versión.
     </p>
     <p v-if="error" role="alert" class="text-sm text-red-700">{{ error }}</p>
+    <div v-if="busy && !html" role="status" class="preview-loading">Preparando tu correo…</div>
     <div v-if="html" class="preview-canvas overflow-x-auto">
       <iframe
         :srcdoc="html"
@@ -103,3 +109,34 @@ onUnmounted(() => {
     </p>
   </section>
 </template>
+
+<style scoped>
+.preview-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.preview-state {
+  font-size: 10px;
+  font-weight: 650;
+  color: #167652;
+  background: #e4f5ed;
+  border-radius: 20px;
+  padding: 4px 8px;
+}
+.preview-state.pending {
+  background: #fff1d6;
+  color: #94620d;
+}
+.preview-loading {
+  display: grid;
+  place-items: center;
+  min-height: 300px;
+  background: #edf1f7;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  color: #64748b;
+  font-size: 13px;
+}
+</style>

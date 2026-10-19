@@ -116,3 +116,5 @@ Plantillas de marketing (2026-10-19): campañas persisten `template_key`; diseñ
 Marketing: selector de público Brasil/portugués y Perú/español; textos predeterminados localizados y preservación de textos personalizados.
 
 Marketing: editor y audiencia en columna izquierda, vista previa a la derecha e historial debajo; controles adaptables a móvil.
+
+Marketing: tarjetas de público Brasil/Perú, contador de asunto y audiencia, estado de actualización de vista previa y tarjetas de resultados por campaña.

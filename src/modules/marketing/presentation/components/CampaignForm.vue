@@ -118,15 +118,46 @@ function save() {
     <div class="editor-grid">
       <div class="editor-fields">
         <h3 class="step-heading"><span>1</span> Contenido del correo</h3>
-        <label class="block"
-          >Diseño del correo
-          <select v-model="form.template_key" class="mt-1 w-full rounded-lg border p-2">
-            <option v-for="item in templates" :key="item.key" :value="item.key">
-              {{ item.name }}
-            </option>
-            <option :value="null">Mensaje sencillo</option>
-          </select>
-        </label>
+        <fieldset class="template-picker">
+          <legend>¿A quién va dirigido?</legend>
+          <div class="template-options">
+            <label
+              v-for="item in templates"
+              :key="item.key"
+              class="template-option"
+              :class="{ selected: form.template_key === item.key }"
+            >
+              <input
+                v-model="form.template_key"
+                type="radio"
+                name="campaign-template"
+                :value="item.key"
+              />
+              <span class="template-country" aria-hidden="true">{{
+                item.language === 'pt-BR' ? 'BR' : 'PE'
+              }}</span>
+              <span
+                ><strong>{{
+                  item.language === 'pt-BR' ? 'Público en Brasil' : 'Público en Perú'
+                }}</strong
+                ><small>{{
+                  item.language === 'pt-BR'
+                    ? 'Portugués · Envíos a Perú'
+                    : 'Español · Envíos a Brasil'
+                }}</small></span
+              >
+            </label>
+          </div>
+          <label class="simple-option"
+            ><input
+              v-model="form.template_key"
+              type="radio"
+              name="campaign-template"
+              :value="null"
+            />
+            Usar mensaje sencillo, sin banners</label
+          >
+        </fieldset>
         <p v-if="form.template_key" class="text-sm text-slate-500">
           Incluye los banners, el logo, los beneficios y el enlace de baja. El mensaje se mostrará
           debajo del banner principal.
@@ -137,10 +168,11 @@ function save() {
             required
             maxlength="150"
             class="mt-1 w-full rounded-lg border p-2"
-            placeholder="Promoción de octubre"
+            placeholder="Ej. Campaña de bienvenida — Perú"
         /></label>
         <label class="block"
-          >Asunto<input
+          >Asunto <span class="field-counter">{{ form.subject.length }}/200</span
+          ><input
             v-model="form.subject"
             required
             maxlength="200"
@@ -156,7 +188,12 @@ function save() {
             placeholder="Escribe el contenido del correo…"
           />
         </label>
-        <h3 class="step-heading"><span>2</span> Tu audiencia</h3>
+        <div class="audience-heading">
+          <h3 class="step-heading"><span>2</span> Tu audiencia</h3>
+          <span class="audience-count"
+            >{{ emails.length.toLocaleString('es-PE') }} destinatarios</span
+          >
+        </div>
         <label class="block"
           >Destinatarios ({{ emails.length }} únicos)<textarea
             v-model="form.emails"
@@ -235,3 +272,109 @@ function save() {
     </div>
   </form>
 </template>
+
+<style scoped>
+.template-picker {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.template-picker legend {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 10px;
+}
+.template-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.template-option {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 14px 10px;
+  border: 1px solid #dce2ed;
+  border-radius: 12px;
+  cursor: pointer;
+  background: #fff;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+.template-option.selected {
+  background: #f1f2ff;
+  border-color: #686bd0;
+  box-shadow: 0 0 0 1px #686bd0;
+}
+.template-option:focus-within {
+  outline: 3px solid #c7d2fe;
+  outline-offset: 2px;
+}
+.template-option input,
+.simple-option input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  padding: 0;
+  accent-color: #5356bb;
+  flex-shrink: 0;
+}
+.template-country {
+  font-size: 10px;
+  font-weight: 800;
+  color: #5356bb;
+  background: #e5e7fc;
+  border-radius: 7px;
+  padding: 6px;
+}
+.template-option strong {
+  display: block;
+  font-size: 12px;
+  color: #24324b;
+}
+.template-option small {
+  display: block;
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.5;
+  margin-top: 3px;
+}
+.simple-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 14px;
+  cursor: pointer;
+}
+.audience-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+.audience-count {
+  font-size: 11px;
+  color: #5356bb;
+  background: #eff0ff;
+  padding: 5px 9px;
+  border-radius: 20px;
+  font-weight: 600;
+}
+.field-counter {
+  float: right;
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 400;
+}
+@media (max-width: 600px) {
+  .template-options {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
