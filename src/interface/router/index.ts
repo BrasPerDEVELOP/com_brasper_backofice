@@ -20,6 +20,7 @@ function firstPermittedAppPath(authStore: ReturnType<typeof useAuthStore>): stri
     { path: '/app/home-banner', permission: 'home_banner.view' },
     { path: '/app/auditoria', permission: 'audit.view' },
     { path: '/app/blog', permission: 'blog.view' },
+    { path: '/app/marketing', permission: 'marketing.view' },
     { path: '/app/roles-permisos', permission: 'roles.permissions.view' },
     { path: '/app/perfil', permission: 'profile.view' }
   ]
@@ -46,6 +47,7 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/interface/layout/app_layout.vue'),
     meta: { requiresAuth: true },
     children: [
+      { path: 'marketing', name: 'marketing', component: () => import('@modules/marketing/presentation/bodies/marketing_view.vue'), meta: { breadcrumb: 'Marketing > Correos masivos', permission: 'marketing.view' } },
       {
         path: '',
         redirect: '/app/dashboard'

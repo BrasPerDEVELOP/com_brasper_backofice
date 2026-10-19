@@ -54,6 +54,7 @@ const allNavItems = [
   { to: "/app/cuentas-brasper", label: "Cuentas Brasper", icon: "bank", permission: "company_bank_accounts.view" },
   { to: "/app/etiquetas", label: "Etiquetas", icon: "ticket", permission: "tags.view" },
   { to: "/app/home-banner", label: "Banner Home", icon: "image", permission: "home_banner.view" },
+  { to: "/app/marketing", label: "Correos masivos", icon: "ledger", permission: "marketing.view" },
   { to: "/app/blog", label: "Blog", icon: "ledger", permission: "blog.view" },
 ];
 

@@ -108,3 +108,5 @@ defensivos en los handlers).
 Ver [docs/plans/00-ROADMAP.md](docs/plans/00-ROADMAP.md).
 
 Avisos: destinatarios por usuarios, roles o todo el equipo; editor visual/HTML con formato seguro. Observaciones al final del paso Datos. La pestaña de acceso individual se muestra como Permisos.
+
+Marketing (2026-10-19): `/app/marketing`, permisos `marketing.view/create/send`, API `marketing/configuration`, `marketing/clients`, `marketing/campaigns` y subrutas `{id}/test`, `{id}/send`, `{id}/recipients`. Baja pública firmada en `marketing/unsubscribe`. Importación local Excel/CSV y selección paginada de clientes; credenciales solo en backend.

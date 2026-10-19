@@ -1,6 +1,7 @@
 import { USER_ROLES, isAccountingRole, isAdminRole, type UserRole } from './user_roles'
 
 export const PERMISSION_MODULES = [
+  { key: 'marketing', label: 'Correos masivos', permissions: [{ key: 'marketing.view', label: 'Ver' }, { key: 'marketing.create', label: 'Crear campañas' }, { key: 'marketing.send', label: 'Enviar correos' }] },
   { key: 'notifications', label: 'Notificaciones', permissions: [{ key: 'notifications.view', label: 'Ver' }, { key: 'notifications.create', label: 'Publicar avisos' }] },
   {
     key: 'dashboard',
@@ -278,7 +279,7 @@ const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
     'profile.update',
     'profile.change_password'
   ],
-  marketing: ['notifications.view',
+  marketing: ['marketing.view', 'marketing.create', 'marketing.send', 'notifications.view',
     'dashboard.view',
     'coupons.view',
     'coupons.create',
