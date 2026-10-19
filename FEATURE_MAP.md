@@ -120,3 +120,5 @@ Marketing: editor y audiencia en columna izquierda, vista previa a la derecha e 
 Marketing: tarjetas de público Brasil/Perú, contador de asunto y audiencia, estado de actualización de vista previa y tarjetas de resultados por campaña.
 
 Actualizaciones: HTML NetworkFirst, service worker comprobado al volver al panel y cada minuto; aviso de nueva versión con recarga voluntaria para preservar formularios. Ver docs/ops/CACHE-UPDATES.md.
+
+Marketing: envío directo con confirmación vía marketing/dispatch, clave de reintento UUID y pruebas sin crear campaña vía marketing/test. El formulario ya no guarda borradores. Imágenes del correo mediante HTTPS público sin adjuntos.

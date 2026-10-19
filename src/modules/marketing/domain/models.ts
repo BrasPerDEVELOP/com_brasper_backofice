@@ -30,6 +30,12 @@ export interface CampaignInput {
   template_key: TemplateKey | null
   consent_confirmed: boolean
 }
+export interface DispatchInput extends CampaignInput {
+  request_id: string
+}
+export interface DirectTestInput extends EmailPreviewInput {
+  email: string
+}
 export interface Recipient {
   email: string
   status: string
@@ -40,7 +46,8 @@ export interface MarketingRepository {
   templates(): Promise<EmailTemplate[]>
   preview(input: EmailPreviewInput): Promise<string>
   list(skip: number): Promise<{ items: Campaign[]; total: number }>
-  create(input: CampaignInput): Promise<Campaign>
+  dispatch(input: DispatchInput): Promise<Campaign>
+  testDirect(input: DirectTestInput): Promise<void>
   send(id: string): Promise<Campaign>
   test(id: string, email: string): Promise<void>
   recipients(id: string, skip: number): Promise<Recipient[]>

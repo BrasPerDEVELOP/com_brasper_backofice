@@ -2,13 +2,14 @@ import { defineStore } from 'pinia'
 import { ref, shallowRef } from 'vue'
 import { marketingActions } from '../../application/use_cases/marketing'
 import { MarketingApiAdapter } from '../../infrastructure/marketing_api_adapter'
-import type { Campaign, CampaignInput, Recipient } from '../../domain/models'
+import type { Campaign, DispatchInput, DirectTestInput, Recipient } from '../../domain/models'
 const actions = marketingActions(new MarketingApiAdapter())
 export const useMarketingStore = defineStore('marketing', () => {
   const campaigns = ref<Campaign[]>([])
   const recipients = ref<Recipient[]>([])
   const total = shallowRef(0)
   const page = shallowRef(0)
+  const lastDispatchedId = shallowRef('')
   const busy = shallowRef(false)
   const error = shallowRef('')
   const message = shallowRef('')
@@ -40,13 +41,19 @@ export const useMarketingStore = defineStore('marketing', () => {
       configuration.value = await actions.configuration()
       await refresh()
     })
-  const create = (input: CampaignInput) =>
+  const dispatch = (input: DispatchInput) =>
     run(async () => {
-      const item = await actions.create(input)
+      const item = await actions.dispatch(input)
+      lastDispatchedId.value = item.id
       page.value = 0
       await refresh()
-      message.value = 'Borrador guardado. Puedes enviar una prueba antes del envío masivo.'
+      message.value = 'Campaña enviada a la cola. Puedes consultar el progreso en el historial.'
       return item
+    })
+  const testDirect = (input: DirectTestInput) =>
+    run(async () => {
+      await actions.testDirect(input)
+      message.value = 'Correo de prueba aceptado por SMTP.'
     })
   const send = (id: string) =>
     run(async () => {
@@ -73,7 +80,9 @@ export const useMarketingStore = defineStore('marketing', () => {
     message,
     configuration,
     load,
-    create,
+    dispatch,
+    testDirect,
+    lastDispatchedId,
     send,
     test,
     history

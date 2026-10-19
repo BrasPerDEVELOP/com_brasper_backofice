@@ -2,7 +2,8 @@ import { apiClient } from '@/interface/api/client'
 import { Domain } from '@/interface/infrastructure/services'
 import type {
   Campaign,
-  CampaignInput,
+  DispatchInput,
+  DirectTestInput,
   MarketingRepository,
   Recipient,
   EmailTemplate,
@@ -24,8 +25,11 @@ export class MarketingApiAdapter implements MarketingRepository {
       })
     ).data
   }
-  async create(input: CampaignInput) {
-    return (await apiClient.post<Campaign>(endpoint('campaigns'), input)).data
+  async dispatch(input: DispatchInput) {
+    return (await apiClient.post<Campaign>(endpoint('dispatch'), input)).data
+  }
+  async testDirect(input: DirectTestInput) {
+    await apiClient.post(endpoint('test'), input)
   }
   async send(id: string) {
     return (await apiClient.post<Campaign>(endpoint(`campaigns/${id}/send`))).data

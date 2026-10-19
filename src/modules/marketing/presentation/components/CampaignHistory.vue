@@ -23,7 +23,9 @@ function confirmSend(id: string) {
     <div v-if="!campaigns.length" class="history-empty">
       <span aria-hidden="true">✉</span>
       <h3>Tu primera campaña empieza aquí</h3>
-      <p>Guarda un borrador para enviar una prueba y consultar sus resultados.</p>
+      <p>
+        Prepara tu mensaje y envía una prueba desde el formulario. Aquí verás las campañas enviadas.
+      </p>
     </div>
     <label v-if="canSend && campaigns.length" class="block text-sm"
       >Correo para las pruebas<input

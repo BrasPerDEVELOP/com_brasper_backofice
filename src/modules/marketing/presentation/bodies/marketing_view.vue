@@ -57,7 +57,11 @@ onUnmounted(() => {
       <CampaignForm
         v-if="auth.hasPermission('marketing.create')"
         :busy="store.busy"
-        @save="store.create"
+        @send="store.dispatch"
+        @test="store.testDirect"
+        :can-send="auth.hasPermission('marketing.send')"
+        :ready="store.configuration.ready"
+        :sent-request-id="store.lastDispatchedId"
       />
       <div class="history-panel">
         <CampaignHistory

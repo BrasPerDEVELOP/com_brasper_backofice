@@ -1,12 +1,20 @@
 <script setup lang="ts">
 import { computed, reactive, shallowRef, onMounted, watch } from 'vue'
 import CampaignPreview from './CampaignPreview.vue'
-import type { CampaignInput, TemplateKey, EmailTemplate } from '../../domain/models'
+import type {
+  DispatchInput,
+  DirectTestInput,
+  TemplateKey,
+  EmailTemplate
+} from '../../domain/models'
 import { parseRecipients } from '../../domain/recipients'
 import { marketingActions } from '../../application/use_cases/marketing'
 import { MarketingApiAdapter } from '../../infrastructure/marketing_api_adapter'
-defineProps<{ busy: boolean }>()
-const emit = defineEmits<{ save: [input: CampaignInput] }>()
+defineProps<{ busy: boolean; canSend: boolean; ready: boolean; sentRequestId: string }>()
+const emit = defineEmits<{ send: [input: DispatchInput]; test: [input: DirectTestInput] }>()
+const requestId = shallowRef(crypto.randomUUID())
+const confirmation = shallowRef<DispatchInput | null>(null)
+const testEmail = shallowRef('')
 const form = reactive({
   name: '',
   subject: '',
@@ -87,7 +95,14 @@ async function importFile(event: Event) {
     error.value = 'No se pudo leer el archivo.'
   }
 }
-function save() {
+watch(
+  () => [form.name, form.subject, form.body, form.emails, form.template_key, form.consent],
+  () => {
+    confirmation.value = null
+    requestId.value = crypto.randomUUID()
+  }
+)
+function prepareSend() {
   error.value = ''
   if (!emails.value.length || emails.value.length > 10000) {
     error.value = 'Agrega entre 1 y 10 000 destinatarios.'
@@ -97,19 +112,42 @@ function save() {
     error.value = 'Revisa los correos: hay direcciones inválidas.'
     return
   }
-  emit('save', {
+  confirmation.value = {
+    request_id: requestId.value,
     name: form.name,
     subject: form.subject,
     body: form.body,
     emails: emails.value,
     template_key: form.template_key,
     consent_confirmed: form.consent
+  }
+}
+function confirmSend() {
+  if (!confirmation.value) return
+  emit('send', confirmation.value)
+  confirmation.value = null
+}
+function sendTest() {
+  error.value = ''
+  if (
+    !form.subject.trim() ||
+    !form.body.trim() ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(testEmail.value.trim())
+  ) {
+    error.value = 'Completa el asunto, el mensaje y un correo de prueba válido.'
+    return
+  }
+  emit('test', {
+    email: testEmail.value.trim(),
+    subject: form.subject,
+    body: form.body,
+    template_key: form.template_key
   })
 }
 </script>
 
 <template>
-  <form class="campaign-editor" @submit.prevent="save">
+  <form class="campaign-editor" @submit.prevent="prepareSend">
     <div class="editor-heading">
       <span class="section-kicker">CREAR CAMPAÑA</span>
       <h2>Nueva campaña</h2>
@@ -254,14 +292,44 @@ function save() {
         >
         <p v-if="error" role="alert" class="text-red-700">{{ error }}</p>
         <button
-          :disabled="busy"
+          type="submit"
+          :disabled="busy || !ready || !canSend || sentRequestId === requestId"
           class="rounded-lg bg-emerald-700 px-5 py-2 text-white disabled:opacity-50"
         >
-          {{ busy ? 'Guardando…' : 'Guardar borrador' }}
+          {{
+            sentRequestId === requestId
+              ? 'Campaña en cola'
+              : busy
+                ? 'Procesando…'
+                : 'Enviar campaña'
+          }}
         </button>
-        <p class="save-note">Podrás enviar una prueba antes de lanzar la campaña.</p>
+        <div v-if="confirmation" class="send-confirmation" role="alert">
+          <strong>Confirmar envío</strong>
+          <p>
+            Enviarás «{{ confirmation.subject }}» a {{ confirmation.emails.length }} destinatarios.
+            Se excluirán los correos dados de baja.
+          </p>
+          <div class="flex gap-2">
+            <button type="button" :disabled="busy || !ready || !canSend" @click="confirmSend">
+              Confirmar y enviar</button
+            ><button type="button" @click="confirmation = null">Cancelar</button>
+          </div>
+        </div>
       </div>
       <aside class="editor-preview">
+        <section v-if="canSend" class="test-current-message">
+          <h3>Prueba antes de enviar</h3>
+          <p>Recibe este diseño y mensaje en tu correo, sin crear una campaña.</p>
+          <label
+            >Correo de prueba<input
+              v-model="testEmail"
+              type="email"
+              placeholder="tu-correo@empresa.com" /></label
+          ><button type="button" :disabled="busy || !ready || !testEmail" @click="sendTest">
+            Enviar prueba
+          </button>
+        </section>
         <CampaignPreview
           v-if="templatesLoaded"
           :template-key="form.template_key"
@@ -274,6 +342,41 @@ function save() {
 </template>
 
 <style scoped>
+.test-current-message {
+  background: white;
+  border: 1px solid #dce2ed;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 22px;
+}
+.test-current-message h3 {
+  font-size: 14px;
+  font-weight: 700;
+}
+.test-current-message p {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #64748b;
+  margin: 5px 0 12px;
+}
+.test-current-message label {
+  font-size: 12px;
+}
+.test-current-message button {
+  margin-top: 10px;
+}
+.send-confirmation {
+  padding: 16px;
+  background: #f0f2ff;
+  border: 1px solid #c7cdf1;
+  border-radius: 12px;
+}
+.send-confirmation p {
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 10px 0;
+}
+
 .template-picker {
   margin: 0;
   padding: 0;

@@ -10,7 +10,7 @@ export function parseRecipients(text: string): string[] {
 }
 export const statusLabel = (status: string) =>
   ({
-    draft: 'Borrador',
+    draft: 'Pendiente de envío',
     queued: 'En cola',
     completed: 'Procesada',
     pending: 'Pendiente',
