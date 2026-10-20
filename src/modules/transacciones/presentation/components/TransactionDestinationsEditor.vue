@@ -86,7 +86,8 @@ function formatMoney(value: number): string {
           :model-value="destination.bank_account_id"
           :options="optionsForRow(index)"
           placeholder="Seleccionar cuenta"
-          :searchable="options.length > 5"
+          external-search
+          search-placeholder="Buscar cuenta bancaria"
           @update:model-value="updateRow(index, { bank_account_id: $event })"
         />
       </div>

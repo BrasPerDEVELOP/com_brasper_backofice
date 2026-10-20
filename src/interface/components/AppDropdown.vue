@@ -12,6 +12,8 @@ const props = withDefaults(
     options: DropdownOption[]
     placeholder?: string
     searchable?: boolean
+    externalSearch?: boolean
+    searchPlaceholder?: string
     size?: 'sm' | 'md'
     class?: string
     minWidth?: string
@@ -19,6 +21,8 @@ const props = withDefaults(
   {
     placeholder: 'Seleccionar',
     searchable: undefined,
+    externalSearch: false,
+    searchPlaceholder: 'Buscar...',
     size: 'md',
     class: '',
     minWidth: undefined
@@ -41,9 +45,13 @@ const showSearch = computed(() => {
 const filteredOptions = computed(() => {
   const q = searchQuery.value.trim().toLowerCase()
   if (!q) return props.options
+  const accountDigits = props.externalSearch && /^[\d\s./-]+$/.test(q)
+    ? q.replace(/\D/g, '')
+    : ''
   return props.options.filter(
     (o) =>
-      o.label.toLowerCase().includes(q) || o.value.toLowerCase().includes(q)
+      o.label.toLowerCase().includes(q) || o.value.toLowerCase().includes(q) ||
+      (Boolean(accountDigits) && o.label.replace(/\D/g, '').includes(accountDigits))
   )
 })
 
@@ -70,7 +78,7 @@ const selectedLabel = computed(() => {
 function toggle() {
   isOpen.value = !isOpen.value
   if (isOpen.value) {
-    searchQuery.value = ''
+    if (!props.externalSearch) searchQuery.value = ''
     nextTick(() => {
       const close = (e: MouseEvent) => {
         const el = dropdownRef.value
@@ -99,10 +107,12 @@ watch(
 
 <template>
   <div ref="dropdownRef" class="relative" :class="props.class">
+    <div :class="externalSearch ? 'flex min-w-0 flex-col gap-2 sm:flex-row' : ''">
     <button
       type="button"
       :class="[
         'flex w-full items-center justify-between rounded-lg border bg-white text-left transition',
+        externalSearch ? 'min-w-0 sm:flex-[3]' : '',
         props.size === 'sm'
           ? 'min-h-[32px] py-1.5 pl-2.5 pr-7 text-xs'
           : 'h-10 px-3 py-2.5 text-sm',
@@ -112,7 +122,8 @@ watch(
       @click="toggle"
     >
       <span
-        :class="selectedValueStr ? 'text-[#374151]' : 'text-[#9ca3af]'"
+        :class="[externalSearch ? 'min-w-0 truncate' : '', selectedValueStr ? 'text-[#374151]' : 'text-[#9ca3af]']"
+        :title="externalSearch ? selectedLabel : undefined"
       >
         {{ selectedLabel }}
       </span>
@@ -126,12 +137,25 @@ watch(
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
       </svg>
     </button>
+    <input
+      v-if="externalSearch"
+      v-model="searchQuery"
+      type="search"
+      :placeholder="searchPlaceholder"
+      :aria-label="searchPlaceholder"
+      class="h-10 w-full min-w-0 rounded-lg border border-[#dce3ef] bg-white px-3 text-sm text-[#374151] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/15 sm:flex-[2]"
+      @focus="!isOpen && toggle()"
+      @input="!isOpen && toggle()"
+      @keydown.esc="isOpen = false"
+      @keydown.enter.prevent
+    />
+    </div>
     <div
       v-if="isOpen"
       class="absolute left-0 top-full z-20 mt-1 w-full min-w-[200px] overflow-hidden rounded-lg border border-[#e5e7eb] bg-white shadow-lg"
       :style="minWidth ? { minWidth } : undefined"
     >
-      <div v-if="showSearch" class="border-b border-[#e5e7eb] p-2">
+      <div v-if="showSearch && !externalSearch" class="border-b border-[#e5e7eb] p-2">
         <input
           v-model="searchQuery"
           type="text"
