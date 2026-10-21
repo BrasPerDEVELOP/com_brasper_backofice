@@ -111,6 +111,7 @@ describe('exportación de transacciones a Excel', () => {
   })
 
   it('el nombre del archivo dice qué alcance se descargó', () => {
+    expect(transactionExportFilename('month', '2026-08', '2026-08-10')).toBe('transacciones_2026-08.xlsx')
     expect(transactionExportFilename('day', '2026-08-09', '2026-08-10')).toBe(
       'transacciones_2026-08-09.xlsx'
     )

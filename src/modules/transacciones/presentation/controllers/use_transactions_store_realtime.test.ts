@@ -4,6 +4,26 @@ import { useTransactionsStore } from './use_transactions_store_controller'
 import type { Transaction } from '../../domain/models'
 
 describe('useTransactionsStore - Realtime Mutations', () => {
+  it.each(['upsertTransaction', 'applyRealtimeUpdated'] as const)(
+    '%s conserva documentos omitidos y respeta su eliminación explícita', (action) => {
+      setActivePinia(createPinia())
+      const store = useTransactionsStore()
+      store.transactions = [{ id: 'tx_1', user_id: 'u1', user_document_type: 'CPF', user_document_number: '00123456789' }]
+      store[action]({ id: 'tx_1', user_id: 'u1', status: 'completed', user_document_type: undefined, user_document_number: undefined })
+      expect(store.transactions[0]).toMatchObject({ status: 'completed', user_document_type: 'CPF', user_document_number: '00123456789' })
+      store[action]({ id: 'tx_1', user_id: 'u1', user_document_type: null, user_document_number: null })
+      expect(store.transactions[0]?.user_document_type).toBeNull()
+      expect(store.transactions[0]?.user_document_number).toBeNull()
+    }
+  )
+
+  it('no conserva documentos cuando cambia el cliente', () => {
+    setActivePinia(createPinia())
+    const store = useTransactionsStore()
+    store.transactions = [{ id: 'tx_1', user_id: 'u1', user_document_type: 'DNI', user_document_number: '12345678' }]
+    store.applyRealtimeUpdated({ id: 'tx_1', user_id: 'u2' })
+    expect(store.transactions[0]?.user_document_number).toBeUndefined()
+  })
   beforeEach(() => {
     setActivePinia(createPinia())
   })

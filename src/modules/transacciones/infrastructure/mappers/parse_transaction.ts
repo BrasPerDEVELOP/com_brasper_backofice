@@ -56,10 +56,13 @@ function parseUserDocumentField(
     o.user && typeof o.user === 'object' && !Array.isArray(o.user)
       ? (o.user as Record<string, unknown>)
       : null
-  const raw = nested?.[nestedKey] ?? o[flatKey]
-  if (raw == null) return nested ? null : undefined
+  const hasNestedField = nested != null && Object.prototype.hasOwnProperty.call(nested, nestedKey)
+  const hasFlatField = Object.prototype.hasOwnProperty.call(o, flatKey)
+  if (!hasNestedField && !hasFlatField) return undefined
+  const raw = hasNestedField ? nested![nestedKey] : o[flatKey]
+  if (raw == null) return null
   const text = String(raw).trim()
-  return text || null
+  return text ? (nestedKey === 'document_type' ? text.toUpperCase() : text) : null
 }
 
 function parseDestinations(value: unknown): TransactionDestination[] | undefined {

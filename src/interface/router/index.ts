@@ -9,8 +9,7 @@ function firstPermittedAppPath(authStore: ReturnType<typeof useAuthStore>): stri
     { path: '/app/egresos', permissions: ['expenses.view', 'fx_rates.view'] },
     { path: '/app/usuarios', permissions: ['users.view', 'bank_accounts.view'] },
     { path: '/app/transacciones', permission: 'transactions.view' },
-    { path: '/app/contabilidad', permission: 'accounting.view' },
-    { path: '/app/facturacion', permission: 'billing.view' },
+    { path: '/app/contabilidad', permissions: ['accounting.view', 'billing.view'] },
     { path: '/app/calculator', permission: 'calculator.view' },
     { path: '/app/cupones', permission: 'coupons.view' },
     { path: '/app/comisiones', permission: 'commissions.view' },
@@ -116,14 +115,13 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'contabilidad',
         name: 'contabilidad',
-        component: () => import('@modules/contabilidad/presentation/bodies/contabilidad_view.vue'),
-        meta: { breadcrumb: 'Operaciones > Contabilidad', permission: 'accounting.view' }
+        component: () => import('@modules/contabilidad/presentation/bodies/contabilidad_workspace_view.vue'),
+        meta: { breadcrumb: 'Operaciones > Contabilidad', permissionAny: ['accounting.view', 'billing.view'] }
       },
       {
         path: 'facturacion',
         name: 'facturacion',
-        component: () => import('@modules/facturacion/presentation/bodies/facturacion_view.vue'),
-        meta: { breadcrumb: 'Contabilidad > Facturación electrónica', permission: 'billing.view' }
+        redirect: (to) => ({ path: '/app/contabilidad', query: { ...to.query, tab: 'facturacion' }, replace: true })
       },
       {
         path: 'calculator',

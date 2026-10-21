@@ -117,11 +117,11 @@ export function buildTransactionExportRows(
  * descargas en la carpeta de Descargas.
  */
 export function transactionExportFilename(
-  scope: 'day' | 'all',
+  scope: 'day' | 'month' | 'all',
   day: string,
   today: string
 ): string {
-  return scope === 'day'
+  return scope === 'day' || scope === 'month'
     ? `transacciones_${day}.xlsx`
     : `transacciones_todas_${today}.xlsx`
 }

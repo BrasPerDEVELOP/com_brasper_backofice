@@ -49,6 +49,8 @@ import { useBillingStore } from '@modules/facturacion/presentation/controllers/u
 import InvoiceCell from '@modules/facturacion/presentation/components/InvoiceCell.vue'
 import IssueInvoiceDialog from '@modules/facturacion/presentation/components/IssueInvoiceDialog.vue'
 import InvoiceDetailDialog from '@modules/facturacion/presentation/components/InvoiceDetailDialog.vue'
+import TransactionDetailDialog from '@modules/transacciones/presentation/components/TransactionDetailDialog.vue'
+import { useTransactionPreviewController } from '@modules/transacciones/presentation/controllers/use_transaction_preview_controller'
 
 const transactionsStore = useTransactionsStore()
 const cuentasStore = useCuentasBancariasStore()
@@ -59,6 +61,38 @@ const accountingCommissionSettingsStore = useAccountingCommissionSettingsStore()
 const tagsStore = useTagsStore()
 const authStore = useAuthStore()
 const billingStore = useBillingStore()
+const { ensurePreviewCatalogLoaded } = useTransactionPreviewController()
+const showTransactionDetail = ref(false)
+const detailTransaction = shallowRef<Transaction | null>(null)
+const detailLoading = ref(false)
+const detailWarning = ref('')
+let detailRequestId = 0
+
+function closeTransactionDetail() {
+  detailRequestId += 1
+  showTransactionDetail.value = false
+  detailTransaction.value = null
+  detailLoading.value = false
+}
+
+async function onRowDoubleClick(transaction: Transaction, event: MouseEvent) {
+  if ((event.target as HTMLElement | null)?.closest('a, button, input, select, textarea, label')) return
+  window.getSelection()?.removeAllRanges()
+  const requestId = ++detailRequestId
+  showTransactionDetail.value = true
+  detailLoading.value = true
+  detailTransaction.value = null
+  detailWarning.value = ''
+  pdfError.value = ''
+  const [fresh] = await Promise.all([
+    transaction.id ? transactionsStore.getTransactionById(transaction.id) : Promise.resolve(null),
+    ensurePreviewCatalogLoaded()
+  ])
+  if (requestId !== detailRequestId || !showTransactionDetail.value) return
+  detailTransaction.value = fresh ? { ...transaction, ...fresh } : { ...transaction }
+  if (!fresh) detailWarning.value = 'No se pudo cargar el detalle actualizado. Se muestran los datos disponibles.'
+  detailLoading.value = false
+}
 
 /* ---- Facturación electrónica (comprobante SUNAT por operación) ---- */
 const canViewBilling = computed(() => authStore.hasPermission('billing.view'))
@@ -96,7 +130,7 @@ const createdAtTo = ref<string>('')
  * Misma operación diaria que Ventas: por defecto un solo día;
  * `"all"` levanta el recorte para el histórico contable.
  */
-type TransactionScope = 'day' | 'all'
+type TransactionScope = 'day' | 'month' | 'all'
 
 function todayDayKey(): string {
   const d = new Date()
@@ -107,6 +141,15 @@ function todayDayKey(): string {
 
 const transactionScope = ref<TransactionScope>('day')
 const selectedDay = ref<string>(todayDayKey())
+const selectedMonth = ref(todayDayKey().slice(0, 7))
+const selectedMonthRange = computed(() => {
+  const [year, month] = selectedMonth.value.split('-').map(Number)
+  const lastDay = new Date(year!, month!, 0).getDate()
+  return {
+    from: `${selectedMonth.value}-01`,
+    to: `${selectedMonth.value}-${String(lastDay).padStart(2, '0')}`
+  }
+})
 
 const isToday = computed(() => selectedDay.value === todayDayKey())
 
@@ -155,7 +198,6 @@ interface AccountingTableColumn<Key extends string = string> extends ResizableTa
   visuallyHidden?: boolean
 }
 
-const ACCOUNTING_TABLE_ACTIONS_WIDTH = 72
 type AccountingTableColumnKey =
   | 'code'
   | 'sendDate'
@@ -168,14 +210,13 @@ type AccountingTableColumnKey =
   | 'company'
   | 'sendAmount'
   | 'receiveAmount'
+  | 'baseCommission'
   | 'exchangeRate'
   | 'variableDiscount'
   | 'internalCommission'
   | 'internalTax'
   | 'internalSale'
   | 'invoice'
-  | 'sendVoucher'
-  | 'paymentVoucher'
 
 /** Anchos pensados para ~1280–1600px de contenido; el usuario puede ensanchar. */
 const ACCOUNTING_TABLE_COLUMNS: readonly AccountingTableColumn<AccountingTableColumnKey>[] = [
@@ -283,6 +324,17 @@ const ACCOUNTING_TABLE_COLUMNS: readonly AccountingTableColumn<AccountingTableCo
     headerLines: ['Monto a', 'recibir']
   },
   {
+    key: 'baseCommission',
+    label: 'Comisión base',
+    defaultWidth: 112,
+    minWidth: 96,
+    maxWidth: 420,
+    headerClass:
+      'whitespace-nowrap bg-sky-700 px-2 py-3 text-center text-[10px] font-bold uppercase leading-tight tracking-wide text-white',
+    title: 'Comisión guardada en la transacción, en la moneda de envío',
+    headerLines: ['Comisión', 'base']
+  },
+  {
     key: 'exchangeRate',
     label: 'Tipo cambio',
     defaultWidth: 88,
@@ -345,29 +397,8 @@ const ACCOUNTING_TABLE_COLUMNS: readonly AccountingTableColumn<AccountingTableCo
       'whitespace-nowrap px-1.5 py-3 text-center text-xs font-semibold leading-tight text-brasper-indigoDark',
     title: 'Boleta o factura electrónica por la comisión (APISUNAT)',
     headerLines: ['Comprobante', 'SUNAT']
-  },
-  {
-    key: 'sendVoucher',
-    label: 'Comprobante de envío',
-    defaultWidth: 72,
-    minWidth: 64,
-    maxWidth: 400,
-    headerClass:
-      'whitespace-nowrap px-1.5 py-3 text-center text-xs font-semibold leading-tight text-brasper-indigoDark',
-    title: 'Comprobante de envío (imagen)',
-    headerLines: ['Comp.', 'envío']
-  },
-  {
-    key: 'paymentVoucher',
-    label: 'Comprobante de pago',
-    defaultWidth: 72,
-    minWidth: 64,
-    maxWidth: 400,
-    headerClass:
-      'whitespace-nowrap px-1.5 py-3 text-center text-xs font-semibold leading-tight text-brasper-indigoDark',
-    title: 'Comprobante de pago (imagen)',
-    headerLines: ['Comp.', 'pago']
   }
+
 ]
 
 const {
@@ -379,8 +410,7 @@ const {
   resizeBy: resizeAccountingColumnBy
 } = useResizableTableColumns({
   columns: ACCOUNTING_TABLE_COLUMNS,
-  storageKey: 'brasper:accounting:table-column-widths:v6',
-  fixedWidth: ACCOUNTING_TABLE_ACTIONS_WIDTH
+  storageKey: 'brasper:accounting:table-column-widths:v6'
 })
 
 function openMediaViewer(source: string, title = 'Comprobante') {
@@ -484,15 +514,15 @@ const apiFilterParams = computed((): GetTransactionsParams => {
     if (origin) p.origin_currency = origin.toUpperCase()
     if (destination) p.destination_currency = destination.toUpperCase()
   }
-  // En modo día el recorte lo define `selectedDay`; desde/hasta solo en histórico.
+  // El mismo período se aplica al listado y a la exportación completa.
   const fromMs =
     transactionScope.value === 'day'
       ? localDateInputStartMs(selectedDay.value)
-      : localDateInputStartMs(createdAtFrom.value)
+      : localDateInputStartMs(transactionScope.value === 'month' ? selectedMonthRange.value.from : createdAtFrom.value)
   const toMs =
     transactionScope.value === 'day'
       ? localDateInputEndMs(selectedDay.value)
-      : localDateInputEndMs(createdAtTo.value)
+      : localDateInputEndMs(transactionScope.value === 'month' ? selectedMonthRange.value.to : createdAtTo.value)
   if (fromMs != null) p.send_date_from = new Date(fromMs).toISOString()
   if (toMs != null) p.send_date_to = new Date(toMs).toISOString()
   const q = debouncedSearch.value.trim()
@@ -506,6 +536,8 @@ const { isExporting, exportError, exportAccountingToExcel } = useAccountingExpor
     filters: { ...apiFilterParams.value },
     filename: transactionScope.value === 'day'
       ? `contabilidad_${selectedDay.value}.xlsx`
+      : transactionScope.value === 'month'
+        ? `contabilidad_${selectedMonth.value}.xlsx`
       : `contabilidad_todas_${todayDayKey()}.xlsx`
   }),
   [
@@ -522,6 +554,7 @@ const { isExporting, exportError, exportAccountingToExcel } = useAccountingExpor
     { label: 'Moneda envío', value: (t) => getTransactionCurrencies(t).origin.toUpperCase() },
     { label: 'Monto a recibir', value: (t) => t.destination_amount },
     { label: 'Moneda destino', value: (t) => getTransactionCurrencies(t).destination.toUpperCase() },
+    { label: 'Comisión base', value: (t) => t.resultado_comision ?? t.commission_result },
     { label: 'Tipo cambio', value: getTransactionExchangeRate },
     { label: 'Descuento variable (%)', value: descuentoVariable },
     { label: 'Comisión final interna', value: (t) => internalSaleBreakdown(t)?.net },
@@ -985,6 +1018,7 @@ watch(
     createdAtTo,
     transactionScope,
     selectedDay,
+    selectedMonth,
     debouncedSearch,
     tagFilter,
     perPage
@@ -1050,17 +1084,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="w-full min-w-0 max-w-full space-y-6">
-    <div class="mb-6">
-      <div class="mb-4 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brasper-indigoStrong">
-            Operaciones
-          </p>
-          <h1 class="text-2xl font-semibold text-[#232b4d]">Contabilidad</h1>
-        </div>
-      </div>
-
+  <div class="flex w-full min-w-0 max-w-full flex-col gap-4">
+    <div>
       <!--
         Alcance de la lista (igual que Ventas). Por defecto un día;
         «Todas» habilita el rango de fechas de envío.
@@ -1082,6 +1107,15 @@ onMounted(() => {
               @click="transactionScope = 'day'"
             >
               Por día
+            </button>
+            <button
+              type="button"
+              class="border-l border-[#dbe7fb] px-3 py-1.5 text-sm transition"
+              :class="transactionScope === 'month' ? 'bg-brasper-indigoStrong font-medium text-white' : 'bg-white text-[#374151] hover:bg-[#f9fafb]'"
+              :aria-pressed="transactionScope === 'month'"
+              @click="transactionScope = 'month'"
+            >
+              Por mes
             </button>
             <button
               type="button"
@@ -1143,9 +1177,62 @@ onMounted(() => {
               Ir a hoy
             </button>
           </template>
+          <div v-else-if="transactionScope === 'month'" class="flex flex-wrap items-center gap-3">
+            <label for="accounting-month" class="text-sm text-[#374151]">Mes</label>
+            <input
+              id="accounting-month"
+              v-model="selectedMonth"
+              type="month"
+              required
+              class="h-9 rounded-lg border border-[#dbe7fb] bg-white px-3 text-sm text-[#374151]"
+            />
+            <span class="text-sm text-[#374151]">{{ totalResults }} envíos del mes</span>
+          </div>
           <p v-else class="text-sm text-[#374151]">
             Histórico completo · <strong>{{ totalResults }}</strong> envíos.
           </p>
+        </div>
+        <div class="flex items-center gap-2">
+          <span v-if="exportError" role="alert" class="text-xs text-[#dc3545]">
+            {{ exportError }}
+          </span>
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 rounded-lg border border-[#dbe7fb] bg-white px-3 py-2 text-sm font-medium text-brasper-indigoStrong transition hover:bg-[#f9fafb] disabled:opacity-50"
+            :disabled="isExporting || transactionsStore.isLoading || transactionsStore.isRefreshing || totalResults === 0 || (transactionScope === 'month' && !selectedMonth)"
+            :title="
+              transactionScope === 'day'
+                ? `Descargar los ${totalResults} envíos de este día, con los filtros aplicados`
+                : transactionScope === 'month'
+                  ? `Descargar los ${totalResults} envíos de este mes, con los filtros aplicados`
+                : `Descargar los ${totalResults} envíos del histórico, con los filtros aplicados`
+            "
+            @click="exportAccountingToExcel"
+          >
+            <svg
+              class="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+              />
+            </svg>
+            {{
+              isExporting
+                ? 'Generando…'
+                : transactionScope === 'day'
+                  ? 'Exportar el día'
+                  : transactionScope === 'month'
+                    ? 'Exportar el mes'
+                  : 'Exportar todo'
+            }}
+          </button>
         </div>
       </div>
 
@@ -1208,8 +1295,8 @@ onMounted(() => {
       />
     </div>
 
-    <div class="mb-6">
-      <div class="relative min-w-[220px] max-w-sm">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div class="relative w-full min-w-0 sm:max-w-sm">
         <svg
           class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]"
           fill="none"
@@ -1231,27 +1318,11 @@ onMounted(() => {
         />
       </div>
     </div>
-
     <p
       v-if="transactionsStore.error"
       class="rounded-lg bg-[#dc3545]/10 px-4 py-3 text-sm text-[#dc3545]"
     >
       {{ transactionsStore.error }}
-    </p>
-
-    <div class="flex flex-wrap items-center justify-end gap-3">
-      <span v-if="exportError" role="alert" class="text-sm text-[#dc3545]">{{ exportError }}</span>
-      <button
-        type="button"
-        class="rounded-lg border border-[#dbe7fb] bg-white px-4 py-2 text-sm font-medium text-brasper-indigoStrong hover:bg-[#eef5ff] disabled:cursor-not-allowed disabled:opacity-50"
-        :disabled="isExporting || transactionsStore.isLoading"
-        @click="exportAccountingToExcel"
-      >
-        {{ isExporting ? 'Exportando…' : 'Exportar Excel' }}
-      </button>
-    </div>
-    <p v-if="pdfError" class="rounded-lg bg-[#dc3545]/10 px-4 py-3 text-sm text-[#dc3545]">
-      {{ pdfError }}
     </p>
     <p
       v-if="billingDateError"
@@ -1294,15 +1365,19 @@ onMounted(() => {
             :key="column.key"
             :style="accountingColumnStyles[column.key]"
           />
-          <col :style="{ width: `${ACCOUNTING_TABLE_ACTIONS_WIDTH}px` }" />
         </colgroup>
         <thead>
           <tr class="bg-[#dbeafe]">
             <th
               v-for="column in ACCOUNTING_TABLE_COLUMNS"
               :key="column.key"
-              class="relative overflow-visible"
-              :class="column.headerClass"
+              class="overflow-visible"
+              :class="[
+                column.headerClass,
+                column.key === 'invoice'
+                  ? 'sticky right-0 z-[2] bg-[#dbeafe] shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]'
+                  : 'relative'
+              ]"
               :title="column.title"
             >
               <span v-if="column.visuallyHidden" class="sr-only">
@@ -1328,18 +1403,12 @@ onMounted(() => {
                 @resize-step="resizeAccountingColumnBy(column.key, $event)"
               />
             </th>
-            <th
-              class="sticky right-0 z-[2] bg-[#dbeafe] px-2 py-3 text-center text-xs font-semibold leading-tight text-brasper-indigoDark shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]"
-              title="Descargar el detalle contable en PDF"
-            >
-              PDF
-            </th>
           </tr>
         </thead>
         <tbody>
           <tr v-if="paginatedTransactions.length === 0" class="border-t border-[#e5e7eb]">
             <td
-              :colspan="ACCOUNTING_TABLE_COLUMNS.length + 1"
+              :colspan="ACCOUNTING_TABLE_COLUMNS.length"
               class="rounded-xl border border-[#dbe7fb] bg-[#fbfdff] px-6 py-12 text-center text-[#666]"
             >
               {{
@@ -1353,6 +1422,7 @@ onMounted(() => {
             v-for="t in paginatedTransactions"
             :key="t.id ?? ''"
             class="border-t border-[#e5e7eb] bg-white transition-colors duration-700 hover:bg-[#f9fafb]"
+            @dblclick="onRowDoubleClick(t, $event)"
           >
             <td class="overflow-hidden whitespace-nowrap px-3 py-3 text-center font-medium text-[#374151]">
               <span class="inline-flex max-w-full items-center justify-center gap-2">
@@ -1431,6 +1501,11 @@ onMounted(() => {
               }}
             </td>
             <td
+              class="overflow-hidden text-ellipsis whitespace-nowrap bg-sky-50 px-2 py-3 text-center text-sm font-semibold tabular-nums text-sky-950"
+            >
+              {{ formatOriginMoney(t, t.resultado_comision ?? t.commission_result) }}
+            </td>
+            <td
               class="truncate whitespace-nowrap px-2 py-3 text-center tabular-nums text-[#374151]"
               :title="getTransactionExchangeTitle(t)"
             >
@@ -1463,7 +1538,7 @@ onMounted(() => {
             >
               {{ internalSaleLabel(t) }}
             </td>
-            <td class="overflow-hidden px-1.5 py-2 align-middle text-center">
+            <td class="sticky right-0 z-[1] overflow-hidden bg-white px-1.5 py-2 align-middle text-center shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]">
               <InvoiceCell
                 v-if="canViewBilling && t.id"
                 :invoice="billingStore.invoiceFor(t.id)"
@@ -1473,83 +1548,6 @@ onMounted(() => {
                 @open="openInvoiceDetail"
               />
               <span v-else class="text-[#9ca3af]">—</span>
-            </td>
-            <td class="overflow-hidden px-2 py-2 align-middle text-center">
-              <template v-if="voucherMediaHref(t.send_voucher)">
-                <button
-                  type="button"
-                  class="inline-flex max-w-[5rem] flex-col items-center gap-1"
-                  title="Ver comprobante de envío"
-                  @click="openMediaViewer(voucherMediaHref(t.send_voucher), 'Comprobante de envío')"
-                >
-                  <img
-                    :src="voucherMediaHref(t.send_voucher)"
-                    alt=""
-                    class="h-11 w-11 rounded border border-[#e5e7eb] bg-[#f3f4f6] object-cover"
-                    loading="lazy"
-                    @error="($event.target as HTMLImageElement).style.display = 'none'"
-                  />
-                  <span
-                    class="text-[10px] font-medium leading-tight text-brasper-indigoStrong underline decoration-transparent hover:decoration-current"
-                  >
-                    Abrir
-                  </span>
-                </button>
-              </template>
-              <span v-else class="text-[#9ca3af]">—</span>
-            </td>
-            <td class="overflow-hidden px-2 py-2 align-middle text-center">
-              <template v-if="voucherMediaHref(t.payment_voucher)">
-                <button
-                  type="button"
-                  class="inline-flex max-w-[5rem] flex-col items-center gap-1"
-                  title="Ver comprobante de pago"
-                  @click="
-                    openMediaViewer(voucherMediaHref(t.payment_voucher), 'Comprobante de pago')
-                  "
-                >
-                  <img
-                    :src="voucherMediaHref(t.payment_voucher)"
-                    alt=""
-                    class="h-11 w-11 rounded border border-[#e5e7eb] bg-[#f3f4f6] object-cover"
-                    loading="lazy"
-                    @error="($event.target as HTMLImageElement).style.display = 'none'"
-                  />
-                  <span
-                    class="text-[10px] font-medium leading-tight text-brasper-indigoStrong underline decoration-transparent hover:decoration-current"
-                  >
-                    Abrir
-                  </span>
-                </button>
-              </template>
-              <span v-else class="text-[#9ca3af]">—</span>
-            </td>
-            <td
-              class="sticky right-0 z-[1] bg-white px-2 py-3 text-center shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]"
-            >
-              <button
-                type="button"
-                class="inline-flex items-center gap-1 rounded-lg border border-[#bcd7ff] bg-[#eef5ff] px-2.5 py-1.5 text-[11px] font-medium text-brasper-indigoStrong transition hover:bg-[#e2eeff] disabled:cursor-not-allowed disabled:opacity-60"
-                :disabled="downloadingPdfId !== null"
-                :title="`Descargar PDF de ${formatTransactionCodeForDisplay(t.code)}`"
-                @click.stop="downloadPdf(t)"
-              >
-                <svg
-                  class="h-3.5 w-3.5"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"
-                  />
-                </svg>
-                {{ downloadingPdfId === (t.id ?? '') ? 'Generando…' : 'PDF' }}
-              </button>
             </td>
           </tr>
         </tbody>
@@ -1609,6 +1607,42 @@ onMounted(() => {
         </div>
       </div>
     </div>
+
+    <TransactionDetailDialog
+      :show-preview-modal="showTransactionDetail"
+      :preview-transaction="detailTransaction"
+      :preview-loading="detailLoading"
+      :preview-detail-warning="detailWarning"
+      @close="closeTransactionDetail"
+      @media="openMediaViewer"
+    >
+      <template #actions>
+        <p v-if="pdfError" role="alert" class="w-full text-sm text-[#dc3545]">{{ pdfError }}</p>
+        <button
+          type="button"
+          class="inline-flex items-center gap-2 rounded-lg border border-[#bcd7ff] bg-[#eef5ff] px-4 py-2.5 text-sm font-medium text-brasper-indigoStrong transition hover:bg-[#e2eeff] disabled:cursor-not-allowed disabled:opacity-60"
+          :disabled="downloadingPdfId !== null"
+          :title="`Descargar PDF de ${formatTransactionCodeForDisplay(detailTransaction?.code)}`"
+          @click.stop="detailTransaction && downloadPdf(detailTransaction)"
+        >
+          <svg
+            class="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"
+            />
+          </svg>
+          {{ downloadingPdfId !== null ? 'Generando…' : 'Descargar PDF' }}
+        </button>
+      </template>
+    </TransactionDetailDialog>
 
     <MediaViewerDialog
       v-model="showMediaViewer"

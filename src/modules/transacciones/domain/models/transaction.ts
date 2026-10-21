@@ -35,8 +35,8 @@ export interface Transaction {
   bank_account_origin_id?: string
   bank_account_destination_id?: string
   destinations?: TransactionDestination[]
-    user_id?: string
-  /** Documento principal del cliente; solo llega en `GET /transactions/accounting`. */
+  user_id?: string
+  /** Documento del usuario relacionado, normalizado desde `user.document_*` del API. */
   user_document_type?: string | null
   user_document_number?: string | null
   agent_id?: string

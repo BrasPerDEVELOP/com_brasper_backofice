@@ -62,6 +62,18 @@ function errorMessageFromCatch(e: unknown, fallback: string): string {
 /** Encadena cargas para no solapar `isLoading` / `isRefreshing` entre peticiones. */
 let loadTransactionsChain: Promise<void> = Promise.resolve()
 
+/** Las respuestas de escritura y tiempo real pueden omitir el documento contable. */
+function preserveUserDocuments(previous: Transaction, incoming: Transaction): Transaction {
+  if (incoming.user_id !== undefined && incoming.user_id !== previous.user_id) return incoming
+  return {
+    ...incoming,
+    user_document_type: incoming.user_document_type === undefined
+      ? previous.user_document_type : incoming.user_document_type,
+    user_document_number: incoming.user_document_number === undefined
+      ? previous.user_document_number : incoming.user_document_number
+  }
+}
+
 export interface LoadTransactionsOptions {
   /**
    * Por defecto (undefined): si ya hay filas al ejecutar la petición, refresco en segundo plano
@@ -330,7 +342,7 @@ export const useTransactionsStore = defineStore('transactions', {
         : -1
 
       if (existingIdx >= 0) {
-        this.transactions[existingIdx] = enriched
+        this.transactions[existingIdx] = preserveUserDocuments(this.transactions[existingIdx]!, enriched)
         return false
       }
 
@@ -350,7 +362,7 @@ export const useTransactionsStore = defineStore('transactions', {
         const updated = await useCase.execute(id, payload)
         const idx = this.transactions.findIndex((t) => (t.id ?? '') === id)
         const enriched = enrichTransactionWithSpecialDiscountMeta(updated)
-        if (idx >= 0) this.transactions[idx] = enriched
+        if (idx >= 0) this.transactions[idx] = preserveUserDocuments(this.transactions[idx]!, enriched)
         // La fecha de envío pudo cambiar: el correlativo del día se recalcula.
         this.resetDailySequences()
         return enriched
@@ -370,7 +382,7 @@ export const useTransactionsStore = defineStore('transactions', {
         const updated = await repo.updateAccountingBillingDate(id.trim(), billingDate)
         const idx = this.transactions.findIndex((t) => (t.id ?? '') === id)
         const enriched = enrichTransactionWithSpecialDiscountMeta(updated)
-        if (idx >= 0) this.transactions[idx] = { ...this.transactions[idx], ...enriched }
+        if (idx >= 0) this.transactions[idx] = { ...this.transactions[idx], ...preserveUserDocuments(this.transactions[idx]!, enriched) }
         return enriched
       } catch (e) {
         this.error = errorMessageFromCatch(e, 'Error al actualizar fecha de facturación')
@@ -439,7 +451,7 @@ export const useTransactionsStore = defineStore('transactions', {
       const idx = this.transactions.findIndex((t) => (t.id ?? '') === txId)
 
       if (idx >= 0) {
-        this.transactions[idx] = enriched
+        this.transactions[idx] = preserveUserDocuments(this.transactions[idx]!, enriched)
       }
 
       this.resetDailySequences()

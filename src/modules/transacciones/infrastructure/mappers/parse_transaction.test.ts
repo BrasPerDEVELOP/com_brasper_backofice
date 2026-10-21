@@ -115,11 +115,14 @@ describe('parseTransaction', () => {
     const parsed = parseTransaction({
       user: { id: 'u2', document_type: 'dni', document_number: '12345678' }
     })
-    expect(parsed.user_document_type).toBe('dni')
+    expect(parsed.user_document_type).toBe('DNI')
     expect(parsed.user_document_number).toBe('12345678')
   })
 
   it('deja el documento del usuario vacío cuando el listado no lo trae', () => {
+    const referenceOnly = parseTransaction({ user: { id: 'u1', role: 'client' } })
+    expect(referenceOnly.user_document_type).toBeUndefined()
+    expect(referenceOnly.user_document_number).toBeUndefined()
     expect(parseTransaction({ user_id: 'u1' }).user_document_type).toBeUndefined()
     expect(
       parseTransaction({ user: { id: 'u2', document_type: null, document_number: '  ' } })
@@ -143,6 +146,28 @@ describe('attachmentStrings / normalizeAttachmentValues', () => {
 })
 
 describe('transactionFromApiRecord', () => {
+  it('usa el documento serializado del usuario en listado y respuestas de actualización', () => {
+    const response = {
+      id: 'tx-1', user_id: 'u1',
+      user: { id: 'u1', role: 'client', document_type: ' cpf ', document_number: ' 00123456789 ' },
+      user_document_type: 'DNI', user_document_number: 'anterior'
+    }
+    for (const transaction of [transactionFromApiRecord(response), ...parseTransactions({ items: [response], total: 1 })]) {
+      expect(transaction.user_id).toBe('u1')
+      expect(transaction.user_document_type).toBe('CPF')
+      expect(transaction.user_document_number).toBe('00123456789')
+    }
+  })
+
+  it('respeta documentos nulos del usuario sin recuperar valores planos antiguos', () => {
+    const transaction = transactionFromApiRecord({
+      id: 'tx-1', user: { id: 'u1', document_type: null, document_number: null },
+      user_document_type: 'DNI', user_document_number: '12345678'
+    })
+    expect(transaction.user_document_type).toBeNull()
+    expect(transaction.user_document_number).toBeNull()
+  })
+
   it('combina el crudo con el parse sin pisar con undefined', () => {
     const rec = transactionFromApiRecord({ id: 1, code: 'TX1', extra_field: 'keep' })
     expect(rec.id).toBe('1')

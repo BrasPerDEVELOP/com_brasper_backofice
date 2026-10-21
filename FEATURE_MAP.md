@@ -34,7 +34,7 @@ Ampliación 2026-09-11: campanita (`notifications.view`) y avisos (`notification
 | auth / login | `/` | público | `useAuthStore` | `auth_api_adapter` | `auth/login` | Completo |
 | dashboard / metrics | `/app/dashboard` (`/app/metricas` redirige conservando query) | `dashboard.view` o `metrics.view` | `use_metrics_store` | `metrics_api_adapter` | `env.metricsOverviewPath` (`metrics/overview`) | Completo; métricas con `metrics.view`, panel legado con solo `dashboard.view` |
 | transacciones | `/app/transacciones` | `transactions.view` | `use_transactions_store` | `transactions_api_adapter` | `transactions` | Completo — **god view** |
-| contabilidad | `/app/contabilidad` | `accounting.view` | — | — | — | Solo presentation ⚠️ |
+| contabilidad | `/app/contabilidad` (Movimientos) y `?tab=facturacion` (Facturación); `/app/facturacion` redirige a la pestaña | `accounting.view` o `billing.view` para el workspace; cada pestaña exige su permiso | — | — | — | Workspace de contabilidad y facturación |
 | calculator | `/app/calculator` | `calculator.view` | `useCalculatorStore` | `calculator_api_adapter` | `coin/{path}` | Completo |
 | cupones | `/app/cupones` | `coupons.view` | `use_cupones_store` | `cupones_api_adapter` | `transactions/coupons` | Completo |
 | comisiones | `/app/comisiones` | `commissions.view` | `use_comisiones_store` | `comisiones_api_adapter` | `coin` | Completo |
