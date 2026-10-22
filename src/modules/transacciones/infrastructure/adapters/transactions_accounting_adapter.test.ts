@@ -109,7 +109,7 @@ describe('TransactionsApiAdapter listado contable', () => {
 
     const { items } = await adapter.getAccountingTransactions()
 
-    expect(items[0].user_document_type).toBe('dni')
+    expect(items[0].user_document_type).toBe('DNI')
     expect(items[0].user_document_number).toBe('12345678')
   })
 
