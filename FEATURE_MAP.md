@@ -78,6 +78,10 @@ defensivos en los handlers).
 
 ## Quirks API (documentados)
 
+Usuarios: los filtros `country`, `role` y `search` se resuelven en SQL mediante
+`GET /user`. El selector de países consulta `GET /user/filter-options`.
+`country=sin-pais` incluye nulos y vacíos. El cliente no filtra usuarios localmente.
+
 | Quirk | Dónde | Nota |
 |-------|-------|------|
 | PUT transaction `id` en body | `transactions_api_adapter.ts` | No en URL path |

@@ -14,13 +14,38 @@ vi.mock('@/interface/infrastructure/services', () => ({
 }))
 
 import { apiClient } from '@/interface/api/client'
-import { createUser, fetchUsers, updateUser } from './users_management_api_adapter'
+import {
+  createUser,
+  fetchUsers,
+  fetchUserFilterOptions,
+  updateUser
+} from './users_management_api_adapter'
 
 const get = vi.mocked(apiClient.get)
 const post = vi.mocked(apiClient.post)
 const put = vi.mocked(apiClient.put)
 
 describe('users management api adapter', () => {
+  it('envía país, rol y búsqueda al backend sin filtrar su respuesta', async () => {
+    get.mockResolvedValueOnce({
+      data: [{ id: 'server-user', names: 'Respuesta del servidor', country: 'Brasil' }]
+    })
+    const users = await fetchUsers({ country: 'brasil', role: 'client', search: 'Adela' })
+    expect(get).toHaveBeenCalledWith(
+      'https://api.test/user',
+      expect.objectContaining({ params: { country: 'brasil', role: 'client', search: 'Adela' } })
+    )
+    expect(users.map((u) => u.id)).toEqual(['server-user'])
+  })
+
+  it('consulta las opciones de país en la API', async () => {
+    get.mockResolvedValueOnce({ data: { countries: ['Brasil', 'Perú'] } })
+    expect(await fetchUserFilterOptions('client')).toEqual(['Brasil', 'Perú'])
+    expect(get).toHaveBeenCalledWith(
+      'https://api.test/user/filter-options',
+      expect.objectContaining({ params: { role: 'client' } })
+    )
+  })
   beforeEach(() => {
     get.mockReset()
     post.mockReset()

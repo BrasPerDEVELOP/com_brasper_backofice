@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import AppDropdown from '@/interface/components/AppDropdown.vue'
+import UserRowActionsMenu from './UserRowActionsMenu.vue'
 import { USER_ROLE_LABELS } from '../../domain/models'
 import type { UserListItem } from '../../infrastructure/adapters/users_management_api_adapter'
 
@@ -22,6 +23,7 @@ defineProps<{
 const emit = defineEmits<{
   select: [user: UserListItem]
   toggleMenu: [id: string]
+  closeMenu: []
   edit: [user: UserListItem]
   resetPassword: [user: UserListItem]
   viewAccounts: [user: UserListItem]
@@ -37,10 +39,6 @@ const perPageOptions = [
   { value: '25', label: '25' },
   { value: '50', label: '50' }
 ]
-
-function isClient(user: UserListItem): boolean {
-  return ['client', 'cliente'].includes((user.role ?? '').toLowerCase())
-}
 
 function documentType(user: UserListItem): string {
   return user.identifications.length > 1
@@ -64,7 +62,7 @@ function documentNumber(user: UserListItem): string {
       >
         <span class="text-sm text-[#6b7280]">Cargando...</span>
       </div>
-      <table class="w-full text-left text-sm">
+      <table class="w-full min-w-[960px] text-left text-sm">
         <thead>
           <tr class="bg-[#dbeafe]">
             <th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">
@@ -75,7 +73,15 @@ function documentNumber(user: UserListItem): string {
               Documento
             </th>
             <th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">Rol</th>
-            <th class="w-12 px-2 py-3"><span class="sr-only">Acciones</span></th>
+            <th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">País</th>
+            <th class="whitespace-nowrap px-4 py-3 font-semibold text-brasper-indigoDark">
+              Zona local
+            </th>
+            <th
+              class="sticky right-0 z-10 w-32 whitespace-nowrap bg-[#dbeafe] px-3 py-3 text-right font-semibold text-brasper-indigoDark"
+            >
+              Acciones
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -106,65 +112,33 @@ function documentNumber(user: UserListItem): string {
                 }}</span
               >
             </td>
-            <td class="relative px-2 py-3">
-              <button
-                type="button"
-                class="rounded p-1.5 text-[#6b7280] hover:bg-[#f3f4f6]"
-                aria-label="Acciones del usuario"
-                @click.stop="emit('toggleMenu', user.id)"
-              >
-                •••
-              </button>
-              <div
-                v-if="openMenuId === user.id"
-                class="absolute right-0 top-full z-20 mt-1 min-w-[180px] rounded-lg border border-[#e5e7eb] bg-white py-1 shadow-lg"
-                @click.stop
-              >
-                <button
-                  v-if="canUpdate"
-                  type="button"
-                  class="block w-full px-4 py-2 text-left text-sm hover:bg-[#f9fafb]"
-                  @click="emit('edit', user)"
-                >
-                  Editar usuario
-                </button>
-                <button
-                  v-if="canResetPassword"
-                  type="button"
-                  class="block w-full px-4 py-2 text-left text-sm hover:bg-[#f9fafb]"
-                  @click="emit('resetPassword', user)"
-                >
-                  Resetear contraseña
-                </button>
-                <button
-                  v-if="canViewAccounts && isClient(user)"
-                  type="button"
-                  class="block w-full px-4 py-2 text-left text-sm hover:bg-[#f9fafb]"
-                  @click="emit('viewAccounts', user)"
-                >
-                  Ver cuentas
-                </button>
-                <button
-                  type="button"
-                  class="block w-full px-4 py-2 text-left text-sm hover:bg-[#f9fafb]"
-                  @click="emit('exportExcel', user)"
-                >
-                  Exportar Excel
-                </button>
-                <button
-                  v-if="canDelete"
-                  type="button"
-                  class="block w-full px-4 py-2 text-left text-sm text-[#dc3545] hover:bg-[#fef2f2]"
-                  :disabled="deletingId === user.id"
-                  @click="emit('delete', user)"
-                >
-                  Borrar
-                </button>
-              </div>
+            <td class="whitespace-nowrap px-4 py-3 text-[#374151]">
+              {{ user.country || 'Sin registrar' }}
+            </td>
+            <td class="min-w-[200px] max-w-[280px] px-4 py-3 text-[#374151]">
+              {{ user.local_area_name || '—' }}
+            </td>
+            <td class="sticky right-0 bg-white px-3 py-3 text-right" @click.stop>
+              <UserRowActionsMenu
+                :user="user"
+                :open="openMenuId === user.id"
+                :deleting="deletingId === user.id"
+                :can-update="canUpdate"
+                :can-delete="canDelete"
+                :can-reset-password="canResetPassword"
+                :can-view-accounts="canViewAccounts"
+                @toggle="emit('toggleMenu', user.id)"
+                @close="emit('closeMenu')"
+                @edit="emit('edit', user)"
+                @reset-password="emit('resetPassword', user)"
+                @view-accounts="emit('viewAccounts', user)"
+                @export-excel="emit('exportExcel', user)"
+                @delete="emit('delete', user)"
+              />
             </td>
           </tr>
           <tr v-if="!loading && users.length === 0">
-            <td colspan="5" class="px-4 py-12 text-center text-[#6b7280]">
+            <td colspan="7" class="px-4 py-12 text-center text-[#6b7280]">
               {{
                 totalUsers === 0
                   ? 'No hay usuarios registrados.'

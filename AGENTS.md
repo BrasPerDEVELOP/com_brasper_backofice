@@ -59,6 +59,7 @@ modules/*/presentation/bodies/*_view.vue  → orquestador (<500 líneas objetivo
 - Leer `CLAUDE.md` + `FEATURE_MAP.md` antes de editar
 - Español en UI; inglés en código
 - API solo vía `Domain.apiPath()` y `apiClient`
+- Los filtros de datos se ejecutan siempre en el backend. El frontend envía los parámetros a la API y muestra su respuesta; no filtra listas de usuarios localmente.
 - Permisos: `module.action` en `permissions.ts`
 
 ## Invocación Cursor

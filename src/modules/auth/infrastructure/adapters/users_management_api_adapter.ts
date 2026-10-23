@@ -33,6 +33,8 @@ export interface FetchUsersParams {
   user_id?: string | null
   /** Filtro por rol (user, sales, admin, client, marketing, accounting). */
   role?: string | null
+  country?: string | null
+  search?: string | null
 }
 
 /** Lista usuarios con filtros opcionales. GET /user/ */
@@ -41,6 +43,8 @@ export async function fetchUsers(params?: FetchUsersParams): Promise<UserListIte
   const query: Record<string, string> = {}
   if (params?.user_id?.trim()) query.user_id = params.user_id.trim()
   if (params?.role?.trim()) query.role = params.role.trim()
+  if (params?.country?.trim()) query.country = params.country.trim()
+  if (params?.search?.trim()) query.search = params.search.trim()
   const response = await apiClient.get<unknown>(url, {
     params: query,
     headers: { Accept: 'application/json' },
@@ -58,6 +62,19 @@ export async function fetchUsers(params?: FetchUsersParams): Promise<UserListIte
     }
   }
   return Array.from(usersById.values()).sort((a, b) => a.name.localeCompare(b.name, 'es'))
+}
+
+export async function fetchUserFilterOptions(role?: string): Promise<string[]> {
+  const response = await apiClient.get<{ countries: string[] }>(
+    Domain.apiPath('user/filter-options'),
+    {
+      params: role ? { role } : {},
+      skipAuthRedirect: true
+    }
+  )
+  if (!Array.isArray(response.data.countries))
+    throw new Error('La API no devuelve las opciones de país')
+  return response.data.countries
 }
 
 /**
@@ -129,16 +146,15 @@ export interface UpdateUserPayload extends Omit<CreateUserPayload, 'email' | 'pa
   email?: string
 }
 
-function appendUserFormFields(
-  form: FormData,
-  payload: CreateUserPayload | UpdateUserPayload
-) {
+function appendUserFormFields(form: FormData, payload: CreateUserPayload | UpdateUserPayload) {
   if (payload.email?.trim()) form.append('email', payload.email.trim())
   if (payload.names?.trim()) form.append('names', payload.names.trim())
   if (payload.lastnames?.trim()) form.append('lastnames', payload.lastnames.trim())
   if (payload.role?.trim()) form.append('role', payload.role.trim())
-  if ('password' in payload && payload.password?.trim()) form.append('password', payload.password.trim())
-  if (payload.document_number?.trim()) form.append('document_number', payload.document_number.trim())
+  if ('password' in payload && payload.password?.trim())
+    form.append('password', payload.password.trim())
+  if (payload.document_number?.trim())
+    form.append('document_number', payload.document_number.trim())
   if (payload.document_type?.trim()) form.append('document_type', payload.document_type.trim())
   if (payload.identifications !== undefined) {
     form.append('identifications', JSON.stringify(payload.identifications))
@@ -146,7 +162,9 @@ function appendUserFormFields(
   const phoneVal = payload.phone
   const phoneNum =
     phoneVal != null && phoneVal !== ''
-      ? (typeof phoneVal === 'number' ? phoneVal : Number(phoneVal))
+      ? typeof phoneVal === 'number'
+        ? phoneVal
+        : Number(phoneVal)
       : null
   if (phoneNum != null && Number.isFinite(phoneNum)) form.append('phone', String(phoneNum))
   if (payload.code_phone?.trim()) form.append('code_phone', payload.code_phone.trim())
@@ -219,9 +237,7 @@ function createUserRequestKey(payload: CreateUserPayload): string {
     phone: payload.phone == null ? '' : String(payload.phone).trim(),
     code_phone: payload.code_phone?.trim() ?? '',
     image:
-      image instanceof File
-        ? `${image.name}:${image.size}:${image.type}:${image.lastModified}`
-        : ''
+      image instanceof File ? `${image.name}:${image.size}:${image.type}:${image.lastModified}` : ''
   })
 }
 
@@ -237,7 +253,7 @@ async function postUser(payload: CreateUserPayload): Promise<UserListItem> {
     const response = await apiClient.post<unknown>(url, form)
     const raw = response.data
     const user = parseUser(
-      (raw != null && typeof raw === 'object' && 'user' in raw)
+      raw != null && typeof raw === 'object' && 'user' in raw
         ? (raw as Record<string, unknown>).user
         : raw
     )
@@ -275,8 +291,8 @@ function isClientCreation(payload: CreateUserPayload): boolean {
 function completesProfile(payload: CreateUserPayload): boolean {
   return Boolean(
     payload.email?.trim() ||
-      payload.document_number?.trim() ||
-      payload.identifications?.some((item) => item.document_number.trim())
+    payload.document_number?.trim() ||
+    payload.identifications?.some((item) => item.document_number.trim())
   )
 }
 
@@ -436,7 +452,9 @@ export async function resetUserPassword(payload: ResetUserPasswordPayload): Prom
         throw new Error('No tienes permiso para resetear la contraseña de este usuario')
       }
       if (status && status >= 500) {
-        throw new Error('El servidor falló al resetear la contraseña. Revisa la regla de permisos del backend para usuarios admin.')
+        throw new Error(
+          'El servidor falló al resetear la contraseña. Revisa la regla de permisos del backend para usuarios admin.'
+        )
       }
       throw new Error(e.message || 'Error al resetear contraseña')
     }

@@ -22,6 +22,9 @@ export interface UserListItem {
   identifications: UserIdentification[]
   phone?: number | null
   code_phone?: string | null
+  country?: string | null
+  local_area_code?: string | null
+  local_area_name?: string | null
   /** Señales no sensibles usadas por listados compactos como `name-list`. */
   has_email?: boolean
   has_phone?: boolean
@@ -165,7 +168,10 @@ export function parseUserListItem(item: unknown): UserListItem | null {
     phone: Number.isFinite(phone) ? phone : null,
     code_phone: codePhone != null ? String(codePhone) : null,
     has_email: typeof hasEmailSignal === 'boolean' ? hasEmailSignal : Boolean(email),
-    has_phone: typeof hasPhoneSignal === 'boolean' ? hasPhoneSignal : Number.isFinite(phone)
+    has_phone: typeof hasPhoneSignal === 'boolean' ? hasPhoneSignal : Number.isFinite(phone),
+    country: typeof o.country === 'string' ? o.country.trim() || null : null,
+    local_area_code: o.local_area_code != null ? String(o.local_area_code).trim() || null : null,
+    local_area_name: typeof o.local_area_name === 'string' ? o.local_area_name.trim() || null : null
   }
 }
 

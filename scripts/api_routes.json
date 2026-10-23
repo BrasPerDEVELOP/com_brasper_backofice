@@ -958,6 +958,13 @@
  },
  {
   "method": "GET",
+  "path": "/user/filter-options",
+  "permissions": [
+   "users.view"
+  ]
+ },
+ {
+  "method": "GET",
   "path": "/user/metrics",
   "permissions": [
    "users.view"

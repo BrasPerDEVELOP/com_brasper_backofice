@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick, toRef } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, toRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   fetchUsers,
+  fetchUserFilterOptions,
   deleteUser,
   USER_ROLES,
   type UserListItem
@@ -16,6 +17,11 @@ import UserWorkspacePanel from '../components/UserWorkspacePanel.vue'
 import UserManagementHeader from '../components/UserManagementHeader.vue'
 import UserFiltersBar from '../components/UserFiltersBar.vue'
 import UserDirectoryTable from '../components/UserDirectoryTable.vue'
+import {
+  ALL_COUNTRIES,
+  userCountryKey,
+  useUserCountryOptions
+} from '../composables/use_user_country_filter'
 import UserResetPasswordModal from '../components/UserResetPasswordModal.vue'
 import UserImportExcelModal from '../components/UserImportExcelModal.vue'
 import {
@@ -60,6 +66,11 @@ const bankAccountDeleteError = ref('')
 const highlightedAccountId = ref<string | null>(null)
 const accountSuccessMessage = ref('')
 const searchQuery = ref(queryString(route.query.search) ?? '')
+const countryFilter = ref(
+  queryString(route.query.country)
+    ? userCountryKey(queryString(route.query.country))
+    : ALL_COUNTRIES
+)
 const openMenuId = ref<string | null>(null)
 const resetPasswordUser = ref<UserListItem | null>(null)
 
@@ -112,7 +123,7 @@ const showUserRoleField = computed(() =>
   })
 )
 
-const debouncedSearch = ref('')
+const debouncedSearch = ref(searchQuery.value)
 let searchDebounceId: ReturnType<typeof setTimeout>
 watch(
   searchQuery,
@@ -122,28 +133,13 @@ watch(
       debouncedSearch.value = q
     }, 150)
   },
-  { immediate: true }
+  { immediate: false }
 )
 
-const filteredByRole = computed(() => {
-  const role = roleSelectFilter.value.toLowerCase()
-  if (role === 'todos') return users.value
-  return users.value.filter((u) => (u.role ?? '').toLowerCase() === role)
-})
-
-const searchedUsers = computed(() => {
-  const list = filteredByRole.value
-  const q = debouncedSearch.value.trim().toLowerCase()
-  if (!q) return list
-  return list.filter((u) => {
-    const name = (u.name ?? '').toLowerCase()
-    const email = (u.email ?? '').toLowerCase()
-    const documents = u.identifications
-      .map((item) => `${item.document_type} ${item.document_number}`.toLowerCase())
-      .join(' ')
-    return name.includes(q) || email.includes(q) || documents.includes(q)
-  })
-})
+const availableCountries = ref<string[]>([])
+const { options: countryOptions } = useUserCountryOptions(availableCountries)
+// The API owns every filter; pagination only divides its returned result for display.
+const searchedUsers = computed(() => users.value)
 
 const totalPages = computed(() =>
   Math.max(1, Math.ceil(searchedUsers.value.length / perPage.value))
@@ -154,19 +150,33 @@ const paginatedUsers = computed(() => {
   return searchedUsers.value.slice(start, start + perPage.value)
 })
 
+let userRequestId = 0
 async function loadUsers() {
+  const requestId = ++userRequestId
   loading.value = true
   error.value = ''
   try {
     const role = canViewUsers.value ? roleSelectFilter.value.toLowerCase() : 'client'
-    const params = role !== 'todos' ? { role } : undefined
-    users.value = await fetchUsers(params)
+    const params = {
+      role: role !== 'todos' ? role : undefined,
+      country: countryFilter.value !== ALL_COUNTRIES ? countryFilter.value : undefined,
+      search: debouncedSearch.value.trim() || undefined
+    }
+    // Loading options also verifies that this API supports server-side country filtering.
+    // Never silently fall back to filtering a full user list in the browser.
+    const countries = await fetchUserFilterOptions(params.role)
+    if (requestId !== userRequestId) return
+    availableCountries.value = countries
+    const result = await fetchUsers(params)
+    if (requestId !== userRequestId) return
+    users.value = result
     currentPage.value = Math.min(currentPage.value, totalPages.value)
   } catch (e) {
+    if (requestId !== userRequestId) return
     error.value = e instanceof Error ? e.message : 'Error al cargar usuarios'
     users.value = []
   } finally {
-    loading.value = false
+    if (requestId === userRequestId) loading.value = false
   }
 }
 
@@ -283,18 +293,7 @@ const deleteConfirmMessage = computed(() =>
 )
 
 function toggleMenu(id: string) {
-  if (openMenuId.value === id) {
-    openMenuId.value = null
-    return
-  }
-  openMenuId.value = id
-  nextTick(() => {
-    const close = () => {
-      openMenuId.value = null
-      document.removeEventListener('click', close)
-    }
-    setTimeout(() => document.addEventListener('click', close), 0)
-  })
+  openMenuId.value = openMenuId.value === id ? null : id
 }
 
 function handleDelete(u: UserListItem): void {
@@ -336,16 +335,19 @@ function goToPage(page: number) {
   currentPage.value = Math.max(1, Math.min(page, totalPages.value))
 }
 
-watch([searchQuery, roleSelectFilter, perPage], () => {
+watch([searchQuery, roleSelectFilter, countryFilter, perPage], () => {
   currentPage.value = 1
+  openMenuId.value = null
 })
 
-watch([searchQuery, roleSelectFilter, perPage, currentPage], () => {
+watch([searchQuery, roleSelectFilter, countryFilter, perPage, currentPage], () => {
   const query = { ...route.query }
   if (searchQuery.value.trim()) query.search = searchQuery.value.trim()
   else delete query.search
   if (roleSelectFilter.value !== 'todos') query.role = roleSelectFilter.value
   else delete query.role
+  if (countryFilter.value !== ALL_COUNTRIES) query.country = countryFilter.value
+  else delete query.country
   if (perPage.value !== 10) query.perPage = String(perPage.value)
   else delete query.perPage
   if (currentPage.value > 1) query.page = String(currentPage.value)
@@ -353,7 +355,11 @@ watch([searchQuery, roleSelectFilter, perPage, currentPage], () => {
   void router.replace({ query })
 })
 
-watch(roleSelectFilter, loadUsers)
+watch([roleSelectFilter, countryFilter, debouncedSearch], loadUsers)
+onUnmounted(() => {
+  clearTimeout(searchDebounceId)
+  userRequestId++
+})
 
 watch(showCreateModal, (open) => {
   if (!open) selectedUser.value = null
@@ -385,14 +391,16 @@ function getDocumentNumber(u: UserListItem): string {
 }
 
 function safeFilePart(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .slice(0, 60) || 'usuario'
+  return (
+    value
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 60) || 'usuario'
+  )
 }
 
 function bankLabel(bankId: string): string {
@@ -410,7 +418,17 @@ function accountHolder(account: BankAccount): string {
 }
 
 function exportUsersToExcel() {
-  const headers = ['uuid', 'nombres', 'email', 'tipo_documento', 'n_documento', 'rol']
+  const headers = [
+    'uuid',
+    'nombres',
+    'email',
+    'tipo_documento',
+    'n_documento',
+    'rol',
+    'pais',
+    'codigo_zona_local',
+    'nombre_zona_local'
+  ]
   const rows = searchedUsers.value.map((u) => {
     const documentType = getDocumentType(u)
     const documentNumber = getDocumentNumber(u)
@@ -420,7 +438,10 @@ function exportUsersToExcel() {
       u.email ?? '',
       documentType === '-' ? '' : documentType,
       documentNumber === '-' ? '' : documentNumber,
-      USER_ROLE_LABELS[u.role as keyof typeof USER_ROLE_LABELS] ?? u.role ?? ''
+      USER_ROLE_LABELS[u.role as keyof typeof USER_ROLE_LABELS] ?? u.role ?? '',
+      u.country ?? '',
+      u.local_area_code ?? '',
+      u.local_area_name ?? ''
     ]
   })
   const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
@@ -531,6 +552,8 @@ onMounted(async () => {
   <UserFiltersBar
     v-model:search="searchQuery"
     v-model:role="roleSelectFilter"
+    v-model:country="countryFilter"
+    :country-options="countryOptions"
     :role-options="roleOptions"
     :total="searchedUsers.length"
   />
@@ -571,6 +594,7 @@ onMounted(async () => {
       :can-view-accounts="canViewBankAccounts"
       @select="(user) => workspace.selectUser(user.id, 'profile')"
       @toggle-menu="toggleMenu"
+      @close-menu="openMenuId = null"
       @edit="openEditModal"
       @reset-password="openResetPasswordModal"
       @view-accounts="goToUserBankAccounts"

@@ -3,15 +3,17 @@ import AppDropdown from '@/interface/components/AppDropdown.vue'
 
 defineProps<{
   roleOptions: Array<{ value: string; label: string }>
+  countryOptions: Array<{ value: string; label: string }>
   total: number
 }>()
 
 const search = defineModel<string>('search', { required: true })
 const role = defineModel<string>('role', { required: true })
+const country = defineModel<string>('country', { required: true })
 </script>
 
 <template>
-  <div class="mb-6 flex flex-wrap items-center gap-6">
+  <div class="mb-6 flex flex-wrap items-center gap-4">
     <div class="relative min-w-[220px] max-w-sm flex-1">
       <svg
         class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]"
@@ -33,6 +35,18 @@ const role = defineModel<string>('role', { required: true })
         placeholder="Buscar por nombre, correo o documento"
         class="h-10 w-full rounded-lg border border-[#e5e7eb] bg-white py-2.5 pl-10 pr-4 text-sm text-[#374151] placeholder-[#9ca3af] focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
       />
+    </div>
+    <div class="flex items-center gap-2">
+      <label for="users-country-filter" class="text-sm font-medium text-[#6b7280]">País</label>
+      <select
+        id="users-country-filter"
+        v-model="country"
+        class="h-10 min-w-[160px] rounded-lg border border-[#e5e7eb] bg-white px-3 text-sm text-[#374151] focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
+      >
+        <option v-for="option in countryOptions" :key="option.value" :value="option.value">
+          {{ option.label }}
+        </option>
+      </select>
     </div>
     <div class="flex items-center gap-2">
       <label class="text-sm font-medium text-[#6b7280]">Rol</label>
