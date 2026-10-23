@@ -204,7 +204,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'usuarios',
         name: 'usuarios',
-        component: () => import('@modules/auth/presentation/bodies/usuarios_view.vue'),
+        component: () => import('@modules/auth/presentation/bodies/users_workspace_view.vue'),
         meta: {
           breadcrumb: 'Cuenta > Usuarios y cuentas',
           permissionAny: ['users.view', 'bank_accounts.view']

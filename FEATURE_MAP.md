@@ -122,3 +122,9 @@ Marketing: tarjetas de público Brasil/Perú, contador de asunto y audiencia, es
 Actualizaciones: HTML NetworkFirst, service worker comprobado al volver al panel y cada minuto; aviso de nueva versión con recarga voluntaria para preservar formularios. Ver docs/ops/CACHE-UPDATES.md.
 
 Marketing: envío directo con confirmación vía marketing/dispatch, clave de reintento UUID y pruebas sin crear campaña vía marketing/test. El formulario ya no guarda borradores. Imágenes del correo mediante HTTPS público sin adjuntos.
+
+
+Usuarios: `/app/usuarios?view=metrics` muestra métricas agregadas por país y
+DDD de Brasil (`GET /user/metrics`, `users.view`, filtro `role`). Los nombres
+de zona vienen de `local_area_name`; los códigos faltantes o inválidos se
+cuentan aparte. La pestaña Directorio conserva sus filtros y permisos.
