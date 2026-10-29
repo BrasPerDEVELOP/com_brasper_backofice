@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import { AppTooltip } from '@interface/widgets'
+
 withDefaults(
   defineProps<{
     names?: string
-    phone?: number | string | null
+    phone?: string | null
     creating?: boolean
     error?: string
   }>(),
@@ -69,16 +71,22 @@ function updatePhone(event: Event) {
         </div>
 
         <div>
-          <label class="mb-1.5 block text-sm font-medium text-[#374151]">
-            Teléfono <span class="text-xs font-normal text-[#6b7280]">(opcional)</span>
-          </label>
+          <div class="mb-1.5 flex items-center gap-1.5">
+            <label for="usuario-quick-phone" class="text-sm font-medium text-[#374151]">
+              Teléfono <span class="text-xs font-normal text-[#6b7280]">(opcional)</span>
+            </label>
+            <AppTooltip label="Escribe @ seguido del nombre de usuario para buscarlo en WhatsApp.">
+              <span class="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[#9ca3af] text-[10px] font-semibold leading-none text-[#6b7280]">?</span>
+            </AppTooltip>
+          </div>
           <input
+            id="usuario-quick-phone"
             :value="phone ?? ''"
-            type="tel"
-            inputmode="numeric"
-            autocomplete="tel"
+            type="text"
+            maxlength="100"
+            autocomplete="off"
             class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
-            placeholder="987654321"
+            placeholder="987654321 o @usuario"
             @input="updatePhone"
           />
         </div>

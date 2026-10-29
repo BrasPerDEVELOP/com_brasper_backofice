@@ -12,6 +12,7 @@ import type {
 } from './auth_repository'
 import type { User } from '../../domain/models'
 import { parseUser } from '../parse_user'
+import { normalizeUserPhone } from '../../domain/models/user_phone'
 
 const log = createLoggerWithContext('auth')
 
@@ -188,7 +189,7 @@ export class AuthApiAdapter implements AuthRepository {
     if (payload.email != null && payload.email !== '') body.email = payload.email
     if (payload.document_number != null && payload.document_number !== '') body.document_number = payload.document_number
     if (payload.document_type != null && payload.document_type !== '') body.document_type = payload.document_type
-    if (payload.phone != null) body.phone = payload.phone
+    if (payload.phone !== undefined) body.phone = normalizeUserPhone(payload.phone)
     if (payload.code_phone != null && payload.code_phone !== '') body.code_phone = payload.code_phone
     if (profileImage) body.profile_image = profileImage
     const response = await apiClient.put<unknown>(authPath('me'), body, {

@@ -130,12 +130,20 @@
                   />
                 </div>
                 <div class="space-y-1.5">
-                  <label class="block text-xs font-medium text-[#666]">Teléfono</label>
+                  <div class="flex items-center gap-1.5">
+                    <label for="profile-phone" class="block text-xs font-medium text-[#666]">Teléfono</label>
+                    <AppTooltip label="Escribe @ seguido del nombre de usuario para buscarlo en WhatsApp.">
+                      <span class="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[#9ca3af] text-[10px] font-semibold leading-none text-[#6b7280]">?</span>
+                    </AppTooltip>
+                  </div>
                   <input
-                    v-model.number="form.phone"
-                    type="number"
+                    id="profile-phone"
+                    v-model="form.phone"
+                    type="text"
+                    maxlength="100"
+                    autocomplete="off"
                     class="w-full rounded-xl border border-[#cfdbef] bg-white px-4 py-3 text-sm text-[#333] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
-                    placeholder="987654321"
+                    placeholder="987654321 o @usuario"
                   />
                 </div>
               </div>
@@ -193,7 +201,7 @@
           <div v-if="authStore.user.phone != null || authStore.user.code_phone" class="rounded-xl border border-[#dbe7fb] bg-[#fbfdff] px-4 py-3">
             <p class="text-xs font-medium text-[#666]">Teléfono</p>
             <p class="mt-1 font-medium text-[#232b4d]">
-              {{ [authStore.user.code_phone, authStore.user.phone].filter(Boolean).join(' ') || '—' }}
+              {{ formatUserPhone(authStore.user.phone, authStore.user.code_phone) || '—' }}
             </p>
           </div>
         </div>
@@ -276,6 +284,8 @@ import { Domain } from '@/interface/infrastructure/services'
 import type { User } from '../../domain/models'
 import { useAuthStore } from '../controllers/use_auth_store_controller'
 import AppDropdown from '@/interface/components/AppDropdown.vue'
+import { AppTooltip } from '@interface/widgets'
+import { formatUserPhone } from '../../domain/models/user_phone'
 
 const documentTypeOptions = [
   { value: 'dni', label: 'DNI' },
@@ -312,7 +322,7 @@ const form = ref<{
   lastnames: string
   document_number: string
   document_type: string
-  phone: number | ''
+  phone: string
   code_phone: string
   profile_image: File | null
 }>({
@@ -427,7 +437,7 @@ async function saveProfile() {
       lastnames: form.value.lastnames.trim() || null,
       document_number: form.value.document_number.trim() || null,
       document_type: form.value.document_type.trim() || null,
-      phone: form.value.phone === '' ? null : (Number.isFinite(Number(form.value.phone)) ? Number(form.value.phone) : null),
+      phone: form.value.phone.trim() || null,
       code_phone: form.value.code_phone.trim() || null,
       profile_image: form.value.profile_image
     })

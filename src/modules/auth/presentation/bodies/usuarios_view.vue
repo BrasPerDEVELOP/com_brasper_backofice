@@ -9,6 +9,7 @@ import {
   type UserListItem
 } from '../../infrastructure/adapters/users_management_api_adapter'
 import { USER_ROLE_LABELS } from '../../domain/models'
+import { formatUserPhone } from '../../domain/models/user_phone'
 import * as XLSX from 'xlsx'
 import UsuarioCreateFormModal from '@/interface/components/UsuarioCreateFormModal.vue'
 import CuentaBancariaCreateFormModal from '@/interface/components/CuentaBancariaCreateFormModal.vue'
@@ -474,7 +475,7 @@ async function exportUserToExcel(user: UserListItem) {
       ['Rol', roleLabel],
       ['Tipo documento', getDocumentType(user) === '-' ? '' : getDocumentType(user)],
       ['Numero documento', getDocumentNumber(user) === '-' ? '' : getDocumentNumber(user)],
-      ['Telefono', [user.code_phone, user.phone].filter(Boolean).join(' ')]
+      ['Telefono', formatUserPhone(user.phone, user.code_phone)]
     ]
 
     const wb = XLSX.utils.book_new()

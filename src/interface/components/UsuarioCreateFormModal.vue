@@ -14,6 +14,7 @@ import { USER_ROLE_LABELS, PHONE_CODES } from '@/modules/auth/domain/models'
 import AppDropdown from '@/interface/components/AppDropdown.vue'
 import UserIdentificationsEditor from '@/interface/components/UserIdentificationsEditor.vue'
 import UsuarioQuickCreateDialog from '@/interface/components/UsuarioQuickCreateDialog.vue'
+import { AppTooltip } from '@interface/widgets'
 
 const props = withDefaults(
   defineProps<{
@@ -314,14 +315,20 @@ watch(
               />
             </div>
             <div>
-              <label class="mb-1.5 block text-sm font-medium text-[#374151]">
-                Teléfono
-              </label>
+              <div class="mb-1.5 flex items-center gap-1.5">
+                <label for="usuario-phone" class="text-sm font-medium text-[#374151]">Teléfono</label>
+                <AppTooltip label="Escribe @ seguido del nombre de usuario para buscarlo en WhatsApp.">
+                  <span class="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[#9ca3af] text-[10px] font-semibold leading-none text-[#6b7280]">?</span>
+                </AppTooltip>
+              </div>
               <input
-                v-model.number="form.phone"
-                type="number"
+                id="usuario-phone"
+                v-model="form.phone"
+                type="text"
+                maxlength="100"
+                autocomplete="off"
                 class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
-                placeholder="987654321"
+                placeholder="987654321 o @usuario"
               />
             </div>
             <div class="sm:col-span-2">

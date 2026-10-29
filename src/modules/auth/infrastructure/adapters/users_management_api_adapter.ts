@@ -3,6 +3,7 @@ import { apiClient } from '@/interface/api/client'
 import { formatApiErrorBody } from '@/interface/api/format_api_error'
 import { Domain } from '@/interface/infrastructure/services'
 import { USER_ROLES } from '../../domain/models'
+import { normalizeUserPhone } from '../../domain/models/user_phone'
 import {
   isClientProfileIncomplete,
   parseUserListItem,
@@ -137,7 +138,7 @@ export interface CreateUserPayload {
   document_type?: string
   identifications?: UserIdentification[]
   profile_image?: File | null
-  phone?: number | string | null
+  phone?: string | null
   code_phone?: string
 }
 
@@ -159,14 +160,7 @@ function appendUserFormFields(form: FormData, payload: CreateUserPayload | Updat
   if (payload.identifications !== undefined) {
     form.append('identifications', JSON.stringify(payload.identifications))
   }
-  const phoneVal = payload.phone
-  const phoneNum =
-    phoneVal != null && phoneVal !== ''
-      ? typeof phoneVal === 'number'
-        ? phoneVal
-        : Number(phoneVal)
-      : null
-  if (phoneNum != null && Number.isFinite(phoneNum)) form.append('phone', String(phoneNum))
+  if (payload.phone !== undefined) form.append('phone', normalizeUserPhone(payload.phone) ?? '')
   if (payload.code_phone?.trim()) form.append('code_phone', payload.code_phone.trim())
   if (payload.profile_image instanceof File) form.append('profile_image', payload.profile_image)
 }

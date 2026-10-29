@@ -16,7 +16,7 @@ export interface UpdateProfilePayload {
   document_type?: string | null
   is_agent?: boolean
   role?: string | null
-  phone?: number | null
+  phone?: string | null
   code_phone?: string | null
 }
 

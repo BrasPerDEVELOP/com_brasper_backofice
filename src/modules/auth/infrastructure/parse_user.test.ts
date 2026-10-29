@@ -31,12 +31,12 @@ describe('parseUser (dominio)', () => {
     const u = parseUser({
       id: 1,
       username: 'via-username@b.com',
-      telefono: '999',
+      telefono: '000999',
       documentType: 'DNI',
       codigo_telefono: '+51'
     })
     expect(u?.email).toBe('via-username@b.com')
-    expect(u?.phone).toBe(999)
+    expect(u?.phone).toBe('000999')
     expect(u?.document_type).toBe('DNI')
     expect(u?.code_phone).toBe('+51')
   })
@@ -176,8 +176,10 @@ describe('parseUserListItem (listado)', () => {
     expect(u?.names).toBe('Ana')
   })
 
-  it('parsea phone string a número y null si no es válido', () => {
-    expect(parseUserListItem({ id: 1, phone: '555' })?.phone).toBe(555)
+  it('conserva teléfonos como texto, incluidos ceros iniciales y usuarios con @', () => {
+    expect(parseUserListItem({ id: 1, phone: '555' })?.phone).toBe('555')
+    expect(parseUserListItem({ id: 2, phone: '009876' })?.phone).toBe('009876')
+    expect(parseUserListItem({ id: 3, phone: '@mariaperez' })?.phone).toBe('@mariaperez')
     expect(parseUserListItem({ id: 1, phone: '' })?.phone).toBeNull()
   })
 })
