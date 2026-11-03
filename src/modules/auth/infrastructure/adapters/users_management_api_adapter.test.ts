@@ -26,6 +26,32 @@ const post = vi.mocked(apiClient.post)
 const put = vi.mocked(apiClient.put)
 
 describe('users management api adapter', () => {
+  it('crea clientes distintos con el mismo correo sin asignarles acceso implícito', async () => {
+    get.mockResolvedValue({ data: [{ id: 'old', names: 'Ana', email: 'familia@example.com', role: 'client' }] })
+    post.mockResolvedValue({ data: { id: 'new', names: 'Pedro', email: 'familia@example.com', role: 'client' } })
+    const user = await createUser({ names: 'Pedro', email: 'familia@example.com', role: 'client' })
+    expect(user.id).toBe('new')
+    const form = post.mock.calls[0]?.[1] as FormData
+    expect(form.get('email')).toBe('familia@example.com')
+    expect(form.has('password')).toBe(false)
+    expect(put).not.toHaveBeenCalled()
+  })
+
+  it('propaga un conflicto de correo sin sustituir al cliente por otro', async () => {
+    get.mockResolvedValue({ data: [{ id: 'old', names: 'Ana', email: 'familia@example.com', role: 'client' }] })
+    post.mockRejectedValue({ isAxiosError: true, response: { status: 409, data: { detail: 'Email already exists' } } })
+    await expect(createUser({ names: 'Pedro', email: 'familia@example.com', role: 'client' })).rejects.toThrow('Email already exists')
+    expect(get).toHaveBeenCalledTimes(1)
+  })
+
+  it('conserva la contraseña explícita y el alta de acceso para personal', async () => {
+    post.mockResolvedValue({ data: { id: 'staff', names: 'Vendedor', role: 'sales' } })
+    await createUser({ names: 'Vendedor', email: 'staff@example.com', role: 'sales' })
+    expect((post.mock.calls[0]?.[1] as FormData).get('password')).toBeTruthy()
+    await createUser({ names: 'Cliente', email: 'cliente@example.com', role: 'client', password: 'Explicit123!' })
+    expect((post.mock.calls[1]?.[1] as FormData).get('password')).toBe('Explicit123!')
+  })
+
   it('envía país, rol y búsqueda al backend sin filtrar su respuesta', async () => {
     get.mockResolvedValueOnce({
       data: [{ id: 'server-user', names: 'Respuesta del servidor', country: 'Brasil' }]

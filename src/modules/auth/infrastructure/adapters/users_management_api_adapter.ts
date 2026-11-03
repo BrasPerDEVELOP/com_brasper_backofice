@@ -169,46 +169,10 @@ function normalizeEmail(value: string | undefined): string {
   return (value ?? '').trim().toLowerCase()
 }
 
-function isDuplicateEmailApiError(err: unknown): boolean {
-  if (!axios.isAxiosError(err)) return false
-  const status = err.response?.status
-  if (status !== 400 && status !== 409 && status !== 422) return false
-  const data = err.response?.data
-  if (data != null && typeof data === 'object' && 'email' in (data as Record<string, unknown>)) {
-    return true
-  }
-  const msg = (formatApiErrorBody(data) ?? '').toLowerCase()
-  return (
-    msg.includes('email') &&
-    (msg.includes('exist') ||
-      msg.includes('ya ') ||
-      msg.includes('duplic') ||
-      msg.includes('unique') ||
-      msg.includes('registrado') ||
-      msg.includes('taken'))
-  )
-}
-
-/** Busca un usuario por correo (insensible a mayúsculas). */
-export async function findUserByEmail(
-  email: string,
-  role?: string | null
-): Promise<UserListItem | null> {
-  const normalized = normalizeEmail(email)
-  if (!normalized) return null
-
-  const match = (list: UserListItem[]) =>
-    list.find((u) => {
-      const candidate = normalizeEmail(u.email === '-' ? '' : u.email)
-      return candidate === normalized
-    }) ?? null
-
-  if (role?.trim()) {
-    const byRole = await fetchUsers({ role: role.trim() })
-    const hit = match(byRole)
-    if (hit) return hit
-  }
-  return match(await fetchUsers())
+function creationPassword(payload: CreateUserPayload): string | undefined {
+  if (payload.password?.trim()) return payload.password.trim()
+  // Los clientes del directorio pueden compartir correo sin compartir acceso.
+  return isClientCreation(payload) ? undefined : DEFAULT_USER_TEMPORARY_PASSWORD
 }
 
 const createUserInflight = new Map<string, Promise<UserListItem>>()
@@ -220,7 +184,7 @@ function createUserRequestKey(payload: CreateUserPayload): string {
     names: payload.names?.trim().toLowerCase() ?? '',
     lastnames: payload.lastnames?.trim().toLowerCase() ?? '',
     role: payload.role?.trim().toLowerCase() ?? '',
-    password: payload.password?.trim() ?? DEFAULT_USER_TEMPORARY_PASSWORD,
+    password: creationPassword(payload) ?? '',
     document_number: payload.document_number?.replace(/\s+/g, '').toLowerCase() ?? '',
     document_type: payload.document_type?.trim().toLowerCase() ?? '',
     identifications: (payload.identifications ?? []).map((item) => ({
@@ -240,7 +204,7 @@ async function postUser(payload: CreateUserPayload): Promise<UserListItem> {
   const form = new FormData()
   appendUserFormFields(form, {
     ...payload,
-    password: payload.password?.trim() || DEFAULT_USER_TEMPORARY_PASSWORD
+    password: creationPassword(payload)
   })
 
   try {
@@ -256,11 +220,6 @@ async function postUser(payload: CreateUserPayload): Promise<UserListItem> {
     }
     return user
   } catch (e) {
-    const email = payload.email?.trim()
-    if (email && isDuplicateEmailApiError(e)) {
-      const existing = await findUserByEmail(email, payload.role)
-      if (existing) return existing
-    }
     if (axios.isAxiosError(e)) {
       const apiMessage = formatApiErrorBody(e.response?.data)
       if (apiMessage) throw new Error(apiMessage)
