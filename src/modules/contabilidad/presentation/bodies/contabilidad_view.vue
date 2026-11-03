@@ -1068,6 +1068,7 @@ watch(currencyPairFilterOptions, (options) => {
 
 onMounted(() => {
   transactionsStore.error = null
+  if (canViewBilling.value) void billingStore.loadStatus()
   void loadTransactions()
   void Promise.all([
     cuentasStore.loadBankAccounts(),
@@ -1543,6 +1544,7 @@ onMounted(() => {
                 v-if="canViewBilling && t.id"
                 :invoice="billingStore.invoiceFor(t.id)"
                 :can-issue="canIssueBilling"
+                :current-environment="billingStore.status?.environment"
                 :loading="billingStore.loadingInvoices"
                 @issue="openIssueDialog(t)"
                 @open="openInvoiceDetail"
@@ -1654,6 +1656,7 @@ onMounted(() => {
       v-model="issueDialogOpen"
       :transaction-id="issueTarget?.id ?? null"
       :transaction-code="issueTarget ? formatTransactionCodeForDisplay(issueTarget.code) : null"
+      :transaction-company-name="issueTarget?.company_name ?? null"
       @issued="onInvoiceIssued"
     />
     <InvoiceDetailDialog v-model="invoiceDetailOpen" :invoice-id="invoiceDetailId" />

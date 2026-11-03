@@ -87,9 +87,17 @@ export function canVoidInvoice(status: string): boolean {
   return status === 'accepted'
 }
 
-/** Sin comprobante vivo (o con uno fallido/anulado) la operación se puede volver a emitir. */
-export function canIssueAgain(status: string | null | undefined): boolean {
-  return !status || status === 'voided'
+/** Permite reemplazar un intento fallido de pruebas al pasar a producción. */
+export function canIssueAgain(
+  status: string | null | undefined,
+  invoiceEnvironment?: string,
+  currentEnvironment?: string
+): boolean {
+  return !status || status === 'voided' || (
+    invoiceEnvironment === 'development' &&
+    currentEnvironment === 'production' &&
+    canRetryInvoice(status)
+  )
 }
 
 /** Catálogo 06 de SUNAT: tipo de documento del adquirente. */
@@ -114,6 +122,7 @@ export interface InvoiceEvent {
 }
 
 export interface Invoice {
+  itemDescription?: string | null
   id: string
   transactionId: string
   /** Empresa emisora (cada una con su token de APISUNAT y su numeración). */
@@ -137,6 +146,9 @@ export interface Invoice {
   customerAddress: string | null
   customerEmail: string | null
   status: string
+  emailRequested: boolean
+  emailStatus: string | null
+  emailSentAt: string | null
   issueDate: string | null
   sunatStatus: string | null
   xmlUrl: string | null
@@ -188,6 +200,7 @@ export interface InvoicePreview {
 
 /** Datos del adquirente que el operador puede completar o corregir al emitir. */
 export interface IssueInvoiceInput {
+  sendCustomerEmail?: boolean
   /** `03` boleta o `01` factura. Vacío = automático (RUC → factura). */
   documentType?: '01' | '03' | null
   /** RUC de la empresa emisora. Vacío = la empresa por defecto. */
@@ -245,6 +258,9 @@ export interface InvoiceListFilters {
 
 /** Texto de cada evento de la traza del comprobante. */
 const EVENT_LABELS: Record<string, string> = {
+  email_requested: 'Envío de PDF solicitado',
+  email_sent: 'PDF enviado por correo',
+  email_failed: 'No se pudo enviar el PDF',
   reserved: 'Número reservado',
   sent: 'Enviado a APISUNAT',
   send_failed: 'Falló el envío',

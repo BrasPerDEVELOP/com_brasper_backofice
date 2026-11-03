@@ -11,12 +11,14 @@ import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { AppSpinner } from '@interface/widgets'
 import type { Invoice, InvoicePreview, IssueInvoiceInput } from '../../domain/models'
 import { SUNAT_IDENTITY_LABELS, sunatIdentityLabel } from '../../domain/models'
+import { issuerForTransactionCompany } from '../../domain/resolve_invoice_issuer'
 import { billingErrorMessage, useBillingStore } from '../controllers/use_billing_store'
 import { formatInvoiceMoney } from '../composables/billing_format'
 
 const props = defineProps<{
   transactionId: string | null
   transactionCode?: string | null
+  transactionCompanyName?: string | null
 }>()
 
 const emit = defineEmits<{ issued: [invoice: Invoice] }>()
@@ -31,13 +33,20 @@ const error = ref<string | null>(null)
 const showDocumentFix = ref(false)
 /** Tipo elegido. Arranca con el que propone el API (RUC → factura) y el operador lo cambia. */
 const documentType = ref<'01' | '03' | null>(null)
-/** Empresa emisora elegida (BRASPER 21, INGENITECH…). Arranca en la de por defecto. */
+/** Empresa emisora elegida (BRASPER 21, INGENITECH…). */
 const issuerRuc = ref<string | null>(null)
+const emailInitialized = ref(false)
 const issuers = computed(() => store.status?.issuers ?? [])
+const companyIssuer = computed(() =>
+  issuerForTransactionCompany(props.transactionCompanyName, issuers.value)
+)
+const issuerDiffersFromCompany = computed(() =>
+  companyIssuer.value != null && issuerRuc.value !== companyIssuer.value.ruc
+)
 /** Documento original del cliente (antes de correcciones): decide si hace falta pedir RUC. */
 const originalDocType = ref<string | null>(null)
 const rucInput = ref('')
-const form = reactive<Omit<Required<IssueInvoiceInput>, 'documentType' | 'issuerRuc'>>({
+const form = reactive<Omit<Required<IssueInvoiceInput>, 'documentType' | 'issuerRuc' | 'sendCustomerEmail'>>({
   customerName: '',
   customerAddress: '',
   customerEmail: '',
@@ -58,7 +67,8 @@ function resetForm() {
   error.value = null
   preview.value = null
   documentType.value = null
-  issuerRuc.value = store.status?.defaultIssuerRuc ?? null
+  issuerRuc.value = companyIssuer.value?.ruc ?? store.status?.defaultIssuerRuc ?? null
+  emailInitialized.value = false
   originalDocType.value = null
   rucInput.value = ''
 }
@@ -75,6 +85,10 @@ async function loadPreview() {
     })
     if (requestId === previewRequest) {
       preview.value = result
+      if (!emailInitialized.value && result.customerEmail) {
+        emailInitialized.value = true
+        form.customerEmail = result.customerEmail
+      }
       if (documentType.value === null) {
         documentType.value = result.documentType === '01' ? '01' : '03'
         originalDocType.value = result.customerDocType
@@ -242,6 +256,12 @@ const inputClass =
             <legend class="text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
               Empresa emisora
             </legend>
+            <p v-if="companyIssuer && !issuerDiffersFromCompany" class="text-xs text-[#4b5563]">
+              Seleccionada según la razón social de la operación: {{ transactionCompanyName }}.
+            </p>
+            <p v-else-if="issuerDiffersFromCompany" class="text-xs font-medium text-amber-800" role="alert">
+              La emisora elegida no coincide con la razón social de la operación ({{ transactionCompanyName }}).
+            </p>
             <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <button
                 v-for="issuer in issuers"
@@ -402,6 +422,10 @@ const inputClass =
                   :placeholder="preview.customerEmail ?? 'Sin correo'"
                 />
               </label>
+
+              <p class="text-xs text-[#6b7280]">
+                Cuando SUNAT acepte el comprobante, podrás enviar el PDF desde su detalle y editar el correo.
+              </p>
 
               <button
                 v-if="!needsRuc"

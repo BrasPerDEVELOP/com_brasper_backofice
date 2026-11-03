@@ -10,6 +10,7 @@ import InvoiceStatusChip from './InvoiceStatusChip.vue'
 defineProps<{
   invoice: Invoice | null
   canIssue: boolean
+  currentEnvironment?: string
   loading?: boolean
 }>()
 
@@ -34,7 +35,7 @@ const emit = defineEmits<{ issue: []; open: [invoice: Invoice] }>()
     </button>
 
     <button
-      v-if="canIssue && canIssueAgain(invoice?.status)"
+      v-if="canIssue && canIssueAgain(invoice?.status, invoice?.environment, currentEnvironment)"
       type="button"
       class="inline-flex items-center gap-1 rounded-lg border border-[#bcd7ff] bg-[#eef5ff] px-2.5 py-1 text-[11px] font-semibold text-brasper-indigoStrong transition hover:bg-[#e2eeff]"
       title="Emitir boleta o factura electrónica por la comisión de esta operación"

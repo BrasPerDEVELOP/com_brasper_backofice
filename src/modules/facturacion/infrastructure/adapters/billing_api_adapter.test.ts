@@ -41,6 +41,17 @@ const RAW_INVOICE = {
 }
 
 describe('BillingApiAdapter', () => {
+  it('envía el destinatario editado al backend y refleja el correo pendiente', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ data: {
+      ...RAW_INVOICE, status: 'accepted', customer_email: 'editado@example.com',
+      email_requested: true, email_status: 'pending'
+    } })
+    const invoice = await new BillingApiAdapter().sendInvoiceEmail('inv-1', ' editado@example.com ')
+    expect(apiClient.post).toHaveBeenCalledWith('billing/invoices/inv-1/email', {
+      customer_email: 'editado@example.com'
+    })
+    expect(invoice).toMatchObject({ customerEmail: 'editado@example.com', emailStatus: 'pending' })
+  })
   beforeEach(() => {
     vi.mocked(apiClient.get).mockReset()
     vi.mocked(apiClient.post).mockReset()
@@ -165,6 +176,7 @@ describe('BillingApiAdapter', () => {
       issueInputToApi({ documentType: '01', customerDocType: '6', customerDocNumber: '20123456789' })
     ).toEqual({ document_type: '01', customer_doc_type: '6', customer_doc_number: '20123456789' })
     expect(issueInputToApi({ issuerRuc: '20611936428' })).toEqual({ issuer_ruc: '20611936428' })
+    expect(issueInputToApi({ sendCustomerEmail: true })).toEqual({ send_customer_email: 'true' })
     expect(messagesFromApi('uno')).toEqual(['uno'])
     expect(messagesFromApi([{ description: 'dos' }, {}])).toEqual(['dos'])
   })

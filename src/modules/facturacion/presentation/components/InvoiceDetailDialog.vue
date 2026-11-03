@@ -29,7 +29,9 @@ const authStore = useAuthStore()
 
 const invoice = ref<Invoice | null>(null)
 const loading = ref(false)
-const busy = ref<null | 'refresh' | 'retry' | 'void' | 'pdf'>(null)
+const busy = ref<null | 'refresh' | 'retry' | 'void' | 'pdf' | 'email'>(null)
+const recipientEmail = ref('')
+const emailEdited = ref(false)
 const error = ref<string | null>(null)
 const voidMode = ref(false)
 const voidReason = ref('')
@@ -38,6 +40,9 @@ const canIssue = computed(() => authStore.hasPermission('billing.issue'))
 const canVoid = computed(() => authStore.hasPermission('billing.void'))
 const meta = computed(() => (invoice.value ? invoiceStatusMeta(invoice.value.status) : null))
 const isProduction = computed(() => invoice.value?.environment === 'production')
+const fromAnotherEnvironment = computed(
+  () => !!invoice.value && !!store.status && invoice.value.environment !== store.status.environment
+)
 const voidReasonValid = computed(() => {
   const length = voidReason.value.trim().length
   return length >= 3 && length <= 100
@@ -52,7 +57,8 @@ function stopPolling() {
 
 function syncPolling() {
   stopPolling()
-  if (open.value && invoice.value && isInvoicePending(invoice.value.status)) {
+  if (open.value && invoice.value && (isInvoicePending(invoice.value.status) ||
+    (invoice.value.status === 'accepted' && ['pending', 'sending'].includes(invoice.value.emailStatus ?? '')))) {
     pollTimer = setInterval(() => void reload(true), 10_000)
   }
 }
@@ -63,6 +69,7 @@ async function reload(silent = false) {
   try {
     const previousStatus = invoice.value?.status
     invoice.value = await store.getInvoice(props.invoiceId)
+    if (!emailEdited.value) recipientEmail.value = invoice.value.customerEmail ?? ''
     if (!silent) error.value = null
     if (previousStatus && previousStatus !== invoice.value.status) emit('updated', invoice.value)
   } catch (e) {
@@ -77,7 +84,10 @@ watch(
   [open, () => props.invoiceId],
   ([isOpen]) => {
     if (isOpen) {
+      if (!store.status) void store.loadStatus()
       invoice.value = null
+      recipientEmail.value = ''
+      emailEdited.value = false
       voidMode.value = false
       voidReason.value = ''
       error.value = null
@@ -113,6 +123,23 @@ async function run(action: 'refresh' | 'retry' | 'void' | 'pdf') {
       e,
       action === 'pdf' ? 'No se pudo descargar el PDF.' : 'La acción no se completó.'
     )
+  } finally {
+    busy.value = null
+    syncPolling()
+  }
+}
+
+async function requestEmail() {
+  if (!invoice.value || busy.value || loading.value) return
+  busy.value = 'email'
+  error.value = null
+  try {
+    invoice.value = await store.sendEmail(invoice.value.id, recipientEmail.value)
+    emailEdited.value = false
+    recipientEmail.value = invoice.value.customerEmail ?? ''
+    emit('updated', invoice.value)
+  } catch (e) {
+    error.value = billingErrorMessage(e, 'No se pudo solicitar el envío del PDF.')
   } finally {
     busy.value = null
     syncPolling()
@@ -196,6 +223,19 @@ const actionButton =
 
           <template v-if="invoice && meta">
             <p class="text-sm text-[#4b5563]">{{ meta.hint }}</p>
+            <p
+              v-if="fromAnotherEnvironment && canRetryInvoice(invoice.status)"
+              class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+              role="status"
+            >
+              Este intento pertenece a {{ isProduction ? 'producción' : 'desarrollo' }} y no se puede reintentar
+              en el ambiente actual. Cierra este panel y usa <strong>Emitir otro</strong> en Contabilidad
+              para preparar un comprobante nuevo con la serie vigente.
+            </p>
+            <p v-if="invoice.emailRequested" class="rounded-lg border border-[#dbe7fb] bg-[#f8fbff] px-3 py-2 text-sm text-[#374151]">
+              Correo al cliente: {{ invoice.emailStatus === 'sent' ? 'enviado' : invoice.emailStatus === 'failed' ? 'no se pudo enviar' : 'pendiente' }}
+              <span v-if="invoice.customerEmail"> · {{ invoice.customerEmail }}</span>
+            </p>
 
             <div
               v-if="invoice.faults.length || invoice.lastError"
@@ -221,6 +261,10 @@ const actionButton =
 
             <section class="rounded-xl border border-[#dbe7fb] bg-[#f8fbff]">
               <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 px-4 py-3 text-sm">
+                <template v-if="invoice.itemDescription">
+                  <dt class="text-[#6b7280]">Detalle</dt>
+                  <dd class="text-right">{{ invoice.itemDescription }}</dd>
+                </template>
                 <dt class="text-[#6b7280]">Valor de venta</dt>
                 <dd class="text-right tabular-nums">{{ formatInvoiceMoney(invoice.taxableAmount, invoice.currency) }}</dd>
                 <dt class="text-[#6b7280]">IGV {{ Math.round(invoice.igvRate * 100) }}%</dt>
@@ -337,6 +381,35 @@ const actionButton =
               </div>
             </section>
 
+            <form
+              v-if="invoice.status === 'accepted' && canIssue && !fromAnotherEnvironment"
+              class="space-y-3 rounded-xl border border-[#dbe7fb] p-4"
+              @submit.prevent="requestEmail"
+            >
+              <label for="invoice-recipient-email" class="block text-sm font-semibold text-[#1f2937]">
+                Enviar PDF al cliente
+              </label>
+              <input
+                id="invoice-recipient-email"
+                v-model="recipientEmail"
+                type="email"
+                required
+                maxlength="255"
+                placeholder="Correo del cliente"
+                class="w-full rounded-lg border border-[#d1d5db] px-3 py-2 text-sm"
+                :disabled="busy !== null || ['pending', 'sending', 'sent'].includes(invoice.emailStatus ?? '')"
+                @input="emailEdited = true"
+              />
+              <button
+                type="submit"
+                :class="[actionButton, 'border-transparent bg-brasper-indigoStrong text-white']"
+                :disabled="busy !== null || loading || !recipientEmail.trim() || ['pending', 'sending', 'sent'].includes(invoice.emailStatus ?? '')"
+              >
+                {{ invoice.emailStatus === 'sent' ? 'PDF enviado' : ['pending', 'sending'].includes(invoice.emailStatus ?? '') ? 'Envío en curso…' : busy === 'email' ? 'Solicitando envío…' : 'Enviar PDF' }}
+              </button>
+              <p class="text-xs text-[#6b7280]">Puedes corregir el destinatario antes de enviar. No se modifica la ficha del cliente.</p>
+            </form>
+
             <section v-if="invoice.events.length">
               <h3 class="mb-2 text-sm font-semibold text-[#1f2937]">Historial</h3>
               <ol class="space-y-2 border-l border-[#e5e7eb] pl-4">
@@ -367,7 +440,7 @@ const actionButton =
             Consultar SUNAT
           </button>
           <button
-            v-if="canIssue && canRetryInvoice(invoice.status)"
+            v-if="canIssue && store.status && !fromAnotherEnvironment && canRetryInvoice(invoice.status)"
             type="button"
             :class="[actionButton, 'border-transparent bg-brasper-indigoStrong text-white hover:bg-brasper-indigoDark']"
             :disabled="busy !== null"
