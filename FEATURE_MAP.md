@@ -21,6 +21,10 @@ Vue View (*_view.vue)
 
 ## Mapa de módulos
 
+Pausa de emisión (2026-11-03): BRL→PEN y BRL→USD tienen el botón Emitir
+deshabilitado. El backend bloquea también vista previa, emisión y reintentos
+para esos pares; se conserva la consulta y descarga de comprobantes existentes.
+
 Correos múltiples (2026-11-03): POST/PUT `/user` admiten `emails` como lista JSON
 multipart, con el principal en primera posición; `email` sigue siendo compatible.
 La búsqueda de usuarios incluye correos secundarios. GET del comprobante devuelve

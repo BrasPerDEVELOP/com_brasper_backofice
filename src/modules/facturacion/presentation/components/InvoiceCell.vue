@@ -10,6 +10,7 @@ import InvoiceStatusChip from './InvoiceStatusChip.vue'
 defineProps<{
   invoice: Invoice | null
   canIssue: boolean
+  disabledReason?: string | null
   currentEnvironment?: string
   loading?: boolean
 }>()
@@ -37,9 +38,10 @@ const emit = defineEmits<{ issue: []; open: [invoice: Invoice] }>()
     <button
       v-if="canIssue && canIssueAgain(invoice?.status, invoice?.environment, currentEnvironment)"
       type="button"
-      class="inline-flex items-center gap-1 rounded-lg border border-[#bcd7ff] bg-[#eef5ff] px-2.5 py-1 text-[11px] font-semibold text-brasper-indigoStrong transition hover:bg-[#e2eeff]"
-      title="Emitir boleta o factura electrónica por la comisión de esta operación"
-      @click.stop="emit('issue')"
+      class="inline-flex items-center gap-1 rounded-lg border border-[#bcd7ff] bg-[#eef5ff] px-2.5 py-1 text-[11px] font-semibold text-brasper-indigoStrong transition hover:bg-[#e2eeff] disabled:cursor-not-allowed disabled:opacity-40"
+      :disabled="!!disabledReason"
+      :title="disabledReason || 'Emitir boleta o factura electrónica por la comisión de esta operación'"
+      @click.stop="!disabledReason && emit('issue')"
     >
       <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6M7 3h7l5 5v11a2 2 0 01-2 2H7a2 2 0 01-2-2V5a2 2 0 012-2z" />

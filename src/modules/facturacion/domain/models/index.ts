@@ -4,6 +4,12 @@
  */
 
 /** Ciclo de vida del comprobante dentro de Brasper (`billing.invoices.status`). */
+export function billingRouteDisabledReason(origin?: string, destination?: string): string | null {
+  return origin?.trim().toLowerCase() === 'brl' && ['pen', 'usd'].includes(destination?.trim().toLowerCase() ?? '')
+    ? 'Emisión temporalmente deshabilitada para operaciones de reales a soles o dólares.'
+    : null
+}
+
 export const INVOICE_STATUSES = [
   'reserved',
   'sent',

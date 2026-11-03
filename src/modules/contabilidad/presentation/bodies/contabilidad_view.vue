@@ -45,6 +45,7 @@ import AccountingBillingDateCell from '../components/AccountingBillingDateCell.v
 import { useTagsStore } from '@modules/transacciones/presentation/controllers/use_tags_store_controller'
 import { useAuthStore } from '@modules/auth/presentation/controllers/use_auth_store_controller'
 import type { Invoice } from '@modules/facturacion/domain/models'
+import { billingRouteDisabledReason } from '@modules/facturacion/domain/models'
 import { useBillingStore } from '@modules/facturacion/presentation/controllers/use_billing_store'
 import InvoiceCell from '@modules/facturacion/presentation/components/InvoiceCell.vue'
 import IssueInvoiceDialog from '@modules/facturacion/presentation/components/IssueInvoiceDialog.vue'
@@ -103,8 +104,18 @@ const invoiceDetailOpen = ref(false)
 const invoiceDetailId = ref<string | null>(null)
 
 function openIssueDialog(t: Transaction) {
+  if (billingDisabledReason(t)) return
   issueTarget.value = t
   issueDialogOpen.value = true
+}
+
+function billingDisabledReason(t: Transaction): string | null {
+  const rate = tasasStore.taxRates.find((item) => item.id === t.tax_rate_id)
+  const currencies = getTransactionCurrencies(t)
+  return billingRouteDisabledReason(
+    rate?.coin_a || currencies.origin || inferOriginCurrencyFromTransactionCode(t.code),
+    rate?.coin_b || currencies.destination
+  )
 }
 
 function openInvoiceDetail(invoice: Invoice) {
@@ -1544,6 +1555,7 @@ onMounted(() => {
                 v-if="canViewBilling && t.id"
                 :invoice="billingStore.invoiceFor(t.id)"
                 :can-issue="canIssueBilling"
+                :disabled-reason="billingDisabledReason(t)"
                 :current-environment="billingStore.status?.environment"
                 :loading="billingStore.loadingInvoices"
                 @issue="openIssueDialog(t)"
