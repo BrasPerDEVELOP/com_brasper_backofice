@@ -427,7 +427,17 @@ const actionButton =
           </p>
         </div>
 
-        <footer v-if="invoice" class="flex flex-wrap justify-end gap-2 border-t border-[#eef0f4] px-6 py-4">
+        <footer v-if="invoice" class="flex shrink-0 flex-wrap justify-end gap-2 border-t border-[#eef0f4] px-6 py-4">
+          <button
+            v-if="invoice.status === 'accepted' || invoice.status === 'voided'"
+            type="button"
+            :class="[actionButton, 'mr-auto border-transparent bg-brasper-indigoStrong text-white hover:bg-brasper-indigoDark']"
+            :disabled="busy !== null"
+            @click="run('pdf')"
+          >
+            <AppSpinner v-if="busy === 'pdf'" size="sm" color-class="text-white" />
+            {{ busy === 'pdf' ? 'Descargando…' : 'Descargar PDF' }}
+          </button>
           <button
             v-if="invoice.status === 'sent'"
             type="button"
