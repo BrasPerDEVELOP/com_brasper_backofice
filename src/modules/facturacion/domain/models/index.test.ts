@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   canIssueAgain,
+  billingRouteDisabledReason,
   canRetryInvoice,
   canVoidInvoice,
   invoiceEventLabel,
@@ -10,6 +11,13 @@ import {
 } from '.'
 
 describe('estados del comprobante', () => {
+  it('pausa solo BRL a PEN y USD, independientemente de mayúsculas', () => {
+    expect(billingRouteDisabledReason('BRL', 'PEN')).toContain('temporalmente')
+    expect(billingRouteDisabledReason(' brl ', 'usd')).toContain('temporalmente')
+    for (const [origin, destination] of [['pen', 'brl'], ['usd', 'brl'], ['pen', 'usd'], ['brl', 'brl']]) {
+      expect(billingRouteDisabledReason(origin, destination)).toBeNull()
+    }
+  })
   it('etiqueta y tono por estado, con respaldo para valores desconocidos', () => {
     expect(invoiceStatusMeta('accepted')).toMatchObject({ label: 'Aceptado', tone: 'success' })
     expect(invoiceStatusMeta('sent').tone).toBe('pending')
