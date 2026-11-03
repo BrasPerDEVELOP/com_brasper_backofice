@@ -21,6 +21,10 @@ Vue View (*_view.vue)
 
 ## Mapa de módulos
 
+Usuarios (2026-11-03): el correo de contacto admite varios clientes. El alta de
+clientes no asigna una contraseña implícita ni selecciona otro usuario por email.
+Las credenciales de acceso conservan su nombre de usuario único.
+
 Facturación (2026-11-03): el detalle permite solicitar el PDF por correo con
 `POST /billing/invoices/{id}/email` (`billing.issue`) después de la aceptación de
 SUNAT. El destinatario viene del backend y se puede editar antes de enviar;
