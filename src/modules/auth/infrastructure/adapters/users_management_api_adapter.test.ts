@@ -26,6 +26,18 @@ const post = vi.mocked(apiClient.post)
 const put = vi.mocked(apiClient.put)
 
 describe('users management api adapter', () => {
+  it('guarda todos los correos y permite vaciar la colección al editar', async () => {
+    const emails = ['main@example.com', 'second@example.com']
+    get.mockResolvedValue({ data: [] })
+    post.mockResolvedValue({ data: { id: 'multi', names: 'Ana', email: emails[0], emails, role: 'client' } })
+    const user = await createUser({ names: 'Ana', email: emails[0], emails, role: 'client' })
+    expect((post.mock.calls[0]?.[1] as FormData).get('emails')).toBe(JSON.stringify(emails))
+    expect(user.emails).toEqual(emails)
+    put.mockResolvedValue({ data: { id: 'multi', names: 'Ana', email: null, emails: [] } })
+    await updateUser({ id: 'multi', emails: [] })
+    expect((put.mock.calls[0]?.[1] as FormData).get('emails')).toBe('[]')
+  })
+
   it('crea clientes distintos con el mismo correo sin asignarles acceso implícito', async () => {
     get.mockResolvedValue({ data: [{ id: 'old', names: 'Ana', email: 'familia@example.com', role: 'client' }] })
     post.mockResolvedValue({ data: { id: 'new', names: 'Pedro', email: 'familia@example.com', role: 'client' } })

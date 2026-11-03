@@ -1,3 +1,4 @@
+import { contactEmails, uniqueEmails } from '@/interface/utils/contact_emails'
 import { apiClient } from '@/interface/api/client'
 import { Domain } from '@/interface/infrastructure/services'
 import type {
@@ -93,6 +94,9 @@ export function invoiceFromApi(raw: unknown): Invoice {
     customerName: str(o.customer_name),
     customerAddress: optStr(o.customer_address),
     customerEmail: optStr(o.customer_email),
+    customerEmails: contactEmails(o.customer_emails),
+    emailRecipients: contactEmails(o.email_recipients),
+    emailDeliveredTo: contactEmails(o.email_delivered_to),
     status: str(o.status),
     emailRequested: o.email_requested === true,
     emailStatus: optStr(o.email_status),
@@ -260,9 +264,9 @@ export class BillingApiAdapter {
     return invoiceFromApi(data)
   }
 
-  async sendInvoiceEmail(invoiceId: string, email: string): Promise<Invoice> {
+  async sendInvoiceEmail(invoiceId: string, emails: string[]): Promise<Invoice> {
     const { data } = await apiClient.post(endpoint(`invoices/${invoiceId}/email`), {
-      customer_email: email.trim()
+      recipients: uniqueEmails(emails)
     })
     return invoiceFromApi(data)
   }

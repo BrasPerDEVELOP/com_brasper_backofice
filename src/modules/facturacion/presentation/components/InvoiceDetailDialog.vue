@@ -4,6 +4,7 @@
  * (PDF, XML, CDR), historial y acciones (consultar, reintentar, anular).
  * Mientras espera a SUNAT se vuelve a leer sola cada 10 s.
  */
+import { uniqueEmails, unsentEmails } from '@/interface/utils/contact_emails'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { AppSpinner } from '@interface/widgets'
 import { useAuthStore } from '@modules/auth/presentation/controllers/use_auth_store_controller'
@@ -30,7 +31,22 @@ const authStore = useAuthStore()
 const invoice = ref<Invoice | null>(null)
 const loading = ref(false)
 const busy = ref<null | 'refresh' | 'retry' | 'void' | 'pdf' | 'email'>(null)
-const recipientEmail = ref('')
+const selectedEmails = ref<string[]>([])
+const extraEmails = ref<string[]>([])
+const registeredEmails = computed(() => invoice.value?.customerEmails?.length
+  ? invoice.value.customerEmails : uniqueEmails([invoice.value?.customerEmail]))
+const emailInProgress = computed(() => ['pending', 'sending'].includes(invoice.value?.emailStatus ?? ''))
+const deliveredEmails = computed(() => invoice.value?.emailDeliveredTo ?? [])
+const recipientEmails = computed(() => unsentEmails(
+  uniqueEmails([...selectedEmails.value, ...extraEmails.value]), deliveredEmails.value))
+function resetRecipients() {
+  selectedEmails.value = unsentEmails(registeredEmails.value, deliveredEmails.value)
+  const remaining = unsentEmails(invoice.value?.emailRecipients ?? [], deliveredEmails.value)
+  extraEmails.value = remaining.filter((email) => !registeredEmails.value.includes(email))
+}
+function wasDelivered(email: string) {
+  return !unsentEmails([email], deliveredEmails.value).length
+}
 const emailEdited = ref(false)
 const error = ref<string | null>(null)
 const voidMode = ref(false)
@@ -69,7 +85,7 @@ async function reload(silent = false) {
   try {
     const previousStatus = invoice.value?.status
     invoice.value = await store.getInvoice(props.invoiceId)
-    if (!emailEdited.value) recipientEmail.value = invoice.value.customerEmail ?? ''
+    if (!emailEdited.value) resetRecipients()
     if (!silent) error.value = null
     if (previousStatus && previousStatus !== invoice.value.status) emit('updated', invoice.value)
   } catch (e) {
@@ -86,7 +102,8 @@ watch(
     if (isOpen) {
       if (!store.status) void store.loadStatus()
       invoice.value = null
-      recipientEmail.value = ''
+      selectedEmails.value = []
+      extraEmails.value = []
       emailEdited.value = false
       voidMode.value = false
       voidReason.value = ''
@@ -134,9 +151,10 @@ async function requestEmail() {
   busy.value = 'email'
   error.value = null
   try {
-    invoice.value = await store.sendEmail(invoice.value.id, recipientEmail.value)
+    await store.sendEmail(invoice.value.id, recipientEmails.value)
+    invoice.value = await store.getInvoice(invoice.value.id)
     emailEdited.value = false
-    recipientEmail.value = invoice.value.customerEmail ?? ''
+    resetRecipients()
     emit('updated', invoice.value)
   } catch (e) {
     error.value = billingErrorMessage(e, 'No se pudo solicitar el envío del PDF.')
@@ -386,28 +404,38 @@ const actionButton =
               class="space-y-3 rounded-xl border border-[#dbe7fb] p-4"
               @submit.prevent="requestEmail"
             >
-              <label for="invoice-recipient-email" class="block text-sm font-semibold text-[#1f2937]">
-                Enviar PDF al cliente
-              </label>
-              <input
-                id="invoice-recipient-email"
-                v-model="recipientEmail"
-                type="email"
-                required
-                maxlength="255"
-                placeholder="Correo del cliente"
-                class="w-full rounded-lg border border-[#d1d5db] px-3 py-2 text-sm"
-                :disabled="busy !== null || ['pending', 'sending', 'sent'].includes(invoice.emailStatus ?? '')"
-                @input="emailEdited = true"
-              />
-              <button
-                type="submit"
-                :class="[actionButton, 'border-transparent bg-brasper-indigoStrong text-white']"
-                :disabled="busy !== null || loading || !recipientEmail.trim() || ['pending', 'sending', 'sent'].includes(invoice.emailStatus ?? '')"
-              >
-                {{ invoice.emailStatus === 'sent' ? 'PDF enviado' : ['pending', 'sending'].includes(invoice.emailStatus ?? '') ? 'Envío en curso…' : busy === 'email' ? 'Solicitando envío…' : 'Enviar PDF' }}
+              <h3 class="text-sm font-semibold text-[#1f2937]">Enviar PDF al cliente</h3>
+              <fieldset class="space-y-3" :disabled="busy !== null || emailInProgress">
+                <legend class="sr-only">Destinatarios del PDF</legend>
+                <label v-for="email in registeredEmails" :key="email" class="flex items-center gap-2 text-sm">
+                  <input v-model="selectedEmails" type="checkbox" :value="email" :disabled="wasDelivered(email)"
+                    @change="emailEdited = true" />
+                  <span class="break-all">{{ email }}</span>
+                  <span v-if="wasDelivered(email)" class="text-xs text-emerald-700">Enviado</span>
+                </label>
+                <div v-for="(_, index) in extraEmails" :key="index" class="flex items-center gap-2">
+                  <input v-model="extraEmails[index]" type="email" required maxlength="255"
+                    :aria-label="`Destinatario adicional ${index + 1}`" placeholder="Otro correo"
+                    class="min-w-0 flex-1 rounded-lg border border-[#d1d5db] px-3 py-2 text-sm"
+                    @input="emailEdited = true" />
+                  <button type="button" class="text-xs text-red-600"
+                    @click="extraEmails.splice(index, 1); emailEdited = true">Quitar</button>
+                </div>
+                <button type="button" class="text-sm text-brasper-indigoStrong"
+                  :disabled="selectedEmails.length + extraEmails.length >= 20"
+                  @click="extraEmails.push(''); emailEdited = true">+ Agregar destinatario</button>
+              </fieldset>
+              <button type="submit" :class="[actionButton, 'border-transparent bg-brasper-indigoStrong text-white']"
+                :disabled="busy !== null || loading || !recipientEmails.length || emailInProgress">
+                {{ emailInProgress ? 'Envío en curso…' : busy === 'email' ? 'Solicitando envío…' : `Enviar PDF (${recipientEmails.length})` }}
               </button>
-              <p class="text-xs text-[#6b7280]">Puedes corregir el destinatario antes de enviar. No se modifica la ficha del cliente.</p>
+              <p v-if="deliveredEmails.length" class="break-all text-xs text-emerald-700" role="status">
+                PDF enviado a: {{ deliveredEmails.join(', ') }}
+              </p>
+              <p v-if="invoice.emailStatus === 'failed'" class="text-xs text-red-600">
+                No se completó el envío. Puedes reintentar los destinatarios pendientes.
+              </p>
+              <p class="text-xs text-[#6b7280]">Selecciona los correos registrados o agrega otros. Cada destinatario recibe un correo individual. No se modifica la ficha del cliente.</p>
             </form>
 
             <section v-if="invoice.events.length">

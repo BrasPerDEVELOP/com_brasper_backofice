@@ -130,6 +130,7 @@ export async function fetchUserById(id: string): Promise<UserListItem | null> {
 
 export interface CreateUserPayload {
   email?: string
+  emails?: string[]
   names?: string
   lastnames?: string
   role?: string
@@ -148,6 +149,7 @@ export interface UpdateUserPayload extends Omit<CreateUserPayload, 'email' | 'pa
 }
 
 function appendUserFormFields(form: FormData, payload: CreateUserPayload | UpdateUserPayload) {
+  if (payload.emails !== undefined) form.append('emails', JSON.stringify(payload.emails))
   if (payload.email?.trim()) form.append('email', payload.email.trim())
   if (payload.names?.trim()) form.append('names', payload.names.trim())
   if (payload.lastnames?.trim()) form.append('lastnames', payload.lastnames.trim())
@@ -181,6 +183,7 @@ function createUserRequestKey(payload: CreateUserPayload): string {
   const image = payload.profile_image
   return JSON.stringify({
     email: normalizeEmail(payload.email),
+    emails: payload.emails?.map(normalizeEmail),
     names: payload.names?.trim().toLowerCase() ?? '',
     lastnames: payload.lastnames?.trim().toLowerCase() ?? '',
     role: payload.role?.trim().toLowerCase() ?? '',
@@ -285,6 +288,7 @@ async function createOrCompleteUser(payload: CreateUserPayload): Promise<UserLis
   return updateUser({
     id: incompleteClient.id,
     email: payload.email,
+    emails: payload.emails,
     names: payload.names,
     lastnames: payload.lastnames,
     role: payload.role,

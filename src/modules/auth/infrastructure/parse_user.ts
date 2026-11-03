@@ -3,6 +3,7 @@
 // duplicada en auth_api_adapter, users_management_api_adapter y (cuentas)
 // users_api_adapter. El comportamiento es idéntico al previo.
 
+import { contactEmails } from '@/interface/utils/contact_emails'
 import { type User, normalizeStoredRole } from '../domain/models'
 import { parseEffectivePermissions } from '../domain/models/permissions'
 import { normalizeUserPhone } from '../domain/models/user_phone'
@@ -15,6 +16,7 @@ export interface UserListItem {
   id: string
   name: string
   email: string
+  emails?: string[]
   role?: string
   names?: string
   lastnames?: string
@@ -104,6 +106,7 @@ export function parseUser(data: unknown): User | null {
   return {
     id: String(id),
     email,
+    emails: contactEmails(o.emails, email),
     names,
     lastnames,
     name: displayName,
@@ -148,6 +151,7 @@ export function parseUserListItem(item: unknown): UserListItem | null {
     id: String(id),
     name: fullName,
     email: email || '-',
+    emails: contactEmails(o.emails, email),
     role,
     names: names || undefined,
     lastnames: lastnames || undefined,

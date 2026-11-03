@@ -2,6 +2,7 @@
 export interface User {
   id: string
   email: string
+  emails?: string[]
   /** Nombres (backend: names). */
   names: string | null
   /** Apellidos (backend: lastnames). */

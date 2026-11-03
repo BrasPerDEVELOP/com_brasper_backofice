@@ -44,13 +44,19 @@ describe('BillingApiAdapter', () => {
   it('envía el destinatario editado al backend y refleja el correo pendiente', async () => {
     vi.mocked(apiClient.post).mockResolvedValue({ data: {
       ...RAW_INVOICE, status: 'accepted', customer_email: 'editado@example.com',
+      customer_emails: ['principal@example.com', 'otro@example.com'],
+      email_recipients: ['editado@example.com', 'otro@example.com'],
+      email_delivered_to: ['principal@example.com'],
       email_requested: true, email_status: 'pending'
     } })
-    const invoice = await new BillingApiAdapter().sendInvoiceEmail('inv-1', ' editado@example.com ')
+    const invoice = await new BillingApiAdapter().sendInvoiceEmail('inv-1', [' editado@example.com ', 'otro@example.com', 'EDITADO@example.com'])
     expect(apiClient.post).toHaveBeenCalledWith('billing/invoices/inv-1/email', {
-      customer_email: 'editado@example.com'
+      recipients: ['editado@example.com', 'otro@example.com']
     })
     expect(invoice).toMatchObject({ customerEmail: 'editado@example.com', emailStatus: 'pending' })
+    expect(invoice.customerEmails).toEqual(['principal@example.com', 'otro@example.com'])
+    expect(invoice.emailDeliveredTo).toEqual(['principal@example.com'])
+    expect(invoice.emailRecipients).toEqual(['editado@example.com', 'otro@example.com'])
   })
   beforeEach(() => {
     vi.mocked(apiClient.get).mockReset()

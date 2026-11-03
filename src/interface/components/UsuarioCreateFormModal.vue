@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { contactEmails, uniqueEmails } from '@/interface/utils/contact_emails'
 import { ref, computed, watch } from 'vue'
 import {
   createUser,
@@ -57,6 +58,7 @@ const emit = defineEmits<{
   created: [user: UserListItem]
 }>()
 
+const emailRows = ref<string[]>([''])
 const creating = ref(false)
 const error = ref('')
 const loadingDetail = ref(false)
@@ -95,6 +97,8 @@ function onProfileImageChange(e: Event) {
 }
 
 function resetForm() {
+  emailRows.value = contactEmails(props.user?.emails, props.user?.email)
+  if (!emailRows.value.length) emailRows.value = ['']
   error.value = ''
   form.value = {
     email: props.user?.email && props.user.email !== '-' ? props.user.email : '',
@@ -125,13 +129,16 @@ async function hydrateFromDetail(id: string) {
   try {
     const detail = await fetchUserById(id)
     if (!props.modelValue || props.user?.id !== id) return
+    if (!detail) throw new Error('Usuario no encontrado')
     if (detail) {
+      emailRows.value = contactEmails(detail.emails, detail.email)
+      if (!emailRows.value.length) emailRows.value = ['']
       identifications.value = detail.identifications.map((item) => ({ ...item }))
     }
   } catch {
     if (props.modelValue && props.user?.id === id) {
       detailError.value =
-        'No se pudieron cargar todas las identificaciones. Revísalas antes de guardar para no borrar datos existentes.'
+        'No se pudieron cargar los datos completos. Cierra y abre el formulario antes de guardar para no perder correos ni identificaciones.'
     }
   } finally {
     if (props.user?.id === id) loadingDetail.value = false
@@ -150,7 +157,7 @@ function openAdvancedDialog() {
 
 async function handleSubmit() {
   // Evita guardar con la colección parcial mientras aún llega el detalle o si ya hay un envío en curso.
-  if (creating.value || loadingDetail.value) return
+  if (creating.value || loadingDetail.value || detailError.value) return
   if (isQuick.value && !form.value.names?.trim()) {
     error.value = 'El nombre es obligatorio.'
     return
@@ -186,11 +193,13 @@ async function handleSubmit() {
     }
     const primaryIdentification = normalizedIdentifications.find((item) => item.is_primary)
     const role = props.showRoleField ? form.value.role : props.defaultRole
-    const email = form.value.email?.trim()
+    const emails = uniqueEmails(emailRows.value)
+    const email = emails[0]
     const payload: CreateUserPayload = {
       ...form.value,
       role,
       email: email || undefined,
+      emails,
       identifications: normalizedIdentifications,
       document_type: primaryIdentification?.document_type,
       document_number: primaryIdentification?.document_number
@@ -256,19 +265,21 @@ watch(
 
         <form class="space-y-6" @submit.prevent="handleSubmit">
           <div class="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label class="mb-1.5 block text-sm font-medium text-[#374151]">
-                Email (opcional)
-              </label>
-              <input
-                v-model="form.email"
-                type="text"
-                inputmode="email"
-                autocomplete="email"
-                class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
-                placeholder="usuario@ejemplo.com"
-              />
-            </div>
+            <fieldset class="space-y-2 sm:col-span-2" :disabled="loadingDetail || creating">
+              <legend class="mb-1.5 text-sm font-medium text-[#374151]">Correos (opcional)</legend>
+              <div v-for="(_, index) in emailRows" :key="index" class="flex items-center gap-2">
+                <label :for="`user-email-${index}`" class="w-20 shrink-0 text-xs text-[#6b7280]">{{ index === 0 ? 'Principal' : `Correo ${index + 1}` }}</label>
+                <input :id="`user-email-${index}`" v-model="emailRows[index]" type="email" maxlength="255"
+                  autocomplete="email" placeholder="usuario@ejemplo.com"
+                  class="min-w-0 flex-1 rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm" />
+                <button v-if="index > 0" type="button" class="text-xs text-brasper-indigoStrong"
+                  @click="emailRows.unshift(...emailRows.splice(index, 1))">Hacer principal</button>
+                <button type="button" class="text-xs text-red-600" :aria-label="`Quitar correo ${index + 1}`"
+                  @click="emailRows.splice(index, 1)">Quitar</button>
+              </div>
+              <button type="button" class="text-sm text-brasper-indigoStrong" :disabled="emailRows.length >= 20"
+                @click="emailRows.push('')">+ Agregar correo</button>
+            </fieldset>
             <div>
               <label class="mb-1.5 block text-sm font-medium text-[#374151]">
                 Nombres
@@ -359,7 +370,7 @@ watch(
             <button
               type="submit"
               class="rounded-lg bg-brasper-indigoStrong px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brasper-indigoDark disabled:opacity-60"
-              :disabled="creating || loadingDetail"
+              :disabled="creating || loadingDetail || !!detailError"
             >
               {{ creating ? (isEditing ? 'Guardando...' : 'Creando...') : 'Guardar' }}
             </button>

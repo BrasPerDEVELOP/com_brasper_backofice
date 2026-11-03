@@ -130,8 +130,8 @@ export const useBillingStore = defineStore('billing', {
       return this.remember(await getAdapter().refreshInvoice(invoiceId))
     },
 
-    async sendEmail(invoiceId: string, email: string): Promise<Invoice> {
-      return this.remember(await getAdapter().sendInvoiceEmail(invoiceId, email))
+    async sendEmail(invoiceId: string, emails: string[]): Promise<Invoice> {
+      return this.remember(await getAdapter().sendInvoiceEmail(invoiceId, emails))
     },
 
     /** En `rejected` el API emite un comprobante NUEVO para la misma operación. */
