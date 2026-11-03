@@ -25,9 +25,9 @@ const props = withDefaults(
     showRoleField?: boolean
     user?: UserListItem | null
     /**
-     * `quick` deja solo nombre y telÃ©fono: sirve para dar de alta un cliente en
-     * medio de una transacciÃ³n sin frenar la operaciÃ³n. El resto del perfil se
-     * completa despuÃ©s desde /app/usuarios.
+     * `quick` deja solo nombre y teléfono: sirve para dar de alta un cliente en
+     * medio de una transacción sin frenar la operación. El resto del perfil se
+     * completa después desde /app/usuarios.
      */
     variant?: 'full' | 'quick'
   }>(),
@@ -41,8 +41,8 @@ const props = withDefaults(
 
 /**
  * `expandedFromQuick` deja pasar al formulario completo sin cerrar el modal ni
- * perder lo escrito: quien empieza rÃ¡pido y descubre que sÃ­ tiene los datos no
- * deberÃ­a tener que volver a empezar.
+ * perder lo escrito: quien empieza rápido y descubre que sí tiene los datos no
+ * debería tener que volver a empezar.
  */
 const expandedFromQuick = ref(false)
 const isQuick = computed(
@@ -111,14 +111,14 @@ function resetForm() {
     code_phone: props.user?.code_phone ?? ''
   }
   // El parser garantiza que `identifications` ya incluya el documento heredado
-  // como identificaciÃ³n principal, asÃ­ que basta con clonar la lista.
+  // como identificación principal, así que basta con clonar la lista.
   identifications.value = (props.user?.identifications ?? []).map((item) => ({ ...item }))
   detailError.value = ''
 }
 
 /**
- * Al editar, la fila de la lista puede traer una colecciÃ³n de identificaciones
- * incompleta. Recargamos el detalle canÃ³nico para no sobrescribir (borrar) las
+ * Al editar, la fila de la lista puede traer una colección de identificaciones
+ * incompleta. Recargamos el detalle canónico para no sobrescribir (borrar) las
  * que no se ven al guardar. Guardas de carrera: si el modal se cierra o se
  * reabre para otro usuario mientras llega la respuesta, se descarta.
  */
@@ -155,7 +155,7 @@ function openAdvancedDialog() {
 }
 
 async function handleSubmit() {
-  // Evita guardar con la colecciÃ³n parcial mientras aÃºn llega el detalle o si ya hay un envÃ­o en curso.
+  // Evita guardar con la colección parcial mientras aún llega el detalle o si ya hay un envío en curso.
   if (creating.value || loadingDetail.value || detailError.value) return
   if (isQuick.value && !form.value.names?.trim()) {
     error.value = 'El nombre es obligatorio.'
@@ -171,17 +171,17 @@ async function handleSubmit() {
       is_primary: item.is_primary
     }))
     if (normalizedIdentifications.some((item) => !item.document_type || !item.document_number)) {
-      error.value = 'Completa el tipo y nÃºmero de cada identificaciÃ³n'
+      error.value = 'Completa el tipo y número de cada identificación'
       return
     }
     const uniqueDocuments = new Set(
       normalizedIdentifications.map((item) => `${item.document_type.toLowerCase()}:${item.document_number.toLowerCase()}`)
     )
     if (uniqueDocuments.size !== normalizedIdentifications.length) {
-      error.value = 'No puedes registrar la misma identificaciÃ³n mÃ¡s de una vez'
+      error.value = 'No puedes registrar la misma identificación más de una vez'
       return
     }
-    // Garantiza exactamente una identificaciÃ³n principal antes de enviar.
+    // Garantiza exactamente una identificación principal antes de enviar.
     let primaryAssigned = false
     for (const item of normalizedIdentifications) {
       item.is_primary = item.is_primary && !primaryAssigned
@@ -256,10 +256,10 @@ watch(
     >
       <div class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-xl">
         <h2 id="usuario-form-dialog-title" class="mb-6 text-lg font-semibold text-[#1f2937]">
-          {{ isEditing ? 'Editar usuario' : isAdvancedFromQuick ? 'CreaciÃ³n avanzada de usuario' : 'Nuevo usuario' }}
+          {{ isEditing ? 'Editar usuario' : isAdvancedFromQuick ? 'Creación avanzada de usuario' : 'Nuevo usuario' }}
         </h2>
         <p v-if="isAdvancedFromQuick" class="-mt-4 mb-6 text-sm text-[#6b7280]">
-          Completa la informaciÃ³n disponible. Este usuario quedarÃ¡ seleccionado en la transacciÃ³n.
+          Completa la información disponible. Este usuario quedará seleccionado en la transacción.
         </p>
 
         <form class="space-y-6" @submit.prevent="handleSubmit">
@@ -310,13 +310,13 @@ watch(
             </div>
             <UserIdentificationsEditor v-model="identifications" />
             <p v-if="loadingDetail" class="-mt-1 text-xs text-[#6b7280] sm:col-span-2">
-              Cargando identificaciones del usuarioâ€¦
+              Cargando identificaciones del usuario…
             </p>
             <p v-else-if="detailError" class="-mt-1 text-xs text-[#dc3545] sm:col-span-2">
               {{ detailError }}
             </p>
             <div>
-              <label class="mb-1.5 block text-sm font-medium text-[#374151]">CÃ³digo tel.</label>
+              <label class="mb-1.5 block text-sm font-medium text-[#374151]">Código tel.</label>
               <AppDropdown
                 v-model="form.code_phone"
                 :options="phoneCodeOptions"
@@ -326,7 +326,7 @@ watch(
             </div>
             <div>
               <label class="mb-1.5 block text-sm font-medium text-[#374151]">
-                TelÃ©fono
+                Teléfono
               </label>
               <input
                 v-model.number="form.phone"

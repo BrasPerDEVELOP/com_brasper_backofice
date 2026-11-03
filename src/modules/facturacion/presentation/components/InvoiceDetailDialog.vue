@@ -138,7 +138,7 @@ async function run(action: 'refresh' | 'retry' | 'void' | 'pdf') {
   } catch (e) {
     error.value = billingErrorMessage(
       e,
-      action === 'pdf' ? 'No se pudo descargar el PDF.' : 'La acciÃ³n no se completÃ³.'
+      action === 'pdf' ? 'No se pudo descargar el PDF.' : 'La acción no se completó.'
     )
   } finally {
     busy.value = null
@@ -157,7 +157,7 @@ async function requestEmail() {
     resetRecipients()
     emit('updated', invoice.value)
   } catch (e) {
-    error.value = billingErrorMessage(e, 'No se pudo solicitar el envÃ­o del PDF.')
+    error.value = billingErrorMessage(e, 'No se pudo solicitar el envío del PDF.')
   } finally {
     busy.value = null
     syncPolling()
@@ -206,7 +206,7 @@ const actionButton =
               {{ invoice?.documentTypeLabel ?? 'Comprobante' }}
             </p>
             <h2 id="invoice-detail-title" class="mt-1 font-mono text-xl font-semibold text-[#1f2937]">
-              {{ invoice?.fullNumber ?? 'â€”' }}
+              {{ invoice?.fullNumber ?? '—' }}
             </h2>
             <div v-if="invoice" class="mt-2 flex flex-wrap items-center gap-2">
               <InvoiceStatusChip :status="invoice.status" size="md" />
@@ -218,7 +218,7 @@ const actionButton =
                     : 'border-amber-200 bg-amber-50 text-amber-800'
                 "
               >
-                {{ isProduction ? 'PRODUCCIÃ“N' : 'DESARROLLO' }}
+                {{ isProduction ? 'PRODUCCIÓN' : 'DESARROLLO' }}
               </span>
             </div>
           </div>
@@ -236,7 +236,7 @@ const actionButton =
 
         <div class="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
           <div v-if="loading && !invoice" class="py-16">
-            <AppSpinner center label="Cargando comprobanteâ€¦" />
+            <AppSpinner center label="Cargando comprobante…" />
           </div>
 
           <template v-if="invoice && meta">
@@ -246,13 +246,13 @@ const actionButton =
               class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
               role="status"
             >
-              Este intento pertenece a {{ isProduction ? 'producciÃ³n' : 'desarrollo' }} y no se puede reintentar
+              Este intento pertenece a {{ isProduction ? 'producción' : 'desarrollo' }} y no se puede reintentar
               en el ambiente actual. Cierra este panel y usa <strong>Emitir otro</strong> en Contabilidad
               para preparar un comprobante nuevo con la serie vigente.
             </p>
             <p v-if="invoice.emailRequested" class="rounded-lg border border-[#dbe7fb] bg-[#f8fbff] px-3 py-2 text-sm text-[#374151]">
               Correo al cliente: {{ invoice.emailStatus === 'sent' ? 'enviado' : invoice.emailStatus === 'failed' ? 'no se pudo enviar' : 'pendiente' }}
-              <span v-if="invoice.customerEmail"> Â· {{ invoice.customerEmail }}</span>
+              <span v-if="invoice.customerEmail"> · {{ invoice.customerEmail }}</span>
             </p>
 
             <div
@@ -260,7 +260,7 @@ const actionButton =
               class="space-y-1 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
               role="alert"
             >
-              <p class="font-semibold">{{ invoice.faults.length ? 'Errores de SUNAT' : 'Ãšltimo error' }}</p>
+              <p class="font-semibold">{{ invoice.faults.length ? 'Errores de SUNAT' : 'Último error' }}</p>
               <ul v-if="invoice.faults.length" class="list-disc space-y-0.5 pl-5">
                 <li v-for="(fault, i) in invoice.faults" :key="i">{{ fault }}</li>
               </ul>
@@ -309,21 +309,21 @@ const actionButton =
                 <dt class="text-[#6b7280]">Nombre</dt>
                 <dd class="text-right">{{ invoice.customerName }}</dd>
                 <template v-if="invoice.customerAddress">
-                  <dt class="text-[#6b7280]">DirecciÃ³n</dt>
+                  <dt class="text-[#6b7280]">Dirección</dt>
                   <dd class="text-right">{{ invoice.customerAddress }}</dd>
                 </template>
                 <template v-if="invoice.customerEmail">
                   <dt class="text-[#6b7280]">Correo</dt>
                   <dd class="break-all text-right">{{ invoice.customerEmail }}</dd>
                 </template>
-                <dt class="text-[#6b7280]">EmisiÃ³n</dt>
+                <dt class="text-[#6b7280]">Emisión</dt>
                 <dd class="text-right">{{ formatLimaDateTime(invoice.issueDate) }}</dd>
                 <template v-if="invoice.acceptedAt">
                   <dt class="text-[#6b7280]">Aceptado</dt>
                   <dd class="text-right">{{ formatLimaDateTime(invoice.acceptedAt) }}</dd>
                 </template>
                 <template v-if="invoice.voidReason">
-                  <dt class="text-[#6b7280]">Motivo de anulaciÃ³n</dt>
+                  <dt class="text-[#6b7280]">Motivo de anulación</dt>
                   <dd class="text-right">{{ invoice.voidReason }}</dd>
                 </template>
               </dl>
@@ -365,7 +365,7 @@ const actionButton =
 
             <section v-if="voidMode" class="space-y-2 rounded-xl border border-red-200 bg-red-50/50 px-4 py-3">
               <label for="invoice-void-reason" class="block text-sm font-semibold text-red-800">
-                Motivo de la anulaciÃ³n
+                Motivo de la anulación
               </label>
               <input
                 id="invoice-void-reason"
@@ -373,10 +373,10 @@ const actionButton =
                 type="text"
                 maxlength="100"
                 class="w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
-                placeholder="Ej. Error en el monto de la comisiÃ³n"
+                placeholder="Ej. Error en el monto de la comisión"
               />
               <p class="text-xs text-red-700">
-                Entre 3 y 100 caracteres. La anulaciÃ³n se comunica a SUNAT y no se puede revertir.
+                Entre 3 y 100 caracteres. La anulación se comunica a SUNAT y no se puede revertir.
               </p>
               <div class="flex justify-end gap-2">
                 <button
@@ -464,14 +464,14 @@ const actionButton =
             @click="run('pdf')"
           >
             <AppSpinner v-if="busy === 'pdf'" size="sm" color-class="text-white" />
-            {{ busy === 'pdf' ? 'Descargandoâ€¦' : 'Descargar PDF' }}
+            {{ busy === 'pdf' ? 'Descargando…' : 'Descargar PDF' }}
           </button>
           <button
             v-if="invoice.status === 'sent'"
             type="button"
             :class="[actionButton, 'border-[#e5e7eb] text-[#374151] hover:bg-[#f9fafb]']"
             :disabled="busy !== null"
-            title="Pregunta a SUNAT ahora, sin esperar la consulta automÃ¡tica"
+            title="Pregunta a SUNAT ahora, sin esperar la consulta automática"
             @click="run('refresh')"
           >
             <AppSpinner v-if="busy === 'refresh'" size="sm" />
@@ -482,7 +482,7 @@ const actionButton =
             type="button"
             :class="[actionButton, 'border-transparent bg-brasper-indigoStrong text-white hover:bg-brasper-indigoDark']"
             :disabled="busy !== null"
-            :title="invoice.status === 'rejected' ? 'Emite un comprobante nuevo con el siguiente nÃºmero' : 'ReenvÃ­a con el mismo nÃºmero'"
+            :title="invoice.status === 'rejected' ? 'Emite un comprobante nuevo con el siguiente número' : 'Reenvía con el mismo número'"
             @click="run('retry')"
           >
             <AppSpinner v-if="busy === 'retry'" size="sm" color-class="text-white" />
