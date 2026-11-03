@@ -40,4 +40,15 @@ describe('estados del comprobante', () => {
     expect(invoiceEventLabel('accepted')).toBe('Aceptado por SUNAT')
     expect(invoiceEventLabel('otro')).toBe('otro')
   })
+
+  it('permite emitir en producción tras un fallo de desarrollo, sin duplicar envíos activos', () => {
+    for (const state of ['error', 'exception', 'rejected']) {
+      expect(canIssueAgain(state, 'development', 'production')).toBe(true)
+      expect(canIssueAgain(state, 'production', 'production')).toBe(false)
+    }
+    for (const state of ['reserved', 'sent', 'accepted']) {
+      expect(canIssueAgain(state, 'development', 'production')).toBe(false)
+    }
+    expect(canIssueAgain('error', 'development', undefined)).toBe(false)
+  })
 })

@@ -71,6 +71,7 @@ function eventFromApi(raw: unknown): InvoiceEvent {
 export function invoiceFromApi(raw: unknown): Invoice {
   const o = record(raw)
   return {
+    itemDescription: optStr(o.item_description),
     id: str(o.id),
     transactionId: str(o.transaction_id),
     issuerRuc: str(o.issuer_ruc),
@@ -93,6 +94,9 @@ export function invoiceFromApi(raw: unknown): Invoice {
     customerAddress: optStr(o.customer_address),
     customerEmail: optStr(o.customer_email),
     status: str(o.status),
+    emailRequested: o.email_requested === true,
+    emailStatus: optStr(o.email_status),
+    emailSentAt: optStr(o.email_sent_at),
     issueDate: optStr(o.issue_date),
     sunatStatus: optStr(o.sunat_status),
     xmlUrl: optStr(o.xml_url),
@@ -185,6 +189,7 @@ export function issueInputToApi(input: IssueInvoiceInput | undefined): Record<st
     const text = value?.trim()
     if (text) out[key] = text
   }
+  if (input?.sendCustomerEmail) out.send_customer_email = 'true'
   return out
 }
 
@@ -252,6 +257,13 @@ export class BillingApiAdapter {
 
   async refreshInvoice(invoiceId: string): Promise<Invoice> {
     const { data } = await apiClient.post(endpoint(`invoices/${invoiceId}/refresh`))
+    return invoiceFromApi(data)
+  }
+
+  async sendInvoiceEmail(invoiceId: string, email: string): Promise<Invoice> {
+    const { data } = await apiClient.post(endpoint(`invoices/${invoiceId}/email`), {
+      customer_email: email.trim()
+    })
     return invoiceFromApi(data)
   }
 
