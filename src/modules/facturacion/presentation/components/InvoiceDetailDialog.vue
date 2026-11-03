@@ -4,6 +4,7 @@
  * (PDF, XML, CDR), historial y acciones (consultar, reintentar, anular).
  * Mientras espera a SUNAT se vuelve a leer sola cada 10 s.
  */
+import { uniqueEmails, unsentEmails } from '@/interface/utils/contact_emails'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { AppSpinner } from '@interface/widgets'
 import { useAuthStore } from '@modules/auth/presentation/controllers/use_auth_store_controller'
@@ -30,7 +31,22 @@ const authStore = useAuthStore()
 const invoice = ref<Invoice | null>(null)
 const loading = ref(false)
 const busy = ref<null | 'refresh' | 'retry' | 'void' | 'pdf' | 'email'>(null)
-const recipientEmail = ref('')
+const selectedEmails = ref<string[]>([])
+const extraEmails = ref<string[]>([])
+const registeredEmails = computed(() => invoice.value?.customerEmails?.length
+  ? invoice.value.customerEmails : uniqueEmails([invoice.value?.customerEmail]))
+const emailInProgress = computed(() => ['pending', 'sending'].includes(invoice.value?.emailStatus ?? ''))
+const deliveredEmails = computed(() => invoice.value?.emailDeliveredTo ?? [])
+const recipientEmails = computed(() => unsentEmails(
+  uniqueEmails([...selectedEmails.value, ...extraEmails.value]), deliveredEmails.value))
+function resetRecipients() {
+  selectedEmails.value = unsentEmails(registeredEmails.value, deliveredEmails.value)
+  const remaining = unsentEmails(invoice.value?.emailRecipients ?? [], deliveredEmails.value)
+  extraEmails.value = remaining.filter((email) => !registeredEmails.value.includes(email))
+}
+function wasDelivered(email: string) {
+  return !unsentEmails([email], deliveredEmails.value).length
+}
 const emailEdited = ref(false)
 const error = ref<string | null>(null)
 const voidMode = ref(false)
@@ -69,7 +85,7 @@ async function reload(silent = false) {
   try {
     const previousStatus = invoice.value?.status
     invoice.value = await store.getInvoice(props.invoiceId)
-    if (!emailEdited.value) recipientEmail.value = invoice.value.customerEmail ?? ''
+    if (!emailEdited.value) resetRecipients()
     if (!silent) error.value = null
     if (previousStatus && previousStatus !== invoice.value.status) emit('updated', invoice.value)
   } catch (e) {
@@ -86,7 +102,8 @@ watch(
     if (isOpen) {
       if (!store.status) void store.loadStatus()
       invoice.value = null
-      recipientEmail.value = ''
+      selectedEmails.value = []
+      extraEmails.value = []
       emailEdited.value = false
       voidMode.value = false
       voidReason.value = ''
@@ -121,7 +138,7 @@ async function run(action: 'refresh' | 'retry' | 'void' | 'pdf') {
   } catch (e) {
     error.value = billingErrorMessage(
       e,
-      action === 'pdf' ? 'No se pudo descargar el PDF.' : 'La acción no se completó.'
+      action === 'pdf' ? 'No se pudo descargar el PDF.' : 'La acciÃ³n no se completÃ³.'
     )
   } finally {
     busy.value = null
@@ -134,12 +151,13 @@ async function requestEmail() {
   busy.value = 'email'
   error.value = null
   try {
-    invoice.value = await store.sendEmail(invoice.value.id, recipientEmail.value)
+    await store.sendEmail(invoice.value.id, recipientEmails.value)
+    invoice.value = await store.getInvoice(invoice.value.id)
     emailEdited.value = false
-    recipientEmail.value = invoice.value.customerEmail ?? ''
+    resetRecipients()
     emit('updated', invoice.value)
   } catch (e) {
-    error.value = billingErrorMessage(e, 'No se pudo solicitar el envío del PDF.')
+    error.value = billingErrorMessage(e, 'No se pudo solicitar el envÃ­o del PDF.')
   } finally {
     busy.value = null
     syncPolling()
@@ -188,7 +206,7 @@ const actionButton =
               {{ invoice?.documentTypeLabel ?? 'Comprobante' }}
             </p>
             <h2 id="invoice-detail-title" class="mt-1 font-mono text-xl font-semibold text-[#1f2937]">
-              {{ invoice?.fullNumber ?? '—' }}
+              {{ invoice?.fullNumber ?? 'â€”' }}
             </h2>
             <div v-if="invoice" class="mt-2 flex flex-wrap items-center gap-2">
               <InvoiceStatusChip :status="invoice.status" size="md" />
@@ -200,7 +218,7 @@ const actionButton =
                     : 'border-amber-200 bg-amber-50 text-amber-800'
                 "
               >
-                {{ isProduction ? 'PRODUCCIÓN' : 'DESARROLLO' }}
+                {{ isProduction ? 'PRODUCCIÃ“N' : 'DESARROLLO' }}
               </span>
             </div>
           </div>
@@ -218,7 +236,7 @@ const actionButton =
 
         <div class="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
           <div v-if="loading && !invoice" class="py-16">
-            <AppSpinner center label="Cargando comprobante…" />
+            <AppSpinner center label="Cargando comprobanteâ€¦" />
           </div>
 
           <template v-if="invoice && meta">
@@ -228,13 +246,13 @@ const actionButton =
               class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
               role="status"
             >
-              Este intento pertenece a {{ isProduction ? 'producción' : 'desarrollo' }} y no se puede reintentar
+              Este intento pertenece a {{ isProduction ? 'producciÃ³n' : 'desarrollo' }} y no se puede reintentar
               en el ambiente actual. Cierra este panel y usa <strong>Emitir otro</strong> en Contabilidad
               para preparar un comprobante nuevo con la serie vigente.
             </p>
             <p v-if="invoice.emailRequested" class="rounded-lg border border-[#dbe7fb] bg-[#f8fbff] px-3 py-2 text-sm text-[#374151]">
               Correo al cliente: {{ invoice.emailStatus === 'sent' ? 'enviado' : invoice.emailStatus === 'failed' ? 'no se pudo enviar' : 'pendiente' }}
-              <span v-if="invoice.customerEmail"> · {{ invoice.customerEmail }}</span>
+              <span v-if="invoice.customerEmail"> Â· {{ invoice.customerEmail }}</span>
             </p>
 
             <div
@@ -242,7 +260,7 @@ const actionButton =
               class="space-y-1 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
               role="alert"
             >
-              <p class="font-semibold">{{ invoice.faults.length ? 'Errores de SUNAT' : 'Último error' }}</p>
+              <p class="font-semibold">{{ invoice.faults.length ? 'Errores de SUNAT' : 'Ãšltimo error' }}</p>
               <ul v-if="invoice.faults.length" class="list-disc space-y-0.5 pl-5">
                 <li v-for="(fault, i) in invoice.faults" :key="i">{{ fault }}</li>
               </ul>
@@ -291,21 +309,21 @@ const actionButton =
                 <dt class="text-[#6b7280]">Nombre</dt>
                 <dd class="text-right">{{ invoice.customerName }}</dd>
                 <template v-if="invoice.customerAddress">
-                  <dt class="text-[#6b7280]">Dirección</dt>
+                  <dt class="text-[#6b7280]">DirecciÃ³n</dt>
                   <dd class="text-right">{{ invoice.customerAddress }}</dd>
                 </template>
                 <template v-if="invoice.customerEmail">
                   <dt class="text-[#6b7280]">Correo</dt>
                   <dd class="break-all text-right">{{ invoice.customerEmail }}</dd>
                 </template>
-                <dt class="text-[#6b7280]">Emisión</dt>
+                <dt class="text-[#6b7280]">EmisiÃ³n</dt>
                 <dd class="text-right">{{ formatLimaDateTime(invoice.issueDate) }}</dd>
                 <template v-if="invoice.acceptedAt">
                   <dt class="text-[#6b7280]">Aceptado</dt>
                   <dd class="text-right">{{ formatLimaDateTime(invoice.acceptedAt) }}</dd>
                 </template>
                 <template v-if="invoice.voidReason">
-                  <dt class="text-[#6b7280]">Motivo de anulación</dt>
+                  <dt class="text-[#6b7280]">Motivo de anulaciÃ³n</dt>
                   <dd class="text-right">{{ invoice.voidReason }}</dd>
                 </template>
               </dl>
@@ -347,7 +365,7 @@ const actionButton =
 
             <section v-if="voidMode" class="space-y-2 rounded-xl border border-red-200 bg-red-50/50 px-4 py-3">
               <label for="invoice-void-reason" class="block text-sm font-semibold text-red-800">
-                Motivo de la anulación
+                Motivo de la anulaciÃ³n
               </label>
               <input
                 id="invoice-void-reason"
@@ -355,10 +373,10 @@ const actionButton =
                 type="text"
                 maxlength="100"
                 class="w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
-                placeholder="Ej. Error en el monto de la comisión"
+                placeholder="Ej. Error en el monto de la comisiÃ³n"
               />
               <p class="text-xs text-red-700">
-                Entre 3 y 100 caracteres. La anulación se comunica a SUNAT y no se puede revertir.
+                Entre 3 y 100 caracteres. La anulaciÃ³n se comunica a SUNAT y no se puede revertir.
               </p>
               <div class="flex justify-end gap-2">
                 <button
@@ -386,28 +404,38 @@ const actionButton =
               class="space-y-3 rounded-xl border border-[#dbe7fb] p-4"
               @submit.prevent="requestEmail"
             >
-              <label for="invoice-recipient-email" class="block text-sm font-semibold text-[#1f2937]">
-                Enviar PDF al cliente
-              </label>
-              <input
-                id="invoice-recipient-email"
-                v-model="recipientEmail"
-                type="email"
-                required
-                maxlength="255"
-                placeholder="Correo del cliente"
-                class="w-full rounded-lg border border-[#d1d5db] px-3 py-2 text-sm"
-                :disabled="busy !== null || ['pending', 'sending', 'sent'].includes(invoice.emailStatus ?? '')"
-                @input="emailEdited = true"
-              />
-              <button
-                type="submit"
-                :class="[actionButton, 'border-transparent bg-brasper-indigoStrong text-white']"
-                :disabled="busy !== null || loading || !recipientEmail.trim() || ['pending', 'sending', 'sent'].includes(invoice.emailStatus ?? '')"
-              >
-                {{ invoice.emailStatus === 'sent' ? 'PDF enviado' : ['pending', 'sending'].includes(invoice.emailStatus ?? '') ? 'Envío en curso…' : busy === 'email' ? 'Solicitando envío…' : 'Enviar PDF' }}
+              <h3 class="text-sm font-semibold text-[#1f2937]">Enviar PDF al cliente</h3>
+              <fieldset class="space-y-3" :disabled="busy !== null || emailInProgress">
+                <legend class="sr-only">Destinatarios del PDF</legend>
+                <label v-for="email in registeredEmails" :key="email" class="flex items-center gap-2 text-sm">
+                  <input v-model="selectedEmails" type="checkbox" :value="email" :disabled="wasDelivered(email)"
+                    @change="emailEdited = true" />
+                  <span class="break-all">{{ email }}</span>
+                  <span v-if="wasDelivered(email)" class="text-xs text-emerald-700">Enviado</span>
+                </label>
+                <div v-for="(_, index) in extraEmails" :key="index" class="flex items-center gap-2">
+                  <input v-model="extraEmails[index]" type="email" required maxlength="255"
+                    :aria-label="`Destinatario adicional ${index + 1}`" placeholder="Otro correo"
+                    class="min-w-0 flex-1 rounded-lg border border-[#d1d5db] px-3 py-2 text-sm"
+                    @input="emailEdited = true" />
+                  <button type="button" class="text-xs text-red-600"
+                    @click="extraEmails.splice(index, 1); emailEdited = true">Quitar</button>
+                </div>
+                <button type="button" class="text-sm text-brasper-indigoStrong"
+                  :disabled="selectedEmails.length + extraEmails.length >= 20"
+                  @click="extraEmails.push(''); emailEdited = true">+ Agregar destinatario</button>
+              </fieldset>
+              <button type="submit" :class="[actionButton, 'border-transparent bg-brasper-indigoStrong text-white']"
+                :disabled="busy !== null || loading || !recipientEmails.length || emailInProgress">
+                {{ emailInProgress ? 'Envío en curso…' : busy === 'email' ? 'Solicitando envío…' : `Enviar PDF (${recipientEmails.length})` }}
               </button>
-              <p class="text-xs text-[#6b7280]">Puedes corregir el destinatario antes de enviar. No se modifica la ficha del cliente.</p>
+              <p v-if="deliveredEmails.length" class="break-all text-xs text-emerald-700" role="status">
+                PDF enviado a: {{ deliveredEmails.join(', ') }}
+              </p>
+              <p v-if="invoice.emailStatus === 'failed'" class="text-xs text-red-600">
+                No se completó el envío. Puedes reintentar los destinatarios pendientes.
+              </p>
+              <p class="text-xs text-[#6b7280]">Selecciona los correos registrados o agrega otros. Cada destinatario recibe un correo individual. No se modifica la ficha del cliente.</p>
             </form>
 
             <section v-if="invoice.events.length">
@@ -436,14 +464,14 @@ const actionButton =
             @click="run('pdf')"
           >
             <AppSpinner v-if="busy === 'pdf'" size="sm" color-class="text-white" />
-            {{ busy === 'pdf' ? 'Descargando…' : 'Descargar PDF' }}
+            {{ busy === 'pdf' ? 'Descargandoâ€¦' : 'Descargar PDF' }}
           </button>
           <button
             v-if="invoice.status === 'sent'"
             type="button"
             :class="[actionButton, 'border-[#e5e7eb] text-[#374151] hover:bg-[#f9fafb]']"
             :disabled="busy !== null"
-            title="Pregunta a SUNAT ahora, sin esperar la consulta automática"
+            title="Pregunta a SUNAT ahora, sin esperar la consulta automÃ¡tica"
             @click="run('refresh')"
           >
             <AppSpinner v-if="busy === 'refresh'" size="sm" />
@@ -454,7 +482,7 @@ const actionButton =
             type="button"
             :class="[actionButton, 'border-transparent bg-brasper-indigoStrong text-white hover:bg-brasper-indigoDark']"
             :disabled="busy !== null"
-            :title="invoice.status === 'rejected' ? 'Emite un comprobante nuevo con el siguiente número' : 'Reenvía con el mismo número'"
+            :title="invoice.status === 'rejected' ? 'Emite un comprobante nuevo con el siguiente nÃºmero' : 'ReenvÃ­a con el mismo nÃºmero'"
             @click="run('retry')"
           >
             <AppSpinner v-if="busy === 'retry'" size="sm" color-class="text-white" />

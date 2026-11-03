@@ -144,6 +144,9 @@ export interface Invoice {
   customerDocNumber: string
   customerName: string
   customerAddress: string | null
+  customerEmails?: string[]
+  emailRecipients?: string[]
+  emailDeliveredTo?: string[]
   customerEmail: string | null
   status: string
   emailRequested: boolean

@@ -21,6 +21,14 @@ Vue View (*_view.vue)
 
 ## Mapa de módulos
 
+Correos múltiples (2026-11-03): POST/PUT `/user` admiten `emails` como lista JSON
+multipart, con el principal en primera posición; `email` sigue siendo compatible.
+La búsqueda de usuarios incluye correos secundarios. GET del comprobante devuelve
+`customer_emails`, `email_recipients` y `email_delivered_to`. POST
+`/billing/invoices/{id}/email` acepta `{ recipients: string[] }` (máximo 20),
+conserva el correo del comprobante y envía individualmente sin repetir entregas
+completadas. Los destinatarios adicionales no actualizan la ficha del cliente.
+
 Usuarios (2026-11-03): el correo de contacto admite varios clientes. El alta de
 clientes no asigna una contraseña implícita ni selecciona otro usuario por email.
 Las credenciales de acceso conservan su nombre de usuario único.

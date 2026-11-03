@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { contactEmails, uniqueEmails } from '@/interface/utils/contact_emails'
 import { ref, computed, watch } from 'vue'
 import {
   createUser,
@@ -24,9 +25,9 @@ const props = withDefaults(
     showRoleField?: boolean
     user?: UserListItem | null
     /**
-     * `quick` deja solo nombre y teléfono: sirve para dar de alta un cliente en
-     * medio de una transacción sin frenar la operación. El resto del perfil se
-     * completa después desde /app/usuarios.
+     * `quick` deja solo nombre y telÃ©fono: sirve para dar de alta un cliente en
+     * medio de una transacciÃ³n sin frenar la operaciÃ³n. El resto del perfil se
+     * completa despuÃ©s desde /app/usuarios.
      */
     variant?: 'full' | 'quick'
   }>(),
@@ -40,8 +41,8 @@ const props = withDefaults(
 
 /**
  * `expandedFromQuick` deja pasar al formulario completo sin cerrar el modal ni
- * perder lo escrito: quien empieza rápido y descubre que sí tiene los datos no
- * debería tener que volver a empezar.
+ * perder lo escrito: quien empieza rÃ¡pido y descubre que sÃ­ tiene los datos no
+ * deberÃ­a tener que volver a empezar.
  */
 const expandedFromQuick = ref(false)
 const isQuick = computed(
@@ -56,6 +57,7 @@ const emit = defineEmits<{
   created: [user: UserListItem]
 }>()
 
+const emailRows = ref<string[]>([''])
 const creating = ref(false)
 const error = ref('')
 const loadingDetail = ref(false)
@@ -94,6 +96,8 @@ function onProfileImageChange(e: Event) {
 }
 
 function resetForm() {
+  emailRows.value = contactEmails(props.user?.emails, props.user?.email)
+  if (!emailRows.value.length) emailRows.value = ['']
   error.value = ''
   form.value = {
     email: props.user?.email && props.user.email !== '-' ? props.user.email : '',
@@ -107,14 +111,14 @@ function resetForm() {
     code_phone: props.user?.code_phone ?? ''
   }
   // El parser garantiza que `identifications` ya incluya el documento heredado
-  // como identificación principal, así que basta con clonar la lista.
+  // como identificaciÃ³n principal, asÃ­ que basta con clonar la lista.
   identifications.value = (props.user?.identifications ?? []).map((item) => ({ ...item }))
   detailError.value = ''
 }
 
 /**
- * Al editar, la fila de la lista puede traer una colección de identificaciones
- * incompleta. Recargamos el detalle canónico para no sobrescribir (borrar) las
+ * Al editar, la fila de la lista puede traer una colecciÃ³n de identificaciones
+ * incompleta. Recargamos el detalle canÃ³nico para no sobrescribir (borrar) las
  * que no se ven al guardar. Guardas de carrera: si el modal se cierra o se
  * reabre para otro usuario mientras llega la respuesta, se descarta.
  */
@@ -124,13 +128,16 @@ async function hydrateFromDetail(id: string) {
   try {
     const detail = await fetchUserById(id)
     if (!props.modelValue || props.user?.id !== id) return
+    if (!detail) throw new Error('Usuario no encontrado')
     if (detail) {
+      emailRows.value = contactEmails(detail.emails, detail.email)
+      if (!emailRows.value.length) emailRows.value = ['']
       identifications.value = detail.identifications.map((item) => ({ ...item }))
     }
   } catch {
     if (props.modelValue && props.user?.id === id) {
       detailError.value =
-        'No se pudieron cargar todas las identificaciones. Revísalas antes de guardar para no borrar datos existentes.'
+        'No se pudieron cargar los datos completos. Cierra y abre el formulario antes de guardar para no perder correos ni identificaciones.'
     }
   } finally {
     if (props.user?.id === id) loadingDetail.value = false
@@ -148,8 +155,8 @@ function openAdvancedDialog() {
 }
 
 async function handleSubmit() {
-  // Evita guardar con la colección parcial mientras aún llega el detalle o si ya hay un envío en curso.
-  if (creating.value || loadingDetail.value) return
+  // Evita guardar con la colecciÃ³n parcial mientras aÃºn llega el detalle o si ya hay un envÃ­o en curso.
+  if (creating.value || loadingDetail.value || detailError.value) return
   if (isQuick.value && !form.value.names?.trim()) {
     error.value = 'El nombre es obligatorio.'
     return
@@ -164,17 +171,17 @@ async function handleSubmit() {
       is_primary: item.is_primary
     }))
     if (normalizedIdentifications.some((item) => !item.document_type || !item.document_number)) {
-      error.value = 'Completa el tipo y número de cada identificación'
+      error.value = 'Completa el tipo y nÃºmero de cada identificaciÃ³n'
       return
     }
     const uniqueDocuments = new Set(
       normalizedIdentifications.map((item) => `${item.document_type.toLowerCase()}:${item.document_number.toLowerCase()}`)
     )
     if (uniqueDocuments.size !== normalizedIdentifications.length) {
-      error.value = 'No puedes registrar la misma identificación más de una vez'
+      error.value = 'No puedes registrar la misma identificaciÃ³n mÃ¡s de una vez'
       return
     }
-    // Garantiza exactamente una identificación principal antes de enviar.
+    // Garantiza exactamente una identificaciÃ³n principal antes de enviar.
     let primaryAssigned = false
     for (const item of normalizedIdentifications) {
       item.is_primary = item.is_primary && !primaryAssigned
@@ -185,11 +192,13 @@ async function handleSubmit() {
     }
     const primaryIdentification = normalizedIdentifications.find((item) => item.is_primary)
     const role = props.showRoleField ? form.value.role : props.defaultRole
-    const email = form.value.email?.trim()
+    const emails = uniqueEmails(emailRows.value)
+    const email = emails[0]
     const payload: CreateUserPayload = {
       ...form.value,
       role,
       email: email || undefined,
+      emails,
       identifications: normalizedIdentifications,
       document_type: primaryIdentification?.document_type,
       document_number: primaryIdentification?.document_number
@@ -247,27 +256,29 @@ watch(
     >
       <div class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-[#e5e7eb] bg-white p-6 shadow-xl">
         <h2 id="usuario-form-dialog-title" class="mb-6 text-lg font-semibold text-[#1f2937]">
-          {{ isEditing ? 'Editar usuario' : isAdvancedFromQuick ? 'Creación avanzada de usuario' : 'Nuevo usuario' }}
+          {{ isEditing ? 'Editar usuario' : isAdvancedFromQuick ? 'CreaciÃ³n avanzada de usuario' : 'Nuevo usuario' }}
         </h2>
         <p v-if="isAdvancedFromQuick" class="-mt-4 mb-6 text-sm text-[#6b7280]">
-          Completa la información disponible. Este usuario quedará seleccionado en la transacción.
+          Completa la informaciÃ³n disponible. Este usuario quedarÃ¡ seleccionado en la transacciÃ³n.
         </p>
 
         <form class="space-y-6" @submit.prevent="handleSubmit">
           <div class="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label class="mb-1.5 block text-sm font-medium text-[#374151]">
-                Email (opcional)
-              </label>
-              <input
-                v-model="form.email"
-                type="text"
-                inputmode="email"
-                autocomplete="email"
-                class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
-                placeholder="usuario@ejemplo.com"
-              />
-            </div>
+            <fieldset class="space-y-2 sm:col-span-2" :disabled="loadingDetail || creating">
+              <legend class="mb-1.5 text-sm font-medium text-[#374151]">Correos (opcional)</legend>
+              <div v-for="(_, index) in emailRows" :key="index" class="flex items-center gap-2">
+                <label :for="`user-email-${index}`" class="w-20 shrink-0 text-xs text-[#6b7280]">{{ index === 0 ? 'Principal' : `Correo ${index + 1}` }}</label>
+                <input :id="`user-email-${index}`" v-model="emailRows[index]" type="email" maxlength="255"
+                  autocomplete="email" placeholder="usuario@ejemplo.com"
+                  class="min-w-0 flex-1 rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm" />
+                <button v-if="index > 0" type="button" class="text-xs text-brasper-indigoStrong"
+                  @click="emailRows.unshift(...emailRows.splice(index, 1))">Hacer principal</button>
+                <button type="button" class="text-xs text-red-600" :aria-label="`Quitar correo ${index + 1}`"
+                  @click="emailRows.splice(index, 1)">Quitar</button>
+              </div>
+              <button type="button" class="text-sm text-brasper-indigoStrong" :disabled="emailRows.length >= 20"
+                @click="emailRows.push('')">+ Agregar correo</button>
+            </fieldset>
             <div>
               <label class="mb-1.5 block text-sm font-medium text-[#374151]">
                 Nombres
@@ -299,13 +310,13 @@ watch(
             </div>
             <UserIdentificationsEditor v-model="identifications" />
             <p v-if="loadingDetail" class="-mt-1 text-xs text-[#6b7280] sm:col-span-2">
-              Cargando identificaciones del usuario…
+              Cargando identificaciones del usuarioâ€¦
             </p>
             <p v-else-if="detailError" class="-mt-1 text-xs text-[#dc3545] sm:col-span-2">
               {{ detailError }}
             </p>
             <div>
-              <label class="mb-1.5 block text-sm font-medium text-[#374151]">Código tel.</label>
+              <label class="mb-1.5 block text-sm font-medium text-[#374151]">CÃ³digo tel.</label>
               <AppDropdown
                 v-model="form.code_phone"
                 :options="phoneCodeOptions"
@@ -315,7 +326,7 @@ watch(
             </div>
             <div>
               <label class="mb-1.5 block text-sm font-medium text-[#374151]">
-                Teléfono
+                TelÃ©fono
               </label>
               <input
                 v-model.number="form.phone"
@@ -352,7 +363,7 @@ watch(
             <button
               type="submit"
               class="rounded-lg bg-brasper-indigoStrong px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brasper-indigoDark disabled:opacity-60"
-              :disabled="creating || loadingDetail"
+              :disabled="creating || loadingDetail || !!detailError"
             >
               {{ creating ? (isEditing ? 'Guardando...' : 'Creando...') : 'Guardar' }}
             </button>
