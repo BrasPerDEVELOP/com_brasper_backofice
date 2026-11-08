@@ -21,9 +21,18 @@ Vue View (*_view.vue)
 
 ## Mapa de módulos
 
-Pausa de emisión (2026-11-03): BRL→PEN y BRL→USD tienen el botón Emitir
-deshabilitado. El backend bloquea también vista previa, emisión y reintentos
-para esos pares; se conserva la consulta y descarga de comprobantes existentes.
+Omie (2026-11-08): BRL→PEN/USD muestra NFS-e Omie con vista previa de Venta final
+como total BRL. GET `/omie/transactions/{id}/preview`, POST `/issue`, POST `/refresh`
+y GET `/pdf` bajo el mismo prefijo de transacción. `billing.view` para consultar,
+`billing.issue` para emitir. El cliente debe existir en Omie con CPF/CNPJ.
+Un intento persistido por operación evita duplicados; los errores se resuelven
+sobre la OS existente en Omie. La cuenta elegida es Banco do Brasil.
+Las rutas SUNAT siguen bloqueadas para esos pares y conservan sus series.
+
+
+Pausa SUNAT (2026-11-03): BRL→PEN y BRL→USD siguen bloqueados para emitir
+por APISUNAT. Desde 2026-11-08 usan el flujo separado NFS-e Omie; se conserva
+la consulta de comprobantes SUNAT existentes.
 
 Correos múltiples (2026-11-03): POST/PUT `/user` admiten `emails` como lista JSON
 multipart, con el principal en primera posición; `email` sigue siendo compatible.
