@@ -47,6 +47,7 @@ import { useAuthStore } from '@modules/auth/presentation/controllers/use_auth_st
 import type { Invoice } from '@modules/facturacion/domain/models'
 import { billingRouteDisabledReason } from '@modules/facturacion/domain/models'
 import { useBillingStore } from '@modules/facturacion/presentation/controllers/use_billing_store'
+import OmieInvoiceCell from '@modules/omie/presentation/OmieInvoiceCell.vue'
 import InvoiceCell from '@modules/facturacion/presentation/components/InvoiceCell.vue'
 import IssueInvoiceDialog from '@modules/facturacion/presentation/components/IssueInvoiceDialog.vue'
 import InvoiceDetailDialog from '@modules/facturacion/presentation/components/InvoiceDetailDialog.vue'
@@ -400,7 +401,7 @@ const ACCOUNTING_TABLE_COLUMNS: readonly AccountingTableColumn<AccountingTableCo
   },
   {
     key: 'invoice',
-    label: 'Comprobante SUNAT',
+    label: 'Comprobante fiscal',
     defaultWidth: 128,
     minWidth: 104,
     maxWidth: 360,
@@ -1042,7 +1043,7 @@ watch(
 // Cualquier cambio de filtros o de página recarga desde el servidor.
 watch(apiFilterParams, () => loadTransactions(), { deep: true })
 
-// Comprobante SUNAT de las operaciones visibles: una sola petición por página.
+// Comprobante fiscal de las operaciones visibles: una sola petición por página.
 const visibleTransactionIds = computed(() =>
   paginatedTransactions.value.map((t) => t.id ?? '').filter(Boolean)
 )
@@ -1551,8 +1552,13 @@ onMounted(() => {
               {{ internalSaleLabel(t) }}
             </td>
             <td class="sticky right-0 z-[1] overflow-hidden bg-white px-1.5 py-2 align-middle text-center shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]">
+              <OmieInvoiceCell
+                v-if="canViewBilling && t.id && billingDisabledReason(t)"
+                :transaction-id="t.id"
+                :can-issue="canIssueBilling"
+              />
               <InvoiceCell
-                v-if="canViewBilling && t.id"
+                v-else-if="canViewBilling && t.id"
                 :invoice="billingStore.invoiceFor(t.id)"
                 :can-issue="canIssueBilling"
                 :disabled-reason="billingDisabledReason(t)"
