@@ -176,6 +176,7 @@ export interface Invoice {
 }
 
 export interface InvoiceList {
+  totalPages?: number
   items: Invoice[]
   total: number
   skip: number
@@ -256,6 +257,8 @@ export interface BillingStatus {
 }
 
 export interface InvoiceListFilters {
+  page?: number
+  pageSize?: number
   issuerRuc?: string | null
   status?: string | null
   documentType?: string | null

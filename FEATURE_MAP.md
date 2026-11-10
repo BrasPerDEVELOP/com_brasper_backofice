@@ -21,6 +21,17 @@ Vue View (*_view.vue)
 
 ## Mapa de módulos
 
+Descarga mensual SUNAT (2026-11-10): GET `/billing/invoices/export-month?month=YYYY-MM`
+con `issuer_ruc` opcional entrega un ZIP con PDF presentado, XML firmado y CDR por
+emisor/comprobante. Requiere `billing.view`; informa faltantes dentro del ZIP.
+Máximo 1000 comprobantes por descarga.
+
+
+Facturación (2026-11-10): GET `/billing/invoices?page=1&page_size=10` pagina
+en el backend (máximo 200 por página) y devuelve `page`, `page_size`, `total_pages`
+además de `items`, `total`, `skip`, `limit`. Se conserva el contrato skip/limit.
+El listado consume el total de páginas del servidor y permite 10/25/50/100 filas.
+
 Omie (2026-11-08): BRL→PEN/USD muestra NFS-e Omie con vista previa de Venta final
 como total BRL. GET `/omie/transactions/{id}/preview`, POST `/issue`, POST `/refresh`
 y GET `/pdf` bajo el mismo prefijo de transacción. `billing.view` para consultar,

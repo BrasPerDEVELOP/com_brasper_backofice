@@ -5,11 +5,13 @@ import { useAuthStore } from '@modules/auth/presentation/controllers/use_auth_st
 
 const AccountingView = defineAsyncComponent(() => import('./contabilidad_view.vue'))
 const BillingView = defineAsyncComponent(() => import('@modules/facturacion/presentation/bodies/facturacion_view.vue'))
+const CreditNotesView = defineAsyncComponent(() => import('@modules/facturacion/presentation/bodies/credit_notes_view.vue'))
 const authStore = useAuthStore()
 const route = useRoute()
 const canViewAccounting = computed(() => authStore.hasPermission('accounting.view'))
 const canViewBilling = computed(() => authStore.hasPermission('billing.view'))
 const activeTab = computed(() => {
+  if (canViewBilling.value && route.query.tab === 'notas-credito') return 'notas-credito'
   if (canViewBilling.value && (route.query.tab === 'facturacion' || !canViewAccounting.value)) return 'facturacion'
   return 'movimientos'
 })
@@ -40,10 +42,20 @@ const activeTab = computed(() => {
           >
             Facturación
           </RouterLink>
+          <RouterLink
+            v-if="canViewBilling"
+            :to="{ path: '/app/contabilidad', query: { ...route.query, tab: 'notas-credito' } }"
+            class="rounded-lg px-4 py-2 text-sm font-medium transition"
+            :class="activeTab === 'notas-credito' ? 'bg-brasper-indigoStrong text-white' : 'bg-white text-[#374151] hover:bg-[#eef5ff]'"
+            :aria-current="activeTab === 'notas-credito' ? 'page' : undefined"
+          >
+            Notas de crédito
+          </RouterLink>
         </nav>
       </div>
     </header>
     <BillingView v-if="activeTab === 'facturacion' && canViewBilling" />
+    <CreditNotesView v-else-if="activeTab === 'notas-credito' && canViewBilling" />
     <AccountingView v-else-if="canViewAccounting" />
   </div>
 </template>

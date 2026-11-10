@@ -198,6 +198,13 @@ export function issueInputToApi(input: IssueInvoiceInput | undefined): Record<st
 }
 
 export class BillingApiAdapter {
+  async downloadMonth(month: string, issuerRuc?: string): Promise<Blob> {
+    const { data } = await apiClient.get(endpoint('invoices/export-month'), {
+      params: { month, ...(issuerRuc ? { issuer_ruc: issuerRuc } : {}) },
+      responseType: 'blob'
+    })
+    return data instanceof Blob ? data : new Blob([data as BlobPart], { type: 'application/zip' })
+  }
   async getStatus(): Promise<BillingStatus> {
     const { data } = await apiClient.get(endpoint('status'))
     return statusFromApi(data)
@@ -207,6 +214,12 @@ export class BillingApiAdapter {
     const params: Record<string, string | number> = {
       skip: filters.skip ?? 0,
       limit: filters.limit ?? 50
+    }
+    if (filters.page !== undefined || filters.pageSize !== undefined) {
+      delete params.skip
+      delete params.limit
+      params.page = filters.page ?? 1
+      params.page_size = filters.pageSize ?? 10
     }
     if (filters.issuerRuc) params.issuer_ruc = filters.issuerRuc
     if (filters.status) params.status = filters.status
@@ -218,6 +231,7 @@ export class BillingApiAdapter {
     return {
       items: records(o.items).map(invoiceFromApi),
       total: Math.round(num(o.total)),
+      totalPages: Math.max(1, Math.round(num(o.total_pages))),
       skip: Math.round(num(o.skip)),
       limit: Math.round(num(o.limit))
     }

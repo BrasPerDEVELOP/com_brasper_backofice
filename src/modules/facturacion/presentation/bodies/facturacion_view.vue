@@ -4,12 +4,11 @@
  * por la comisión cobrada). Para emitir, ir a Contabilidad → columna Comprobante.
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
-import { AppSpinner, PageHeader } from '@interface/widgets'
-import { useAuthStore } from '@modules/auth/presentation/controllers/use_auth_store_controller'
+import { AppSpinner } from '@interface/widgets'
 import type { Invoice } from '../../domain/models'
 import { INVOICE_STATUSES, invoiceStatusMeta, isInvoicePending, sunatIdentityLabel } from '../../domain/models'
 import { useBillingStore } from '../controllers/use_billing_store'
+import { BillingApiAdapter } from '../../infrastructure/adapters/billing_api_adapter'
 import { formatInvoiceMoney, formatLimaDateTime } from '../composables/billing_format'
 import InvoiceStatusChip from '../components/InvoiceStatusChip.vue'
 import InvoiceDetailDialog from '../components/InvoiceDetailDialog.vue'
@@ -17,27 +16,35 @@ import InvoiceDetailDialog from '../components/InvoiceDetailDialog.vue'
 defineOptions({ name: 'FacturacionView' })
 
 const store = useBillingStore()
-const authStore = useAuthStore()
 
 const issuerFilter = ref('')
+const exportIssuer = ref('')
 const statusFilter = ref('')
 const documentTypeFilter = ref('')
 const dateFrom = ref('')
 const dateTo = ref('')
-const perPage = 25
+const limaMonthParts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Lima', year: 'numeric', month: '2-digit' }).formatToParts(new Date())
+const exportMonth = ref(`${limaMonthParts.find((part) => part.type === 'year')?.value}-${limaMonthParts.find((part) => part.type === 'month')?.value}`)
+const exportLoading = ref(false)
+const exportError = ref('')
+const perPage = ref(10)
 const page = ref(1)
 
 const detailOpen = ref(false)
 const detailId = ref<string | null>(null)
 
-const canSeeAccounting = computed(() => authStore.hasPermission('accounting.view'))
-const totalPages = computed(() => Math.max(1, Math.ceil(store.list.total / perPage)))
+const totalPages = computed(() => store.list.totalPages ?? 1)
 const status = computed(() => store.status)
 const issuers = computed(() => status.value?.issuers ?? [])
-const lastNumber = (issuerRuc: string, documentType: string) =>
-  status.value?.series.find((s) => s.issuerRuc === issuerRuc && s.documentType === documentType)
-    ?.lastNumber ?? 0
-
+const invalidDateRange = computed(() => Boolean(dateFrom.value && dateTo.value && dateFrom.value > dateTo.value))
+const hasFilters = computed(() => Boolean(issuerFilter.value || statusFilter.value || documentTypeFilter.value || dateFrom.value || dateTo.value))
+function clearFilters() {
+  issuerFilter.value = ''
+  statusFilter.value = ''
+  documentTypeFilter.value = ''
+  dateFrom.value = ''
+  dateTo.value = ''
+}
 /** Límites del día en hora de Lima (UTC−5) para filtrar por fecha de emisión. */
 function limaDayStart(day: string): string {
   return `${day}T00:00:00-05:00`
@@ -47,18 +54,19 @@ function limaDayEnd(day: string): string {
 }
 
 async function load() {
+  if (invalidDateRange.value) return
   await store.loadList({
     issuerRuc: issuerFilter.value || null,
     status: statusFilter.value || null,
     documentType: documentTypeFilter.value || null,
     dateFrom: dateFrom.value ? limaDayStart(dateFrom.value) : null,
     dateTo: dateTo.value ? limaDayEnd(dateTo.value) : null,
-    skip: (page.value - 1) * perPage,
-    limit: perPage
+    page: page.value,
+    pageSize: perPage.value
   })
 }
 
-watch([issuerFilter, statusFilter, documentTypeFilter, dateFrom, dateTo], () => {
+watch([issuerFilter, statusFilter, documentTypeFilter, dateFrom, dateTo, perPage], () => {
   if (page.value !== 1) page.value = 1
   else void load()
 })
@@ -82,6 +90,26 @@ function openDetail(invoice: Invoice) {
   detailOpen.value = true
 }
 
+async function downloadMonth() {
+  exportError.value = ''
+  exportLoading.value = true
+  try {
+    const blob = await new BillingApiAdapter().downloadMonth(exportMonth.value, exportIssuer.value)
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `comprobantes-sunat-${exportMonth.value}.zip`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  } catch {
+    exportError.value = 'No se pudo descargar el mes. Comprueba que haya comprobantes y vuelve a intentar.'
+  } finally {
+    exportLoading.value = false
+  }
+}
+
 onMounted(() => {
   void store.loadStatus()
   void load()
@@ -93,58 +121,7 @@ const inputClass =
 
 <template>
   <div class="w-full min-w-0 max-w-full space-y-6">
-    <PageHeader
-      eyebrow="Contabilidad"
-      title="Facturación electrónica"
-      subtitle="Boletas y facturas por la comisión de cada operación, emitidas vía APISUNAT."
-    >
-      <template #actions>
-        <RouterLink
-          v-if="canSeeAccounting"
-          to="/app/contabilidad"
-          class="rounded-lg bg-brasper-indigoStrong px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brasper-indigoDark"
-        >
-          Emitir desde Contabilidad
-        </RouterLink>
-      </template>
-    </PageHeader>
-
-    <!-- Configuración vigente: ambiente, emisor y correlativos. -->
-    <section
-      v-if="status"
-      class="space-y-2 rounded-xl border px-4 py-3 text-sm"
-      :class="
-        !status.enabled
-          ? 'border-[#e5e7eb] bg-[#f9fafb] text-[#4b5563]'
-          : status.isProduction
-            ? 'border-red-200 bg-red-50 text-red-900'
-            : 'border-amber-200 bg-amber-50 text-amber-900'
-      "
-    >
-      <p class="flex flex-wrap gap-x-6 gap-y-1">
-        <span class="font-semibold">
-          <template v-if="!status.enabled">Facturación apagada</template>
-          <template v-else-if="status.isProduction">Producción · con validez tributaria</template>
-          <template v-else>Desarrollo · pruebas sin validez tributaria</template>
-        </span>
-        <span>Emisión {{ status.autoIssue ? 'automática al finalizar' : 'manual' }}</span>
-      </p>
-      <ul class="grid gap-x-6 gap-y-1 sm:grid-cols-2">
-        <li v-for="issuer in issuers" :key="issuer.ruc" class="min-w-0">
-          <span class="font-medium">{{ issuer.name }}</span>
-          <span class="font-mono text-xs"> · RUC {{ issuer.ruc }}</span>
-          <span v-if="issuer.isDefault && issuers.length > 1" class="text-xs"> · por defecto</span>
-          <span v-if="!issuer.configured" class="text-xs font-semibold text-red-700"> · sin token</span>
-          <span class="block text-xs">
-            Boletas <span class="font-mono">{{ status.seriesBoleta }}</span> (último
-            {{ lastNumber(issuer.ruc, '03') }}) · Facturas
-            <span class="font-mono">{{ status.seriesFactura }}</span> (último
-            {{ lastNumber(issuer.ruc, '01') }})
-          </span>
-        </li>
-      </ul>
-    </section>
-    <p v-else-if="store.statusError" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+    <p v-if="store.statusError" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
       {{ store.statusError }}
     </p>
     <p v-if="status && !status.enabled" class="text-sm text-[#6b7280]">
@@ -152,7 +129,36 @@ const inputClass =
       servidor con <code class="rounded bg-[#f3f4f6] px-1">BILLING_ENABLED=true</code>.
     </p>
 
-    <div class="flex flex-wrap items-end gap-3">
+    <section class="rounded-xl border border-[#dbe4f4] bg-white p-4 sm:p-5" aria-labelledby="billing-export-title">
+      <div class="mb-4">
+        <h2 id="billing-export-title" class="text-sm font-semibold text-[#17243b]">Descarga mensual de comprobantes</h2>
+        <p class="mt-1 text-xs text-[#617089]">Un ZIP con PDF, XML firmado y CDR de los comprobantes SUNAT del mes.</p>
+      </div>
+      <div class="flex flex-wrap items-end gap-3">
+      <label class="space-y-1">
+        <span class="block text-xs font-medium text-[#4b5563]">Mes para descargar</span>
+        <input v-model="exportMonth" type="month" :class="inputClass" />
+      </label>
+      <label v-if="issuers.length > 1" class="space-y-1">
+        <span class="block text-xs font-medium text-[#4b5563]">Empresa</span>
+        <select v-model="exportIssuer" :class="inputClass">
+          <option value="">Todas las empresas</option>
+          <option v-for="issuer in issuers" :key="issuer.ruc" :value="issuer.ruc">{{ issuer.name }}</option>
+        </select>
+      </label>
+      <button type="button" :disabled="exportLoading || !exportMonth" class="rounded-lg bg-brasper-indigoStrong px-4 py-2 text-sm font-semibold text-white transition hover:bg-brasper-indigoDark disabled:opacity-50" @click="downloadMonth">
+        {{ exportLoading ? 'Preparando ZIP…' : 'Descargar ZIP del mes' }}
+      </button>
+      </div>
+      <p v-if="exportError" role="alert" class="mt-3 text-sm text-red-700">{{ exportError }}</p>
+    </section>
+
+    <section class="rounded-xl border border-[#dbe4f4] bg-white p-4 sm:p-5" aria-labelledby="billing-filters-title">
+      <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <h2 id="billing-filters-title" class="text-sm font-semibold text-[#17243b]">Filtrar comprobantes</h2>
+        <button v-if="hasFilters" type="button" class="text-sm font-medium text-brasper-indigoStrong hover:underline" @click="clearFilters">Limpiar filtros</button>
+      </div>
+      <div class="flex flex-wrap items-end gap-3">
       <label v-if="issuers.length > 1" class="space-y-1">
         <span class="block text-xs font-medium text-[#4b5563]">Empresa</span>
         <select id="billing-filter-issuer" v-model="issuerFilter" :class="inputClass">
@@ -181,16 +187,19 @@ const inputClass =
       </label>
       <label class="space-y-1">
         <span class="block text-xs font-medium text-[#4b5563]">Hasta</span>
-        <input id="billing-filter-to" v-model="dateTo" type="date" :class="inputClass" />
+        <input id="billing-filter-to" v-model="dateTo" type="date" :min="dateFrom || undefined" :class="inputClass" />
       </label>
       <span v-if="store.listLoading" class="pb-2"><AppSpinner size="sm" label="Cargando…" /></span>
-    </div>
+      </div>
+      <p v-if="invalidDateRange" role="alert" class="mt-3 text-sm text-red-700">La fecha «Desde» debe ser anterior o igual a «Hasta».</p>
+      <p v-else class="mt-3 text-xs text-[#617089]">{{ store.list.total }} comprobantes encontrados</p>
+    </section>
 
     <p v-if="store.listError" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
       {{ store.listError }}
     </p>
 
-    <div class="overflow-x-auto rounded-xl border border-[#e5e7eb] bg-white">
+    <div v-if="!invalidDateRange" class="overflow-x-auto rounded-xl border border-[#e5e7eb] bg-white">
       <table class="w-full min-w-[64rem] text-sm">
         <thead>
           <tr class="bg-[#dbeafe] text-left text-xs font-semibold text-brasper-indigoDark">
@@ -244,13 +253,19 @@ const inputClass =
       </table>
     </div>
 
-    <div v-if="store.list.total > perPage" class="flex items-center justify-between text-sm text-[#6b7280]">
+    <div v-if="!invalidDateRange" class="flex flex-wrap items-center justify-between gap-3 text-sm text-[#6b7280]">
+      <label class="flex items-center gap-2">
+        Comprobantes por página
+        <select v-model.number="perPage" :class="inputClass" :disabled="store.listLoading">
+          <option v-for="size in [10, 25, 50, 100]" :key="size" :value="size">{{ size }}</option>
+        </select>
+      </label>
       <span>{{ store.list.total }} comprobantes · página {{ page }} de {{ totalPages }}</span>
       <div class="flex gap-2">
         <button
           type="button"
           class="rounded-lg border border-[#e5e7eb] px-3 py-1.5 hover:bg-[#f3f4f6] disabled:opacity-40"
-          :disabled="page <= 1"
+          :disabled="store.listLoading || page <= 1"
           @click="page -= 1"
         >
           Anterior
@@ -258,7 +273,7 @@ const inputClass =
         <button
           type="button"
           class="rounded-lg border border-[#e5e7eb] px-3 py-1.5 hover:bg-[#f3f4f6] disabled:opacity-40"
-          :disabled="page >= totalPages"
+          :disabled="store.listLoading || page >= totalPages"
           @click="page += 1"
         >
           Siguiente
