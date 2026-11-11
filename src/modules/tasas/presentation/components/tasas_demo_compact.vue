@@ -66,6 +66,13 @@
               </button>
             </div>
           </div>
+          <p
+            v-if="savedRate?.id === rate.id && savedRate.value === rate.rate && draftTaxes[rate.id] === undefined"
+            role="status"
+            class="mt-2 text-xs font-medium text-emerald-700"
+          >
+            Tasa guardada localmente.
+          </p>
           <div
             v-if="expandedHistoryId === rate.id"
             class="mt-4 rounded-xl border border-[#dbe7fb] bg-white p-3"
@@ -127,7 +134,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import {
   useCalculatorDemoStore,
   useCalculatorStore
@@ -152,6 +159,7 @@ const tasasStore = useTasasStore()
 
 const expandedHistoryId = ref<string | null>(null)
 const draftTaxes = ref<Record<string, string>>({})
+const savedRate = ref<{ id: string; value: number } | null>(null)
 const showHistoryButton = computed(() => !props.useMainCalculatorStore)
 const panelEyebrow = computed(() =>
   props.useMainCalculatorStore ? 'Configuración local' : 'Configuración demo'
@@ -188,6 +196,7 @@ function parseTaxInput(raw: string, fallback: number): number {
 }
 
 function onDraftInput(id: string, ev: Event): void {
+  savedRate.value = null
   const v = (ev.target as HTMLInputElement).value
   draftTaxes.value = { ...draftTaxes.value, [id]: v }
 }
@@ -203,13 +212,14 @@ function saveRate(rate: ExchangeRate): void {
     return
   }
   tasasStore.error = null
-  draftTaxes.value[rate.id] = String(parsedTax)
   calculatorStore.overrideLocalTaxRate(rate.id, parsedTax)
   if (calculatorStore.inputMode === 'receive' && calculatorStore.amountReceive > 0) {
     calculatorStore.recalcFromReceive()
   } else if (calculatorStore.amountSend > 0) {
     calculatorStore.recalcFromSend()
   }
+  delete draftTaxes.value[rate.id]
+  savedRate.value = { id: rate.id, value: parsedTax }
 }
 
 function getHistoryEntries(taxRateId: string): Array<Record<string, unknown>> {
@@ -263,15 +273,4 @@ async function toggleHistory(taxRateId: string): Promise<void> {
   await tasasStore.loadTaxRateHistoryTrial(taxRateId)
 }
 
-watch(
-  () => calculatorStore.effectiveTaxRates,
-  (rates) => {
-    for (const rate of rates) {
-      if (!(rate.id in draftTaxes.value)) {
-        draftTaxes.value[rate.id] = String(rate.rate)
-      }
-    }
-  },
-  { immediate: true, deep: true }
-)
 </script>

@@ -427,6 +427,63 @@ describe('editRateLock: tasa histórica de la transacción en edición', () => {
     expect(store.result?.rate).toBe(1.438)
   })
 
+  it('Guardar aplica la tasa local al editar y recalcula el envío en modo especial', () => {
+    const store = useCalculatorStore()
+    seed(store, { calculationMode: 'special' })
+    store.setEditRateLock('pen', 'brl', 1.497)
+    store.setAmountSend(1000)
+
+    store.overrideLocalTaxRate('tr-1', 1.6)
+    store.recalcFromSend()
+
+    expect(store.result?.rate).toBe(1.6)
+    expect(store.amountReceive).toBeCloseTo(980 * 1.6, 4)
+    expect(store.taxRates[0]?.rate).toBe(1.438)
+    expect(JSON.parse(localStorage.getItem('calculator.localTaxRateOverrides')!)).toEqual({ 'tr-1': 1.6 })
+
+    store.calculationMode = 'normal'
+    store.setAmountSend(1000)
+    expect(store.result?.rate).toBe(1.497)
+    store.calculationMode = 'special'
+    expect(store.result?.rate).toBe(1.6)
+  })
+
+  it('aplica la tasa local inversa sin perder el monto destino especial acordado', () => {
+    const store = useCalculatorStore()
+    seed(store, { taxRates: [{ id: 'tr-inv', pair: 'brl-pen', from: 'brl', to: 'pen', rate: 0.66 }] })
+    store.setEditRateLock('pen', 'brl', 1.497)
+    store.setSpecialQuote(1000, 1450)
+
+    store.overrideLocalTaxRate('tr-inv', 0.625)
+    store.recalcFromSend()
+
+    expect(store.result?.rate).toBe(1.6)
+    expect(store.result?.amountReceive).toBe(1450)
+  })
+
+  it('abrir otra edición conserva su tasa histórica aunque haya overrides anteriores', () => {
+    const store = useCalculatorStore()
+    seed(store, { calculationMode: 'special' })
+    store.setEditRateLock('pen', 'brl', 1.497)
+    store.overrideLocalTaxRate('tr-1', 1.6)
+
+    store.setEditRateLock('pen', 'brl', 1.52)
+    expect(store.currentRate).toBe(1.52)
+
+    store.clearEditRateLock()
+    expect(store.currentRate).toBe(1.6)
+  })
+
+  it('guardar otro par no cambia la tasa histórica del par editado', () => {
+    const store = useCalculatorStore()
+    seed(store, { calculationMode: 'special', taxRates: [RATE_PEN_BRL, { id: 'tr-usd', pair: 'pen-usd', from: 'pen', to: 'usd', rate: 0.27 }] })
+    store.setEditRateLock('pen', 'brl', 1.497)
+
+    store.overrideLocalTaxRate('tr-usd', 0.3)
+    expect(store.currentRate).toBe(1.497)
+    expect(store.effectiveTaxRates.find(rate => rate.id === 'tr-usd')?.rate).toBe(0.3)
+  })
+
   it('ignora un bloqueo inválido (tasa <= 0)', () => {
     const store = useCalculatorStore()
     seed(store, { calculationMode: 'normal' })

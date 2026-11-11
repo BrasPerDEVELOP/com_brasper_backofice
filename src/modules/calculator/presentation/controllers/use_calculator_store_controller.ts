@@ -247,7 +247,7 @@ interface CalculatorState {
    * transacción para el par indicado (en modo normal y especial), en vez del catálogo vivo.
    * Evita que los montos "se muevan" al re-editar una transacción cuya tasa ya cambió en catálogo.
    */
-  editRateLock: { from: CurrencyCode; to: CurrencyCode; rate: number } | null
+  editRateLock: { from: CurrencyCode; to: CurrencyCode; rate: number; specialRate?: number } | null
   /** IDs para POST /transactions/ (tasa y comisión usadas en la calculadora). */
   selectedTaxRateId: string | null
   selectedCommissionId: string | null
@@ -378,16 +378,19 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
         })
       }
 
-      // Bloqueo de tasa en edición: el tipo de cambio histórico manda sobre el
-      // catálogo vivo para el par editado, tanto en normal como en especial.
+      // La edición conserva la tasa histórica hasta guardar explícitamente una
+      // tasa local especial. Normal sigue usando la tasa histórica original.
       const lock = state.editRateLock
       if (lock && lock.rate > 0) {
+        const lockedRate = (lockTrial || state.calculationMode === 'special')
+          ? (lock.specialRate ?? lock.rate)
+          : lock.rate
         rates = rates.map((r) => {
           if (r.from === lock.from && r.to === lock.to) {
-            return { ...r, rate: lock.rate }
+            return { ...r, rate: lockedRate }
           }
           if (r.from === lock.to && r.to === lock.from) {
-            return { ...r, rate: 1 / lock.rate }
+            return { ...r, rate: 1 / lockedRate }
           }
           return r
         })
@@ -768,8 +771,18 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
      * No toca `taxRates` (la calculadora normal nunca ve este mapa).
      */
     overrideLocalTaxRate(id: string, newRate: number) {
+      if (!Number.isFinite(newRate) || newRate <= 0) return
       this.localTaxRateOverrides = { ...this.localTaxRateOverrides, [id]: newRate }
       writeLocalTaxRateOverrides(lockTrial, this.localTaxRateOverrides)
+      const lock = this.editRateLock
+      const rate = this.taxRates.find((item) => item.id === id)
+      if (lock && rate && (lockTrial || this.calculationMode === 'special')) {
+        if (rate.from === lock.from && rate.to === lock.to) {
+          this.editRateLock = { ...lock, specialRate: newRate }
+        } else if (rate.from === lock.to && rate.to === lock.from) {
+          this.editRateLock = { ...lock, specialRate: 1 / newRate }
+        }
+      }
       this.updateSelectedIds()
     },
 
