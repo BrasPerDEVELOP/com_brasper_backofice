@@ -133,11 +133,20 @@ describe('selección de tramo de comisión fuera de los límites configurados', 
     return store
   }
 
-  it('usa el tramo inferior cuando el monto está debajo del mínimo', () => {
+  it('rechaza un monto por debajo del mínimo en vez de aplicarle el primer tramo', () => {
     const store = seededStore()
     store.setAmountSend(50)
+    expect(store.currentCommission).toBeNull()
+    expect(store.result).toBeNull()
+    expect(store.minimumAmountError).toBe('El monto mínimo para esta operación es 100 PEN.')
+  })
+
+  it('acepta exactamente el monto mínimo configurado', () => {
+    const store = seededStore()
+    store.setAmountSend(100)
     expect(store.currentCommission?.id).toBe('cm-low')
     expect(store.result?.commissionRate).toBe(1)
+    expect(store.minimumAmountError).toBeNull()
   })
 
   it('usa el tramo que contiene el monto', () => {
@@ -181,6 +190,7 @@ describe('selección de tramo de comisión fuera de los límites configurados', 
       const store = storeWithOpenBracket()
       store.setAmountSend(5_000)
       expect(store.currentCommission?.id).toBe('cm-high')
+      expect(store.result?.commissionRate).toBe(2.5)
     })
 
     it('al indicar cuánto recibe, resuelve el bruto dentro del tramo abierto', () => {

@@ -21,6 +21,9 @@ function pickCommissionBracket(
   grossSend: number,
   pairCommissions: CommissionRange[]
 ): CommissionRange | null {
+  if (pairCommissions.length > 0 && grossSend < Math.min(...pairCommissions.map((item) => item.min_amount))) {
+    return null
+  }
   return findRangeForAmount(pairCommissions, grossSend)
 }
 
@@ -154,18 +157,21 @@ function computeQuoteFromCatalog(params: {
   if (inputMode === 'receive' && amountReceive > 0) {
     const gross = resolveGrossFromReceive(amountReceive, rate, pairCommissions)
     const commissionDef = pickCommissionBracket(gross, pairCommissions)
+    if (pairCommissions.length > 0 && !commissionDef) return null
     return buildNormalResult(gross, rate, commissionDef, amountReceive)
   }
 
   if (amountSend > 0) {
     const gross = amountSend
     const commissionDef = pickCommissionBracket(gross, pairCommissions)
+    if (pairCommissions.length > 0 && !commissionDef) return null
     return buildNormalResult(gross, rate, commissionDef)
   }
 
   if (amountReceive > 0) {
     const gross = resolveGrossFromReceive(amountReceive, rate, pairCommissions)
     const commissionDef = pickCommissionBracket(gross, pairCommissions)
+    if (pairCommissions.length > 0 && !commissionDef) return null
     return buildNormalResult(gross, rate, commissionDef, amountReceive)
   }
 
@@ -492,18 +498,21 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
       if (state.inputMode === 'receive' && receive > 0) {
         const gross = resolveGrossFromReceive(receive, rate, pairCommissions)
         const commissionDef = pickCommissionBracket(gross, pairCommissions)
+        if (pairCommissions.length > 0 && !commissionDef) return null
         return buildNormalResult(gross, rate, commissionDef, receive)
       }
 
       if (send > 0) {
         const gross = send
         const commissionDef = pickCommissionBracket(gross, pairCommissions)
+        if (pairCommissions.length > 0 && !commissionDef) return null
         return buildNormalResult(gross, rate, commissionDef)
       }
 
       if (receive > 0) {
         const gross = resolveGrossFromReceive(receive, rate, pairCommissions)
         const commissionDef = pickCommissionBracket(gross, pairCommissions)
+        if (pairCommissions.length > 0 && !commissionDef) return null
         return buildNormalResult(gross, rate, commissionDef, receive)
       }
 
@@ -525,6 +534,13 @@ function buildCalculatorStoreDefinition(lockTrial: boolean) {
       const finite = pair.map((c) => c.max_amount).filter((m): m is number => m != null)
       if (finite.length === 0) return 50000
       return Math.max(...finite)
+    },
+
+    minimumAmountError(): string | null {
+      const minimum = this.minAmount
+      return this.amountSend > 0 && this.amountSend < minimum
+        ? `El monto mínimo para esta operación es ${minimum} ${this.currencyFrom.toUpperCase()}.`
+        : null
     }
   },
 

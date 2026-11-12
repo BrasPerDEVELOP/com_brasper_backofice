@@ -1732,6 +1732,7 @@ function resetForm() {
 }
 
 function getCalculatorBlockingError(): string | null {
+  if (calculatorStore.minimumAmountError) return calculatorStore.minimumAmountError
   const res = calculatorStore.result
   if (!res) return 'Completa la cotización: montos y tasa/comisión antes de continuar.'
   if (calculatorStore.calculationMode === 'special' && !res.specialDiscountValid) {
