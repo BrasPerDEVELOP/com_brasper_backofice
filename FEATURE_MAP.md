@@ -32,10 +32,13 @@ en el backend (máximo 200 por página) y devuelve `page`, `page_size`, `total_p
 además de `items`, `total`, `skip`, `limit`. Se conserva el contrato skip/limit.
 El listado consume el total de páginas del servidor y permite 10/25/50/100 filas.
 
-Omie (2026-11-08): BRL→PEN/USD muestra NFS-e Omie con vista previa de Venta final
+Omie (2026-11-13): BRL→PEN/USD muestra NFS-e Omie con vista previa de Venta final
 como total BRL. GET `/omie/transactions/{id}/preview`, POST `/issue`, POST `/refresh`
 y GET `/pdf` bajo el mismo prefijo de transacción. `billing.view` para consultar,
-`billing.issue` para emitir. El cliente debe existir en Omie con CPF/CNPJ.
+`billing.issue` para emitir. Si el cliente falta en Omie, la vista previa ofrece
+un formulario de registro con nombre, correo y dirección reales. POST
+`/omie/transactions/{id}/customer` requiere `billing.issue`, registra al cliente
+en Omie y vuelve a consultar antes de habilitar la emisión de la NFS-e.
 Un intento persistido por operación evita duplicados; los errores se resuelven
 sobre la OS existente en Omie. La cuenta elegida es Banco do Brasil.
 Las rutas SUNAT siguen bloqueadas para esos pares y conservan sus series.
