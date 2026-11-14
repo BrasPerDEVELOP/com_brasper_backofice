@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onUnmounted, ref } from 'vue'
 import { isAxiosError } from 'axios'
 import { omieApi } from '../infrastructure/omie_api'
 import type { OmieCustomerRegistration, OmiePreview } from '../domain/models'
@@ -10,6 +10,8 @@ const busy = ref(false)
 const error = ref('')
 const preview = ref<OmiePreview | null>(null)
 const pdfUrl = ref('')
+const retryAfterSeconds = ref(0)
+let cooldownTimer: ReturnType<typeof setInterval> | undefined
 const registrationAttempted = ref(false)
 const registration = ref<OmieCustomerRegistration>({
   legal_name: '', email: '', street: '', number: '', district: '', city: '',
@@ -24,23 +26,41 @@ const totalLabel = computed(() => new Intl.NumberFormat('es-PE', {
   style: 'currency', currency: 'BRL'
 }).format(Number(preview.value?.total || 0)))
 
+function startCooldown(seconds: number) {
+  retryAfterSeconds.value = Math.max(1, Math.min(Math.ceil(seconds) || 40, 300))
+  if (cooldownTimer) clearInterval(cooldownTimer)
+  cooldownTimer = setInterval(() => {
+    retryAfterSeconds.value = Math.max(0, retryAfterSeconds.value - 1)
+    if (retryAfterSeconds.value === 0 && cooldownTimer) {
+      clearInterval(cooldownTimer)
+      cooldownTimer = undefined
+    }
+  }, 1000)
+}
+onUnmounted(() => { if (cooldownTimer) clearInterval(cooldownTimer) })
+
 async function run(action: () => Promise<void>) {
   if (busy.value) return
   busy.value = true
   error.value = ''
   try { await action() } catch (cause) {
     const detail = isAxiosError(cause) ? cause.response?.data?.detail : null
+    if (isAxiosError(cause) && cause.response?.status === 429) {
+      startCooldown(Number(cause.response.headers?.['retry-after']))
+    }
     error.value = typeof detail === 'string' ? detail : 'No se pudo confirmar la respuesta. Consulta el estado antes de volver a emitir.'
   } finally { busy.value = false }
 }
 async function open() {
   opened.value = true
   pdfUrl.value = ''
+  if (retryAfterSeconds.value > 0) return
   preview.value = null
   registrationAttempted.value = false
   await consultPreview()
 }
 async function consultPreview() {
+  if (retryAfterSeconds.value > 0) return
   await run(async () => {
     preview.value = await omieApi.preview(props.transactionId)
     if (preview.value.customer_registration_required) {
@@ -71,6 +91,7 @@ async function issue() {
   })
 }
 async function refresh() {
+  if (retryAfterSeconds.value > 0) return
   await run(async () => {
     if (preview.value) preview.value.record = await omieApi.refresh(props.transactionId)
   })
@@ -146,9 +167,9 @@ async function preparePdf() {
         <p v-if="preview?.can_issue" class="mt-4 text-sm text-slate-500">Se emitirá una NFS-e real con la configuración tributaria del servicio en Omie.</p>
         <div class="mt-6 flex flex-wrap justify-end gap-2">
           <button type="button" class="rounded-lg border px-4 py-2 text-sm disabled:opacity-50" :disabled="busy" @click="opened = false">Cerrar</button>
-          <button v-if="error && !preview?.record" type="button" class="rounded-lg border px-4 py-2 text-sm disabled:opacity-50" :disabled="busy" @click="open">Volver a consultar</button>
-          <button v-if="preview?.customer_registration_required && registrationAttempted" type="button" class="rounded-lg border px-4 py-2 text-sm disabled:opacity-50" :disabled="busy" @click="consultPreview">Consultar cliente</button>
-          <button v-if="preview?.record" type="button" class="rounded-lg border border-indigo-200 px-4 py-2 text-sm text-indigo-700 disabled:opacity-50" :disabled="busy" @click="refresh">Consultar estado</button>
+          <button v-if="error && !preview?.record" type="button" class="rounded-lg border px-4 py-2 text-sm disabled:opacity-50" :disabled="busy || retryAfterSeconds > 0" @click="open">{{ retryAfterSeconds > 0 ? `Espera ${retryAfterSeconds} s` : 'Volver a consultar' }}</button>
+          <button v-if="preview?.customer_registration_required && registrationAttempted" type="button" class="rounded-lg border px-4 py-2 text-sm disabled:opacity-50" :disabled="busy || retryAfterSeconds > 0" @click="consultPreview">Consultar cliente</button>
+          <button v-if="preview?.record" type="button" class="rounded-lg border border-indigo-200 px-4 py-2 text-sm text-indigo-700 disabled:opacity-50" :disabled="busy || retryAfterSeconds > 0" @click="refresh">{{ retryAfterSeconds > 0 ? `Consultar en ${retryAfterSeconds} s` : 'Consultar estado' }}</button>
           <button v-if="preview?.record && ['issued', 'cancelled'].includes(preview.record.status) && !pdfUrl" type="button" class="rounded-lg border px-4 py-2 text-sm disabled:opacity-50" :disabled="busy" @click="preparePdf">Preparar PDF</button>
           <a v-if="pdfUrl" :href="pdfUrl" target="_blank" rel="noopener noreferrer" class="rounded-lg bg-indigo-700 px-4 py-2 text-sm text-white">Abrir PDF</a>
           <button v-if="preview?.can_issue && canIssue" type="button" class="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="busy" @click="issue">Emitir NFS-e</button>

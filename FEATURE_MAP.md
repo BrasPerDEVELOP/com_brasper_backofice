@@ -42,6 +42,8 @@ en Omie y vuelve a consultar antes de habilitar la emisión de la NFS-e.
 Un intento persistido por operación evita duplicados; los errores se resuelven
 sobre la OS existente en Omie. La cuenta elegida es Banco do Brasil.
 Las rutas SUNAT siguen bloqueadas para esos pares y conservan sus series.
+Si Omie limita consultas repetidas, la API devuelve 429 con Retry-After y el botón
+de consulta muestra la cuenta regresiva antes de volver a habilitarse.
 
 
 Pausa SUNAT (2026-11-03): BRL→PEN y BRL→USD siguen bloqueados para emitir
