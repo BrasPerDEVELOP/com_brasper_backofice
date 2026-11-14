@@ -210,6 +210,7 @@ export interface InvoicePreview {
 
 /** Datos del adquirente que el operador puede completar o corregir al emitir. */
 export interface IssueInvoiceInput {
+  itemDescription?: string | null
   sendCustomerEmail?: boolean
   /** `03` boleta o `01` factura. Vacío = automático (RUC → factura). */
   documentType?: '01' | '03' | null

@@ -183,6 +183,9 @@ describe('BillingApiAdapter', () => {
     ).toEqual({ document_type: '01', customer_doc_type: '6', customer_doc_number: '20123456789' })
     expect(issueInputToApi({ issuerRuc: '20611936428' })).toEqual({ issuer_ruc: '20611936428' })
     expect(issueInputToApi({ sendCustomerEmail: true })).toEqual({ send_customer_email: 'true' })
+    expect(issueInputToApi({ itemDescription: '  Monto enviado S/ 41.00\nMonto recibido R$ 50.00  ' })).toEqual({
+      item_description: 'Monto enviado S/ 41.00\nMonto recibido R$ 50.00'
+    })
     expect(messagesFromApi('uno')).toEqual(['uno'])
     expect(messagesFromApi([{ description: 'dos' }, {}])).toEqual(['dos'])
   })

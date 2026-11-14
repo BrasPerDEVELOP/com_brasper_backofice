@@ -68,6 +68,12 @@ SUNAT. El destinatario viene del backend y se puede editar antes de enviar;
 `email_status` refleja el progreso. La descripción del comprobante, incluida la
 razón social de la operación, viene en `item_description` desde el backend.
 
+Facturación (2026-11-14): la emisión SUNAT admite `item_description` editable
+(máximo 1000 caracteres) en POST `/billing/transactions/{id}/issue`. En PEN→BRL
+se precargan monto enviado, monto recibido y código. El backend guarda el texto
+en el comprobante y lo presenta en el PDF Brasper; los comprobantes anteriores
+conservan su descripción existente.
+
 Contabilidad (2026-09-12): botón Exportar Excel con todas las páginas del filtro vigente mediante `GET /transactions/accounting` (`accounting.view`). Incluye documentos, fechas, importes numéricos y desglose contable, con monedas separadas. No requiere migración.
 
 Etiquetas (2026-09-12): `counts_as_new_client` admite varias etiquetas marcadas a la vez. El panel cuenta cada transacción una sola vez si tiene al menos una de ellas; las etiquetas borradas no cuentan. No requiere migración.

@@ -36,6 +36,8 @@ const documentType = ref<'01' | '03' | null>(null)
 /** Empresa emisora elegida (BRASPER 21, INGENITECH…). */
 const issuerRuc = ref<string | null>(null)
 const emailInitialized = ref(false)
+const itemDescription = ref('')
+const descriptionEdited = ref(false)
 const issuers = computed(() => store.status?.issuers ?? [])
 const companyIssuer = computed(() =>
   issuerForTransactionCompany(props.transactionCompanyName, issuers.value)
@@ -46,7 +48,7 @@ const issuerDiffersFromCompany = computed(() =>
 /** Documento original del cliente (antes de correcciones): decide si hace falta pedir RUC. */
 const originalDocType = ref<string | null>(null)
 const rucInput = ref('')
-const form = reactive<Omit<Required<IssueInvoiceInput>, 'documentType' | 'issuerRuc' | 'sendCustomerEmail'>>({
+const form = reactive<Omit<Required<IssueInvoiceInput>, 'documentType' | 'issuerRuc' | 'sendCustomerEmail' | 'itemDescription'>>({
   customerName: '',
   customerAddress: '',
   customerEmail: '',
@@ -69,6 +71,8 @@ function resetForm() {
   documentType.value = null
   issuerRuc.value = companyIssuer.value?.ruc ?? store.status?.defaultIssuerRuc ?? null
   emailInitialized.value = false
+  itemDescription.value = ''
+  descriptionEdited.value = false
   originalDocType.value = null
   rucInput.value = ''
 }
@@ -85,6 +89,7 @@ async function loadPreview() {
     })
     if (requestId === previewRequest) {
       preview.value = result
+      if (!descriptionEdited.value) itemDescription.value = result.itemDescription ?? ''
       if (!emailInitialized.value && result.customerEmail) {
         emailInitialized.value = true
         form.customerEmail = result.customerEmail
@@ -176,13 +181,18 @@ function close() {
 
 async function confirm() {
   if (!props.transactionId || !preview.value?.canIssue || issuing.value) return
+  if (!itemDescription.value.trim()) {
+    error.value = 'Escribe la descripción que aparecerá en el comprobante.'
+    return
+  }
   issuing.value = true
   error.value = null
   try {
     const invoice = await store.issue(props.transactionId, {
       ...form,
       documentType: documentType.value,
-      issuerRuc: issuerRuc.value
+      issuerRuc: issuerRuc.value,
+      itemDescription: itemDescription.value.trim()
     })
     open.value = false
     emit('issued', invoice)
@@ -340,8 +350,6 @@ const inputClass =
                 </template>
                 <dt class="text-[#6b7280]">Serie</dt>
                 <dd class="text-right font-mono text-[#1f2937]">{{ preview.series }}-········</dd>
-                <dt class="text-[#6b7280]">Detalle</dt>
-                <dd class="text-right text-[#1f2937]">{{ preview.itemDescription }}</dd>
                 <dt class="text-[#6b7280]">Valor de venta</dt>
                 <dd class="text-right tabular-nums text-[#1f2937]">
                   {{ formatInvoiceMoney(preview.taxableAmount, preview.currency) }}
@@ -357,6 +365,23 @@ const inputClass =
                   {{ formatInvoiceMoney(preview.totalAmount, preview.currency) }}
                 </span>
               </div>
+            </section>
+
+            <section class="space-y-1.5">
+              <label for="issue-invoice-description" class="block text-sm font-semibold text-[#1f2937]">
+                Descripción del comprobante
+              </label>
+              <p class="text-xs text-[#6b7280]">Incluye el monto enviado, el monto recibido y cualquier detalle relevante de la operación. Se enviará a SUNAT y aparecerá en el PDF.</p>
+              <textarea
+                id="issue-invoice-description"
+                v-model="itemDescription"
+                :class="inputClass"
+                rows="4"
+                maxlength="1000"
+                :disabled="issuing"
+                @input="descriptionEdited = true"
+              />
+              <p class="text-right text-xs text-[#6b7280]">{{ itemDescription.length }}/1000</p>
             </section>
 
             <section class="space-y-3">

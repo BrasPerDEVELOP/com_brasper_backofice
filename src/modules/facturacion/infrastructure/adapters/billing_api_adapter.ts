@@ -187,7 +187,8 @@ export function issueInputToApi(input: IssueInvoiceInput | undefined): Record<st
     ['customer_address', input?.customerAddress],
     ['customer_email', input?.customerEmail],
     ['customer_doc_type', input?.customerDocType],
-    ['customer_doc_number', input?.customerDocNumber]
+    ['customer_doc_number', input?.customerDocNumber],
+    ['item_description', input?.itemDescription]
   ]
   for (const [key, value] of pairs) {
     const text = value?.trim()
