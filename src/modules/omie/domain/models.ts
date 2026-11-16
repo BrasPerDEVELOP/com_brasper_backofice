@@ -5,6 +5,33 @@ export interface OmieRecord {
   nfse_number: string | null
   error: string | null
 }
+
+export interface OmieInvoiceListItem extends OmieRecord {
+  transaction_id: string
+  transaction_code: string
+  currency: 'BRL'
+  customer: string
+  document: string
+  issuer: string
+  service: string
+  created_at: string
+}
+
+export interface OmieInvoiceList {
+  items: OmieInvoiceListItem[]
+  total: number
+  page: number
+  page_size: number
+  total_pages: number
+}
+
+export interface OmieInvoiceFilters {
+  page: number
+  pageSize: number
+  status?: string
+  dateFrom?: string
+  dateTo?: string
+}
 export interface OmiePreview {
   can_issue: boolean
   customer_registration_required?: boolean

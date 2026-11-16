@@ -1,8 +1,19 @@
 import { apiClient } from '@/interface/api/client'
 import { Domain } from '@/interface/infrastructure/services'
-import type { OmieCustomerRegistration, OmiePreview, OmieRecord } from '../domain/models'
+import type { OmieCustomerRegistration, OmieInvoiceFilters, OmieInvoiceList, OmiePreview, OmieRecord } from '../domain/models'
 
 export const omieApi = {
+  async listInvoices(filters: OmieInvoiceFilters): Promise<OmieInvoiceList> {
+    return (await apiClient.get(Domain.apiPath('omie/invoices'), {
+      params: {
+        page: filters.page,
+        page_size: filters.pageSize,
+        ...(filters.status ? { status: filters.status } : {}),
+        ...(filters.dateFrom ? { date_from: filters.dateFrom } : {}),
+        ...(filters.dateTo ? { date_to: filters.dateTo } : {})
+      }
+    })).data
+  },
   async preview(id: string): Promise<OmiePreview> {
     return (await apiClient.get(Domain.apiPath(`omie/transactions/${id}/preview`))).data
   },

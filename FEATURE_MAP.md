@@ -41,6 +41,12 @@ un formulario de registro con nombre, correo y dirección reales. POST
 en Omie y vuelve a consultar antes de habilitar la emisión de la NFS-e.
 Un intento persistido por operación evita duplicados; los errores se resuelven
 sobre la OS existente en Omie. La cuenta elegida es Banco do Brasil.
+
+Notas fiscales Omie (2026-11-16): `GET /omie/invoices` consulta los intentos
+guardados en `billing.omie_invoices` con filtros de estado y fechas, paginación
+en el backend y permiso `billing.view`. Contabilidad muestra la pestaña
+`?tab=notas-fiscales` con número, operación, cliente, importe y estado; el
+detalle permite consultar Omie y abrir el PDF de las notas emitidas.
 Las rutas SUNAT siguen bloqueadas para esos pares y conservan sus series.
 Si Omie limita consultas repetidas, la API devuelve 429 con Retry-After y el botón
 de consulta muestra la cuenta regresiva antes de volver a habilitarse.
