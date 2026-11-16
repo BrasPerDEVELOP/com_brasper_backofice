@@ -147,10 +147,11 @@ async function preparePdf() {
 
     <p v-if="error" role="alert" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{{ error }}</p>
     <div v-if="!invalidRange" class="overflow-x-auto rounded-xl border border-[#e5e7eb] bg-white">
-      <table class="w-full min-w-[62rem] text-sm">
+      <table class="w-full min-w-[70rem] text-sm">
         <thead>
           <tr class="bg-[#dbeafe] text-left text-xs font-semibold text-brasper-indigoDark">
             <th class="px-4 py-3">NFS-e</th>
+            <th class="px-4 py-3">N.º orden de servicio</th>
             <th class="px-4 py-3">Operación</th>
             <th class="px-4 py-3">Cliente</th>
             <th class="px-4 py-3">Emisor</th>
@@ -161,10 +162,11 @@ async function preparePdf() {
         </thead>
         <tbody>
           <tr v-if="!list.items.length && !loading">
-            <td colspan="7" class="px-6 py-12 text-center text-[#6b7280]">No hay notas fiscales con estos filtros. Los intentos nuevos se crean desde Movimientos.</td>
+            <td colspan="8" class="px-6 py-12 text-center text-[#6b7280]">No hay notas fiscales con estos filtros. Los intentos nuevos se crean desde Movimientos.</td>
           </tr>
           <tr v-for="item in list.items" :key="item.transaction_id" tabindex="0" class="cursor-pointer border-t border-[#e5e7eb] hover:bg-[#f9fafb]" @click="openDetail(item)" @keydown.enter="openDetail(item)">
             <td class="px-4 py-3 font-mono font-medium">{{ item.nfse_number ? `NFS-e ${item.nfse_number}` : 'Pendiente de número' }}</td>
+            <td class="px-4 py-3 font-mono">{{ item.os_id || '—' }}</td>
             <td class="px-4 py-3 font-mono">{{ item.transaction_code }}</td>
             <td class="max-w-[15rem] px-4 py-3"><span class="block truncate" :title="item.customer">{{ item.customer || '—' }}</span><span class="font-mono text-xs text-[#6b7280]">{{ item.document }}</span></td>
             <td class="max-w-[12rem] truncate px-4 py-3" :title="item.issuer">{{ item.issuer || '—' }}</td>
