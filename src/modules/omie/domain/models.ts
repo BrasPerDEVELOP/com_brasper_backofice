@@ -1,6 +1,7 @@
 export interface OmieRecord {
   status: string
   total: string
+  issued_at?: string | null
   os_id: number | null
   nfse_number: string | null
   error: string | null

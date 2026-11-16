@@ -47,6 +47,8 @@ import { useAuthStore } from '@modules/auth/presentation/controllers/use_auth_st
 import type { Invoice } from '@modules/facturacion/domain/models'
 import { billingRouteDisabledReason } from '@modules/facturacion/domain/models'
 import { useBillingStore } from '@modules/facturacion/presentation/controllers/use_billing_store'
+import { omieApi } from '@modules/omie/infrastructure/omie_api'
+import type { OmieRecord } from '@modules/omie/domain/models'
 import OmieInvoiceCell from '@modules/omie/presentation/OmieInvoiceCell.vue'
 import InvoiceCell from '@modules/facturacion/presentation/components/InvoiceCell.vue'
 import IssueInvoiceDialog from '@modules/facturacion/presentation/components/IssueInvoiceDialog.vue'
@@ -1044,13 +1046,34 @@ watch(
 watch(apiFilterParams, () => loadTransactions(), { deep: true })
 
 // Comprobante fiscal de las operaciones visibles: una sola petición por página.
+const omieRecords = ref<Record<string, OmieRecord>>({})
+let omieLoadId = 0
+function updateOmieRecord(id: string, record: OmieRecord) {
+  omieRecords.value = { ...omieRecords.value, [id]: record }
+  const transaction = transactionsStore.transactions.find((t) => t.id === id)
+  if (transaction && !transaction.billing_date && record.issued_at) transaction.billing_date = record.issued_at
+}
+async function loadOmieRecords(ids: string[]) {
+  const request = ++omieLoadId
+  try {
+    const records = await omieApi.records(ids)
+    if (request !== omieLoadId) return
+    omieRecords.value = records
+    for (const [id, record] of Object.entries(records)) updateOmieRecord(id, record)
+  } catch {
+    billingDateError.value = 'No se pudo cargar el estado de las notas de Omie. Recarga la p�gina para consultar su estado.'
+  }
+}
 const visibleTransactionIds = computed(() =>
   paginatedTransactions.value.map((t) => t.id ?? '').filter(Boolean)
 )
 watch(
   [visibleTransactionIds, canViewBilling],
   ([ids, canView]) => {
-    if (canView && ids.length) void billingStore.loadForTransactions(ids)
+    if (canView && ids.length) {
+      void billingStore.loadForTransactions(ids)
+      void loadOmieRecords(ids)
+    } else { ++omieLoadId; omieRecords.value = {} }
   },
   { immediate: true }
 )
@@ -1555,6 +1578,8 @@ onMounted(() => {
               <OmieInvoiceCell
                 v-if="canViewBilling && t.id && billingDisabledReason(t)"
                 :transaction-id="t.id"
+                :record="omieRecords[t.id]"
+                @updated="updateOmieRecord(t.id, $event)"
                 :can-issue="canIssueBilling"
               />
               <InvoiceCell

@@ -3,6 +3,11 @@ import { Domain } from '@/interface/infrastructure/services'
 import type { OmieCustomerRegistration, OmieInvoiceFilters, OmieInvoiceList, OmiePreview, OmieRecord } from '../domain/models'
 
 export const omieApi = {
+  async records(ids: string[]): Promise<Record<string, OmieRecord>> {
+    return (await apiClient.get(Domain.apiPath('omie/transaction-records'), {
+      params: { transaction_ids: ids }, paramsSerializer: { indexes: null }
+    })).data
+  },
   async listInvoices(filters: OmieInvoiceFilters): Promise<OmieInvoiceList> {
     return (await apiClient.get(Domain.apiPath('omie/invoices'), {
       params: {

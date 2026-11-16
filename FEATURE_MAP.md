@@ -191,3 +191,5 @@ Usuarios: `/app/usuarios?view=metrics` muestra métricas agregadas por país y
 DDD de Brasil (`GET /user/metrics`, `users.view`, filtro `role`). Los nombres
 de zona vienen de `local_area_name`; los códigos faltantes o inválidos se
 cuentan aparte. La pestaña Directorio conserva sus filtros y permisos.
+
+Omie: GET /omie/transaction-records consulta hasta 100 transaction_ids en la base de datos para mostrar estado y numero sin abrir el modal. Las emisiones confirmadas guardan issued_at y completan billing_date si falta.

@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { isAxiosError } from 'axios'
 import { omieApi } from '../infrastructure/omie_api'
-import type { OmieCustomerRegistration, OmiePreview } from '../domain/models'
+import type { OmieCustomerRegistration, OmiePreview, OmieRecord } from '../domain/models'
 
-const props = defineProps<{ transactionId: string; canIssue: boolean }>()
+const props = defineProps<{ transactionId: string; canIssue: boolean; record?: OmieRecord | null }>()
+const emit = defineEmits<{ updated: [record: OmieRecord] }>()
+const currentRecord = computed(() => preview.value?.record ?? props.record)
 const opened = ref(false)
 const busy = ref(false)
 const error = ref('')
@@ -21,7 +23,7 @@ const labels: Record<string, string> = {
   creating: 'Creando orden', validating: 'Validando orden', billing: 'Facturando',
   pending: 'En proceso', issued: 'Emitida', cancelled: 'Anulada', review_required: 'Revisar en Omie'
 }
-const statusLabel = computed(() => labels[preview.value?.record?.status || ''] || '')
+const statusLabel = computed(() => labels[currentRecord.value?.status || ''] || '')
 const totalLabel = computed(() => new Intl.NumberFormat('es-PE', {
   style: 'currency', currency: 'BRL'
 }).format(Number(preview.value?.total || 0)))
@@ -63,6 +65,7 @@ async function consultPreview() {
   if (retryAfterSeconds.value > 0) return
   await run(async () => {
     preview.value = await omieApi.preview(props.transactionId)
+    if (preview.value.record) emit('updated', preview.value.record)
     if (preview.value.customer_registration_required) {
       registration.value.legal_name = preview.value.customer
       registration.value.email = preview.value.email || ''
@@ -88,22 +91,37 @@ async function issue() {
   current.can_issue = false
   await run(async () => {
     current.record = await omieApi.issue(props.transactionId, current.total, current.document)
+    emit('updated', current.record)
   })
 }
 async function refresh() {
   if (retryAfterSeconds.value > 0) return
   await run(async () => {
-    if (preview.value) preview.value.record = await omieApi.refresh(props.transactionId)
+    const record = await omieApi.refresh(props.transactionId)
+    if (preview.value) preview.value.record = record
+    emit('updated', record)
   })
 }
 async function preparePdf() {
   await run(async () => { pdfUrl.value = await omieApi.pdf(props.transactionId) })
 }
+// Omie generates the note asynchronously; keep pending visible rows in sync.
+let statusTimer: ReturnType<typeof setInterval> | undefined
+watch(() => currentRecord.value?.status, (status) => {
+  if (statusTimer) clearInterval(statusTimer)
+  statusTimer = status === 'pending' ? setInterval(() => {
+    if (!busy.value && !retryAfterSeconds.value) void refresh()
+  }, 60_000) : undefined
+}, { immediate: true })
+onUnmounted(() => { if (statusTimer) clearInterval(statusTimer) })
 </script>
 
 <template>
-  <button type="button" class="rounded-lg border border-indigo-200 bg-indigo-50 px-2 py-1 text-xs font-semibold text-indigo-700" @click.stop="open">
-    {{ preview?.record?.nfse_number ? `NFS-e ${preview.record.nfse_number}` : 'NFS-e Omie' }}
+  <button type="button" class="rounded-lg border px-2 py-1 text-xs font-semibold"
+    :class="currentRecord?.status === 'issued' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : currentRecord?.status === 'cancelled' || currentRecord?.status === 'review_required' ? 'border-red-200 bg-red-50 text-red-700' : 'border-indigo-200 bg-indigo-50 text-indigo-700'"
+    @click.stop="open">
+    <span class="block">{{ currentRecord?.nfse_number ? `NFS-e ${currentRecord.nfse_number}` : 'NFS-e Omie' }}</span>
+    <span v-if="currentRecord" class="block text-[10px]">{{ statusLabel }}</span>
   </button>
   <Teleport to="body">
     <div v-if="opened" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" @keydown.esc="!busy && (opened = false)">
