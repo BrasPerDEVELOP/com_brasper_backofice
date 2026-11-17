@@ -1,8 +1,14 @@
 import { apiClient } from '@/interface/api/client'
 import { Domain } from '@/interface/infrastructure/services'
-import type { OmieCustomerRegistration, OmieInvoiceFilters, OmieInvoiceList, OmiePreview, OmieRecord } from '../domain/models'
+import type { OmieCustomerRegistration, OmieEmailDetails, OmieInvoiceFilters, OmieInvoiceList, OmiePreview, OmieRecord } from '../domain/models'
 
 export const omieApi = {
+  async emailDetails(id: string): Promise<OmieEmailDetails> {
+    return (await apiClient.get(Domain.apiPath(`omie/transactions/${id}/email`))).data
+  },
+  async sendEmail(id: string, recipients: string[]): Promise<OmieEmailDetails> {
+    return (await apiClient.post(Domain.apiPath(`omie/transactions/${id}/email`), { recipients })).data
+  },
   async records(ids: string[]): Promise<Record<string, OmieRecord>> {
     return (await apiClient.get(Domain.apiPath('omie/transaction-records'), {
       params: { transaction_ids: ids }, paramsSerializer: { indexes: null }

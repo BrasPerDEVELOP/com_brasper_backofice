@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { isAxiosError } from 'axios'
 import { AppSpinner } from '@interface/widgets'
 import { omieApi } from '../infrastructure/omie_api'
+import OmieEmailPanel from './OmieEmailPanel.vue'
 import type { OmieInvoiceList, OmieInvoiceListItem } from '../domain/models'
 
 const statusLabels: Record<string, string> = {
@@ -205,6 +206,7 @@ async function preparePdf() {
           </dl>
           <p v-if="selected.error" class="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{{ selected.error }}</p>
           <p v-if="detailError" role="alert" class="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{{ detailError }}</p>
+          <OmieEmailPanel v-if="selected.status === 'issued'" :transaction-id="selected.transaction_id" />
           <div class="mt-6 flex flex-wrap justify-end gap-2">
             <button type="button" class="rounded-lg border px-4 py-2 text-sm" @click="selected = null">Cerrar</button>
             <button type="button" class="rounded-lg border border-indigo-200 px-4 py-2 text-sm text-indigo-700 disabled:opacity-50" :disabled="detailBusy" @click="refresh">Consultar estado</button>

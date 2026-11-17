@@ -2,6 +2,7 @@
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { isAxiosError } from 'axios'
 import { omieApi } from '../infrastructure/omie_api'
+import OmieEmailPanel from './OmieEmailPanel.vue'
 import type { OmieCustomerRegistration, OmiePreview, OmieRecord } from '../domain/models'
 
 const props = defineProps<{ transactionId: string; canIssue: boolean; record?: OmieRecord | null }>()
@@ -183,6 +184,7 @@ onUnmounted(() => { if (statusTimer) clearInterval(statusTimer) })
         <p v-if="preview?.record?.error" class="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{{ preview.record.error }}</p>
         <p v-if="preview?.record && !['issued', 'cancelled', 'pending'].includes(preview.record.status)" class="mt-3 text-sm text-slate-600">Revisa la orden existente en Omie y consulta su estado aquí. No crees otra orden para esta operación.</p>
         <p v-if="preview?.can_issue" class="mt-4 text-sm text-slate-500">Se emitirá una NFS-e real con la configuración tributaria del servicio en Omie.</p>
+        <OmieEmailPanel v-if="preview?.record?.status === 'issued'" :transaction-id="transactionId" />
         <div class="mt-6 flex flex-wrap justify-end gap-2">
           <button type="button" class="rounded-lg border px-4 py-2 text-sm disabled:opacity-50" :disabled="busy" @click="opened = false">Cerrar</button>
           <button v-if="error && !preview?.record" type="button" class="rounded-lg border px-4 py-2 text-sm disabled:opacity-50" :disabled="busy || retryAfterSeconds > 0" @click="open">{{ retryAfterSeconds > 0 ? `Espera ${retryAfterSeconds} s` : 'Volver a consultar' }}</button>

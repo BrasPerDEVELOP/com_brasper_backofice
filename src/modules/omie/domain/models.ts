@@ -7,6 +7,15 @@ export interface OmieRecord {
   error: string | null
 }
 
+export interface OmieEmailDetails {
+  customer_emails: string[]
+  email_status: 'pending' | 'sending' | 'sent' | 'failed' | null
+  email_error: string | null
+  email_recipients: string[]
+  email_delivered_to: string[]
+  email_sent_at: string | null
+}
+
 export interface OmieInvoiceListItem extends OmieRecord {
   transaction_id: string
   transaction_code: string

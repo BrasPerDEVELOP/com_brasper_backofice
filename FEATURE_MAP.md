@@ -21,6 +21,14 @@ Vue View (*_view.vue)
 
 ## Mapa de módulos
 
+Correo Omie (2026-11-17): GET `/omie/transactions/{id}/email` devuelve los correos
+actuales del cliente y las entregas registradas (`billing.view`). POST al mismo
+endpoint con `{ recipients: string[] }` encola el PDF oficial (`billing.issue`,
+máximo 20 destinatarios). El backend adjunta el PDF y envía individualmente,
+sin repetir destinatarios completados. Ambos detalles de NFS-e muestran el panel
+solo para notas emitidas; la consulta del correo no llama a Omie. Requiere la
+migración 099 del API y el SMTP de comprobantes configurado.
+
 Descarga mensual SUNAT (2026-11-10): GET `/billing/invoices/export-month?month=YYYY-MM`
 con `issuer_ruc` opcional entrega un ZIP con PDF presentado, XML firmado y CDR por
 emisor/comprobante. Requiere `billing.view`; informa faltantes dentro del ZIP.
