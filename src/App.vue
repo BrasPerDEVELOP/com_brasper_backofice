@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { RouterView } from 'vue-router'
-import AppUpdateNotice from '@/interface/components/AppUpdateNotice.vue'
+import { provideAppUpdates } from '@/interface/presentation/use_app_updates'
+
+provideAppUpdates()
 </script>
 
 <template>
   <RouterView />
-  <AppUpdateNotice />
 </template>

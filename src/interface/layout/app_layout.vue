@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppUpdateNotice from "@/interface/components/AppUpdateNotice.vue";
 import NotificationBell from "@/modules/notifications/presentation/NotificationBell.vue";
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter, RouterLink, RouterView } from "vue-router";
@@ -169,6 +170,7 @@ watch(showSidebar, (vis) => {
         </div>
       </div>
       <div class="flex items-center gap-1 sm:gap-2">
+        <AppUpdateNotice />
         <NotificationBell v-if="authStore.hasPermission('notifications.view')" :key="authStore.user?.id" />
         <RouterLink
           to="/app/perfil"

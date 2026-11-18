@@ -63,6 +63,7 @@ import { blockNumberInputWheel } from '@/interface/helpers/block_number_input_wh
 import UsuarioCreateFormModal from '@/interface/components/UsuarioCreateFormModal.vue'
 import CuentaBancariaCreateFormModal from '@/interface/components/CuentaBancariaCreateFormModal.vue'
 import BancoCrudModal from '@/interface/components/BancoCrudModal.vue'
+import { useAppUpdates } from '@/interface/presentation/use_app_updates'
 import { ConfirmDialog, MediaViewerDialog } from '@interface/widgets'
 import type { BankOption } from '@modules/cuentas-bancarias/infrastructure/adapters/banks_api_adapter'
 import type { UserListItem } from '@modules/auth/infrastructure/adapters/users_management_api_adapter'
@@ -133,6 +134,18 @@ const mediaViewerTitle = shallowRef('Comprobante')
 const showTransactionClientModal = ref(false)
 const showBankAccountCreateModal = ref(false)
 const showBancoCrudModal = ref(false)
+
+useAppUpdates().deferWhile(
+  computed(() =>
+    showCreateModal.value ||
+    showImportModal.value ||
+    showImportSimpleModal.value ||
+    showTransactionClientModal.value ||
+    showBankAccountCreateModal.value ||
+    showBancoCrudModal.value
+  )
+)
+
 /** Abre `BancoCrudModal` directo en formulario de alta (tuerca junto a Banco). */
 const bancoCrudOpenForCreate = ref(false)
 const bankAccountCreateFlow = ref<'origin' | 'destination'>('origin')

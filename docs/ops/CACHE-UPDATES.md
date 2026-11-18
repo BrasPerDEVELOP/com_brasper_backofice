@@ -2,7 +2,7 @@
 
 El HTML se obtiene con NetworkFirst; no se precachea index.html. La caché de navegación solo se usa cuando falla la red. Los archivos con hash conservan el precache y permiten mantener pestañas antiguas durante el despliegue.
 
-La aplicación registra /sw.js con updateViaCache=none y comprueba cambios al abrir, al volver a la pestaña y cada 60 segundos mientras esté visible. Un nuevo worker toma control y muestra un aviso con Actualizar ahora; no recarga formularios automáticamente ni elimina la sesión.
+La aplicación registra /sw.js con updateViaCache=none y comprueba cambios al abrir, al volver a la pestaña y cada 60 segundos mientras esté visible. Un nuevo worker toma control y habilita el botón «Actualizar panel» en la barra superior o en la pantalla de inicio de sesión. El botón se oculta mientras hay un formulario de transacciones abierto y reaparece al cerrarlo. La recarga es manual y conserva la sesión.
 
 Nginx debe devolver Cache-Control: no-store, no-cache, must-revalidate para HTML, rutas SPA, sw.js, registerSW.js y manifest.webmanifest. Los assets con hash válidos pueden usar public, max-age=31536000, immutable; los ausentes deben responder 404, nunca index.html.
 

@@ -51,10 +51,13 @@
 
       <!-- Panel derecho: formulario -->
       <div class="flex flex-col p-8 md:p-10">
-        <p class="mb-6 text-right text-sm text-brasper-textSoft">
-          ¿Problemas para entrar?
-          <a :href="supportMailto" class="font-medium text-brasper-indigoStrong hover:underline">Contacta a soporte</a>
-        </p>
+        <div class="mb-6 flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
+          <AppUpdateNotice />
+          <p class="text-right text-sm text-brasper-textSoft">
+            ¿Problemas para entrar?
+            <a :href="supportMailto" class="font-medium text-brasper-indigoStrong hover:underline">Contacta a soporte</a>
+          </p>
+        </div>
 
         <div class="mb-8">
           <p class="text-xs font-semibold uppercase tracking-[0.2em] text-brasper-indigoStrong">Acceso seguro</p>
@@ -225,6 +228,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import AppUpdateNotice from '@/interface/components/AppUpdateNotice.vue'
 import { env } from '@/interface/config/env'
 import { useAuthStore } from '../controllers/use_auth_store_controller'
 import { useGoogleLogin } from '../composables/use_google_login'
