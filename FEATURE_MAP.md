@@ -21,6 +21,11 @@ Vue View (*_view.vue)
 
 ## Mapa de módulos
 
+Destinatarios SUNAT (2026-11-18): el detalle abre sin correos seleccionados.
+Muestra los destinatarios explícitos antes de solicitar el envío y separa el
+historial acumulado de los correos disponibles; las entregas completadas no
+aparecen como casillas desmarcadas. POST conserva la lista `recipients` elegida.
+
 Facturación (2026-11-18): GET `/billing/invoices` acepta `search` (máximo 120
 caracteres) para código de comprobante, cliente o documento. Admite `BB02-209`
 y el correlativo con ceros. Filtra y cuenta antes de paginar; ordena por serie

@@ -37,15 +37,14 @@ const registeredEmails = computed(() => invoice.value?.customerEmails?.length
   ? invoice.value.customerEmails : uniqueEmails([invoice.value?.customerEmail]))
 const emailInProgress = computed(() => ['pending', 'sending'].includes(invoice.value?.emailStatus ?? ''))
 const deliveredEmails = computed(() => invoice.value?.emailDeliveredTo ?? [])
+const selectableEmails = computed(() => unsentEmails(
+  uniqueEmails([...registeredEmails.value, ...(invoice.value?.emailRecipients ?? [])]), deliveredEmails.value))
 const recipientEmails = computed(() => unsentEmails(
   uniqueEmails([...selectedEmails.value, ...extraEmails.value]), deliveredEmails.value))
 function resetRecipients() {
-  selectedEmails.value = unsentEmails(registeredEmails.value, deliveredEmails.value)
-  const remaining = unsentEmails(invoice.value?.emailRecipients ?? [], deliveredEmails.value)
-  extraEmails.value = remaining.filter((email) => !registeredEmails.value.includes(email))
-}
-function wasDelivered(email: string) {
-  return !unsentEmails([email], deliveredEmails.value).length
+  // Opening or refreshing the panel must never opt a recipient into a new send.
+  selectedEmails.value = []
+  extraEmails.value = []
 }
 const emailEdited = ref(false)
 const error = ref<string | null>(null)
@@ -147,11 +146,12 @@ async function run(action: 'refresh' | 'retry' | 'void' | 'pdf') {
 }
 
 async function requestEmail() {
-  if (!invoice.value || busy.value || loading.value) return
+  if (!invoice.value || busy.value || loading.value || emailInProgress.value || !recipientEmails.value.length) return
+  const recipients = [...recipientEmails.value]
   busy.value = 'email'
   error.value = null
   try {
-    await store.sendEmail(invoice.value.id, recipientEmails.value)
+    await store.sendEmail(invoice.value.id, recipients)
     invoice.value = await store.getInvoice(invoice.value.id)
     emailEdited.value = false
     resetRecipients()
@@ -407,11 +407,10 @@ const actionButton =
               <h3 class="text-sm font-semibold text-[#1f2937]">Enviar PDF al cliente</h3>
               <fieldset class="space-y-3" :disabled="busy !== null || emailInProgress">
                 <legend class="sr-only">Destinatarios del PDF</legend>
-                <label v-for="email in registeredEmails" :key="email" class="flex items-center gap-2 text-sm">
-                  <input v-model="selectedEmails" type="checkbox" :value="email" :disabled="wasDelivered(email)"
+                <label v-for="email in selectableEmails" :key="email" class="flex items-center gap-2 text-sm">
+                  <input v-model="selectedEmails" type="checkbox" :value="email"
                     @change="emailEdited = true" />
                   <span class="break-all">{{ email }}</span>
-                  <span v-if="wasDelivered(email)" class="text-xs text-emerald-700">Enviado</span>
                 </label>
                 <div v-for="(_, index) in extraEmails" :key="index" class="flex items-center gap-2">
                   <input v-model="extraEmails[index]" type="email" required maxlength="255"
@@ -425,17 +424,21 @@ const actionButton =
                   :disabled="selectedEmails.length + extraEmails.length >= 20"
                   @click="extraEmails.push(''); emailEdited = true">+ Agregar destinatario</button>
               </fieldset>
+              <p v-if="recipientEmails.length && !emailInProgress" class="break-all text-xs text-[#374151]" role="status">
+                Se enviará únicamente a: {{ recipientEmails.join(', ') }}
+              </p>
+              <p v-else-if="!emailInProgress" class="text-xs text-[#6b7280]">No hay destinatarios seleccionados.</p>
               <button type="submit" :class="[actionButton, 'border-transparent bg-brasper-indigoStrong text-white']"
                 :disabled="busy !== null || loading || !recipientEmails.length || emailInProgress">
                 {{ emailInProgress ? 'Envío en curso…' : busy === 'email' ? 'Solicitando envío…' : `Enviar PDF (${recipientEmails.length})` }}
               </button>
               <p v-if="deliveredEmails.length" class="break-all text-xs text-emerald-700" role="status">
-                PDF enviado a: {{ deliveredEmails.join(', ') }}
+                Historial de envíos: {{ deliveredEmails.join(', ') }}. Estos correos no forman parte de la selección actual.
               </p>
               <p v-if="invoice.emailStatus === 'failed'" class="text-xs text-red-600">
                 No se completó el envío. Puedes reintentar los destinatarios pendientes.
               </p>
-              <p class="text-xs text-[#6b7280]">Selecciona los correos registrados o agrega otros. Cada destinatario recibe un correo individual. No se modifica la ficha del cliente.</p>
+              <p class="text-xs text-[#6b7280]">Marca los correos a los que deseas enviar o agrega otro destinatario. Ningún correo se selecciona automáticamente. Cada destinatario recibe un correo individual.</p>
             </form>
 
             <section v-if="invoice.events.length">
