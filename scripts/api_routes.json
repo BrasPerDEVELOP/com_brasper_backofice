@@ -971,6 +971,14 @@
   ]
  },
  {
+  "method": "POST",
+  "path": "/user/document-lookup",
+  "permissions": [
+   "users.create",
+   "users.update"
+  ]
+ },
+ {
   "method": "GET",
   "path": "/user/name-list",
   "permissions": [

@@ -14,6 +14,8 @@ import {
 import { USER_ROLE_LABELS, PHONE_CODES } from '@/modules/auth/domain/models'
 import AppDropdown from '@/interface/components/AppDropdown.vue'
 import UserIdentificationsEditor from '@/interface/components/UserIdentificationsEditor.vue'
+import UserDocumentLookup from '@/interface/components/UserDocumentLookup.vue'
+import type { DocumentLookupResult } from '@/modules/auth/infrastructure/adapters/document_lookup_api_adapter'
 import UsuarioQuickCreateDialog from '@/interface/components/UsuarioQuickCreateDialog.vue'
 
 const props = withDefaults(
@@ -81,6 +83,18 @@ const phoneCodeOptions = computed(() =>
 )
 
 const identifications = ref<UserIdentification[]>([])
+const lookingUpDocument = ref(false)
+const primaryIdentification = computed(() => identifications.value.find(item => item.is_primary) ?? identifications.value[0])
+
+function applyDocumentData(result: DocumentLookupResult) {
+  form.value.names = result.names
+  form.value.lastnames = result.lastnames
+}
+
+function onDocumentResolved(result: DocumentLookupResult) {
+  // Never overwrite a name the operator already entered or an existing user.
+  if (!form.value.names?.trim() && !form.value.lastnames?.trim()) applyDocumentData(result)
+}
 
 const formRoleOptions = computed(() =>
   USER_ROLES.map((r) => ({ value: r, label: USER_ROLE_LABELS[r] }))
@@ -113,6 +127,10 @@ function resetForm() {
   // El parser garantiza que `identifications` ya incluya el documento heredado
   // como identificación principal, así que basta con clonar la lista.
   identifications.value = (props.user?.identifications ?? []).map((item) => ({ ...item }))
+  if (!props.user && !identifications.value.length) {
+    identifications.value = [{ document_type: '', document_number: '', is_primary: true }]
+  }
+  lookingUpDocument.value = false
   detailError.value = ''
 }
 
@@ -156,7 +174,7 @@ function openAdvancedDialog() {
 
 async function handleSubmit() {
   // Evita guardar con la colección parcial mientras aún llega el detalle o si ya hay un envío en curso.
-  if (creating.value || loadingDetail.value || detailError.value) return
+  if (creating.value || loadingDetail.value || detailError.value || lookingUpDocument.value) return
   if (isQuick.value && !form.value.names?.trim()) {
     error.value = 'El nombre es obligatorio.'
     return
@@ -165,7 +183,7 @@ async function handleSubmit() {
   error.value = ''
   try {
     // Sin espacios internos: "130 028 633 43" y "13002863343" son el mismo documento.
-    const normalizedIdentifications = identifications.value.map((item) => ({
+    const normalizedIdentifications = identifications.value.filter(item => item.document_number.trim() || item.document_type).map((item) => ({
       document_type: item.document_type.trim(),
       document_number: item.document_number.replace(/\s+/g, ''),
       is_primary: item.is_primary
@@ -228,7 +246,8 @@ watch(
     expandedFromQuick.value = false
     resetForm()
     if (props.user?.id) void hydrateFromDetail(props.user.id)
-  }
+  },
+  { immediate: true }
 )
 </script>
 
@@ -264,6 +283,11 @@ watch(
 
         <form class="space-y-6" @submit.prevent="handleSubmit">
           <div class="grid gap-4 sm:grid-cols-2">
+            <fieldset class="sm:col-span-2" :disabled="loadingDetail || creating">
+              <UserIdentificationsEditor v-model="identifications" />
+            </fieldset>
+            <UserDocumentLookup v-if="!loadingDetail && !detailError" :identification="primaryIdentification"
+              :disabled="creating" @resolved="onDocumentResolved" @apply="applyDocumentData" @busy="lookingUpDocument = $event" />
             <fieldset class="space-y-2 sm:col-span-2" :disabled="loadingDetail || creating">
               <legend class="mb-1.5 text-sm font-medium text-[#374151]">Correos (opcional)</legend>
               <div v-for="(_, index) in emailRows" :key="index" class="flex items-center gap-2">
@@ -308,7 +332,6 @@ watch(
                 :searchable="false"
               />
             </div>
-            <UserIdentificationsEditor v-model="identifications" />
             <p v-if="loadingDetail" class="-mt-1 text-xs text-[#6b7280] sm:col-span-2">
               Cargando identificaciones del usuario…
             </p>
@@ -363,7 +386,7 @@ watch(
             <button
               type="submit"
               class="rounded-lg bg-brasper-indigoStrong px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brasper-indigoDark disabled:opacity-60"
-              :disabled="creating || loadingDetail || !!detailError"
+              :disabled="creating || loadingDetail || !!detailError || lookingUpDocument"
             >
               {{ creating ? (isEditing ? 'Guardando...' : 'Creando...') : 'Guardar' }}
             </button>

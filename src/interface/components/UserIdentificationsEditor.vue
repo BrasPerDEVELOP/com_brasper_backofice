@@ -29,6 +29,7 @@ const NUMERIC_TYPE_LENGTHS: Record<string, number> = {
 
 /** Solo dígitos para tipos numéricos; sin espacios para el resto (CE, pasaporte). */
 function cleanDocumentNumber(type: string, value: string): string {
+  if (type === 'cnpj') return value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 14)
   const maxLength = NUMERIC_TYPE_LENGTHS[type]
   if (maxLength) return value.replace(/\D/g, '').slice(0, maxLength)
   return value.replace(/\s+/g, '')
@@ -104,7 +105,7 @@ function setPrimary(index: number) {
       <input
         :value="identification.document_number"
         type="text"
-        :inputmode="NUMERIC_TYPE_LENGTHS[identification.document_type] ? 'numeric' : 'text'"
+        :inputmode="identification.document_type !== 'cnpj' && NUMERIC_TYPE_LENGTHS[identification.document_type] ? 'numeric' : 'text'"
         :maxlength="NUMERIC_TYPE_LENGTHS[identification.document_type] ?? 40"
         class="form-input w-full rounded-lg border border-[#e5e7eb] bg-white px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
         placeholder="Número de documento"

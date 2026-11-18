@@ -21,6 +21,14 @@ Vue View (*_view.vue)
 
 ## Mapa de módulos
 
+Usuarios (2026-11-18): formulario completo inicia con identificaciones y consulta
+del documento principal mediante POST `/user/document-lookup` (DNI/RUC/CPF/CNPJ).
+El backend exige sesión y `users.create` o `users.update`, conserva credenciales
+APIPERU/CPFCNPJ exclusivamente en servidor y devuelve nombre/apellidos normalizados.
+La consulta no crea ni modifica usuarios. Autocompleta solo nombres vacíos;
+«Usar estos datos» permite reemplazar explícitamente. Ignora respuestas de documentos
+anteriores. CPF conserva nombre completo sin inventar apellidos. CE/pasaporte manuales.
+
 Destinatarios SUNAT (2026-11-18): el detalle abre sin correos seleccionados.
 Muestra los destinatarios explícitos antes de solicitar el envío y separa el
 historial acumulado de los correos disponibles; las entregas completadas no
