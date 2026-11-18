@@ -17,6 +17,7 @@ export interface OmieEmailDetails {
 }
 
 export interface OmieInvoiceListItem extends OmieRecord {
+  description?: string
   transaction_id: string
   transaction_code: string
   currency: 'BRL'
@@ -43,6 +44,7 @@ export interface OmieInvoiceFilters {
   dateTo?: string
 }
 export interface OmiePreview {
+  description?: string
   can_issue: boolean
   customer_registration_required?: boolean
   record: OmieRecord | null

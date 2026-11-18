@@ -21,6 +21,13 @@ Vue View (*_view.vue)
 
 ## Mapa de módulos
 
+Omie (2026-11-18): la vista previa incluye `description`, generada por el backend
+con servicio, código de operación, monto enviado y recibido, con sus monedas.
+Se envía como `ServicosPrestados[].cDescServ` y se conserva en el snapshot de emisión.
+POST `/omie/transactions/{id}/issue` recibe `expected_description` para detectar cambios
+entre vista previa y emisión. El historial muestra solo la descripción guardada;
+no reconstruye ni modifica el texto de notas anteriores. El total sigue siendo Venta final.
+
 CPF (2026-11-18): alta, edición, directorio y perfil presentan `000.000.000-00`.
 El campo acepta pegar la máscara completa (14 caracteres) y conserva los 11
 dígitos, incluidos ceros iniciales, al consultar y guardar. CPF incompleto no se guarda.

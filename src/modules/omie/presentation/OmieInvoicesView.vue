@@ -201,6 +201,9 @@ async function preparePdf() {
             <dt class="text-[#6b7280]">CPF/CNPJ</dt><dd class="text-right font-mono">{{ selected.document }}</dd>
             <dt class="text-[#6b7280]">Emisor</dt><dd class="text-right">{{ selected.issuer }}</dd>
             <dt class="text-[#6b7280]">Servicio</dt><dd class="text-right">{{ selected.service }}</dd>
+            <template v-if="selected.description">
+              <dt class="text-[#6b7280]">Descripción en la nota fiscal</dt><dd class="whitespace-pre-line text-right">{{ selected.description }}</dd>
+            </template>
             <dt class="text-[#6b7280]">Orden de servicio</dt><dd class="text-right font-mono">{{ selected.os_id || '—' }}</dd>
             <dt class="text-[#6b7280]">Total</dt><dd class="text-right font-semibold">{{ money(selected.total) }}</dd>
           </dl>

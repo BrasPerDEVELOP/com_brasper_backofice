@@ -91,7 +91,7 @@ async function issue() {
   const current = preview.value
   current.can_issue = false
   await run(async () => {
-    current.record = await omieApi.issue(props.transactionId, current.total, current.document)
+    current.record = await omieApi.issue(props.transactionId, current.total, current.document, current.description)
     emit('updated', current.record)
   })
 }
@@ -135,6 +135,10 @@ onUnmounted(() => { if (statusTimer) clearInterval(statusTimer) })
           <div><dt class="text-slate-500">Empresa emisora</dt><dd>{{ preview.issuer }}</dd></div>
           <div><dt class="text-slate-500">Cliente · CPF/CNPJ {{ preview.document }}</dt><dd>{{ preview.customer }}</dd></div>
           <div><dt class="text-slate-500">Servicio</dt><dd>{{ preview.service }}</dd></div>
+          <div v-if="preview.description" class="rounded-lg border border-indigo-100 bg-indigo-50/40 p-3">
+            <dt class="font-medium text-slate-700">Descripción en la nota fiscal</dt>
+            <dd class="mt-2 whitespace-pre-line">{{ preview.description }}</dd>
+          </div>
           <div><dt class="text-slate-500">Cuenta de facturación</dt><dd>{{ preview.account }}</dd></div>
           <div class="rounded-lg bg-emerald-50 p-3"><dt>Venta final · Total a facturar</dt><dd class="text-xl font-bold text-emerald-800">{{ totalLabel }}</dd></div>
           <div v-if="preview.record"><dt>Estado</dt><dd>{{ statusLabel }}<span v-if="preview.record.nfse_number"> · NFS-e {{ preview.record.nfse_number }}</span></dd></div>
