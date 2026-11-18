@@ -86,10 +86,28 @@ const phoneCodeOptions = computed(() =>
 const identifications = ref<UserIdentification[]>([])
 const lookingUpDocument = ref(false)
 const primaryIdentification = computed(() => identifications.value.find(item => item.is_primary) ?? identifications.value[0])
+const primaryDocumentKey = computed(() => {
+  const item = primaryIdentification.value
+  return `${item?.document_type ?? ''}:${(item?.document_number ?? '').replace(/[\s./-]/g, '').toUpperCase()}`
+})
+const appliedDocumentKey = ref<string | null>(null)
+
+watch(primaryDocumentKey, (key) => {
+  // Names obtained for one identity must never follow a different document,
+  // including manual corrections made after applying the lookup result.
+  if (appliedDocumentKey.value && appliedDocumentKey.value !== key) {
+    form.value.names = ''
+    form.value.lastnames = ''
+    appliedDocumentKey.value = null
+  }
+}, { flush: 'sync' })
 
 function applyDocumentData(result: DocumentLookupResult) {
+  const key = `${result.document_type}:${result.document_number.replace(/[\s./-]/g, '').toUpperCase()}`
+  if (key !== primaryDocumentKey.value) return
   form.value.names = result.names
   form.value.lastnames = result.lastnames
+  appliedDocumentKey.value = key
 }
 
 function onDocumentResolved(result: DocumentLookupResult) {
@@ -111,6 +129,7 @@ function onProfileImageChange(e: Event) {
 }
 
 function resetForm() {
+  appliedDocumentKey.value = null
   emailRows.value = contactEmails(props.user?.emails, props.user?.email)
   if (!emailRows.value.length) emailRows.value = ['']
   error.value = ''

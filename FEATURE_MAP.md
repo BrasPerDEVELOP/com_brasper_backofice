@@ -25,6 +25,11 @@ CPF (2026-11-18): alta, edición, directorio y perfil presentan `000.000.000-00`
 El campo acepta pegar la máscara completa (14 caracteres) y conserva los 11
 dígitos, incluidos ceros iniciales, al consultar y guardar. CPF incompleto no se guarda.
 
+Consulta de documentos (2026-11-18): nombres/apellidos aplicados quedan asociados
+al documento principal consultado. Al cambiar su tipo, número o principal se limpian
+para no guardar la identidad anterior con un documento nuevo. Se descartan respuestas
+atrasadas; si la siguiente consulta falla, los nombres permanecen vacíos.
+
 Usuarios (2026-11-18): formulario completo inicia con identificaciones y consulta
 del documento principal mediante POST `/user/document-lookup` (DNI/RUC/CPF/CNPJ).
 El backend exige sesión y `users.create` o `users.update`, conserva credenciales

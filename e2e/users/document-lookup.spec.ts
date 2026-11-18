@@ -75,6 +75,45 @@ test('provider failure leaves manual creation available', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Guardar', exact: true })).toBeEnabled()
 })
 
+test('changing a resolved DNI clears its names and replaces them on the next lookup', async ({ page }) => {
+  await page.route('**/user/document-lookup', route => {
+    const { document_number } = route.request().postDataJSON()
+    if (document_number === '88776655') return route.fulfill({ status: 404, json: { detail: 'Documento no encontrado' } })
+    return route.fulfill({ json: document_number === '00112233' ? result : {
+      ...result, document_number, names: 'OTRO CLIENTE', lastnames: 'SEGUNDO APELLIDO',
+    } })
+  })
+  await openForm(page)
+  await page.getByRole('button', { name: 'Consultar datos', exact: true }).click()
+  await expect(page.getByPlaceholder('Nombres', { exact: true })).toHaveValue('JUAN CARLOS')
+  await page.getByPlaceholder('Apellidos').fill('APELLIDO CORREGIDO')
+  await page.getByLabel('Número de documento', { exact: true }).fill('99887766')
+  await expect(page.getByPlaceholder('Nombres', { exact: true })).toHaveValue('')
+  await expect(page.getByPlaceholder('Apellidos')).toHaveValue('')
+  await expect(page.getByText('Datos encontrados:', { exact: false })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Consultar datos', exact: true }).click()
+  await expect(page.getByPlaceholder('Nombres', { exact: true })).toHaveValue('OTRO CLIENTE')
+  await expect(page.getByPlaceholder('Apellidos')).toHaveValue('SEGUNDO APELLIDO')
+  await page.getByLabel('Número de documento', { exact: true }).fill('88776655')
+  await page.getByRole('button', { name: 'Consultar datos', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('Documento no encontrado')
+  await expect(page.getByPlaceholder('Nombres', { exact: true })).toHaveValue('')
+  await expect(page.getByPlaceholder('Apellidos')).toHaveValue('')
+})
+
+test('changing document type clears names that were explicitly applied', async ({ page }) => {
+  await page.route('**/user/document-lookup', route => route.fulfill({ json: result }))
+  await openForm(page)
+  await page.getByPlaceholder('Nombres', { exact: true }).fill('Nombre manual')
+  await page.getByRole('button', { name: 'Consultar datos', exact: true }).click()
+  await page.getByRole('button', { name: 'Usar estos datos' }).click()
+  await expect(page.getByPlaceholder('Nombres', { exact: true })).toHaveValue('JUAN CARLOS')
+  await page.getByRole('button', { name: 'DNI', exact: true }).click()
+  await page.getByRole('button', { name: 'CPF', exact: true }).click()
+  await expect(page.getByPlaceholder('Nombres', { exact: true })).toHaveValue('')
+  await expect(page.getByPlaceholder('Apellidos')).toHaveValue('')
+})
+
 for (const pasted of ['001.234.567-89', '00123456789']) {
   test(`CPF ${pasted} displays its mask and sends all eleven digits`, async ({ page }) => {
     let lookupPayload: unknown
