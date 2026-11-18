@@ -21,6 +21,10 @@ Vue View (*_view.vue)
 
 ## Mapa de módulos
 
+CPF (2026-11-18): alta, edición, directorio y perfil presentan `000.000.000-00`.
+El campo acepta pegar la máscara completa (14 caracteres) y conserva los 11
+dígitos, incluidos ceros iniciales, al consultar y guardar. CPF incompleto no se guarda.
+
 Usuarios (2026-11-18): formulario completo inicia con identificaciones y consulta
 del documento principal mediante POST `/user/document-lookup` (DNI/RUC/CPF/CNPJ).
 El backend exige sesión y `users.create` o `users.update`, conserva credenciales

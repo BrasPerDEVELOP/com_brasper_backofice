@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { displayUserDocument } from '@/interface/utils/user_documents'
 import { useAuthStore } from '../controllers/use_auth_store_controller'
 import UserTransactionHistory from './UserTransactionHistory.vue'
 import UserAccessPanel from './UserAccessPanel.vue'
@@ -86,7 +87,7 @@ const primaryIdentification = computed(
       <div v-else-if="tab !== 'accounts' || !isClient || !canViewAccounts" class="space-y-4 p-5">
         <dl class="space-y-3 text-sm">
           <div><dt class="text-xs font-semibold uppercase text-[#9ca3af]">Rol</dt><dd class="mt-1 font-medium text-[#374151]">{{ USER_ROLE_LABELS[user.role as keyof typeof USER_ROLE_LABELS] ?? user.role ?? '—' }}</dd></div>
-          <div><dt class="text-xs font-semibold uppercase text-[#9ca3af]">Identificación principal</dt><dd class="mt-1 font-medium text-[#374151]">{{ primaryIdentification ? `${primaryIdentification.document_type.toUpperCase()} ${primaryIdentification.document_number}` : 'No registrada' }}</dd></div>
+          <div><dt class="text-xs font-semibold uppercase text-[#9ca3af]">Identificación principal</dt><dd class="mt-1 font-medium text-[#374151]">{{ primaryIdentification ? `${primaryIdentification.document_type.toUpperCase()} ${displayUserDocument(primaryIdentification.document_type, primaryIdentification.document_number)}` : 'No registrada' }}</dd></div>
           <div><dt class="text-xs font-semibold uppercase text-[#9ca3af]">Teléfono</dt><dd class="mt-1 font-medium text-[#374151]">{{ [user.code_phone, user.phone].filter(Boolean).join(' ') || 'No registrado' }}</dd></div>
         </dl>
         <p v-if="!isClient" class="rounded-lg bg-[#f9fafb] px-4 py-3 text-sm text-[#6b7280]">Las cuentas bancarias se administran únicamente para usuarios cliente.</p>

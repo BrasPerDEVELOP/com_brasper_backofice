@@ -74,3 +74,33 @@ test('provider failure leaves manual creation available', async ({ page }) => {
   await expect(page.getByRole('alert')).toContainText('Proveedor no disponible')
   await expect(page.getByRole('button', { name: 'Guardar', exact: true })).toBeEnabled()
 })
+
+for (const pasted of ['001.234.567-89', '00123456789']) {
+  test(`CPF ${pasted} displays its mask and sends all eleven digits`, async ({ page }) => {
+    let lookupPayload: unknown
+    let saved: unknown
+    await page.route('**/user/document-lookup', route => {
+      lookupPayload = route.request().postDataJSON()
+      return route.fulfill({ json: { ...result, document_type: 'cpf', document_number: '00123456789', names: 'CLIENTE DE TESTE', lastnames: '', source: 'cpfcnpj' } })
+    })
+    await page.route('**/user?*', route => route.fulfill({ json: [] }))
+    await page.route('**/user', async route => {
+      if (route.request().method() === 'GET') return route.fulfill({ json: [] })
+      const form = await new Response(route.request().postDataBuffer(), {
+        headers: { 'Content-Type': route.request().headers()['content-type']! },
+      }).formData()
+      saved = JSON.parse(String(form.get('identifications')))
+      return route.fulfill({ json: { id: 'qa-user', names: 'CLIENTE DE TESTE', identifications: saved } })
+    })
+    await openForm(page)
+    await page.getByRole('button', { name: 'DNI', exact: true }).click()
+    await page.getByRole('button', { name: 'CPF', exact: true }).click()
+    await page.getByLabel('Número de documento', { exact: true }).fill(pasted)
+    await expect(page.getByLabel('Número de documento', { exact: true })).toHaveValue('001.234.567-89')
+    await page.getByRole('button', { name: 'Consultar datos', exact: true }).click()
+    await expect(page.getByPlaceholder('Nombres', { exact: true })).toHaveValue('CLIENTE DE TESTE')
+    expect(lookupPayload).toEqual({ document_type: 'cpf', document_number: '00123456789' })
+    await page.getByRole('button', { name: 'Guardar', exact: true }).click()
+    await expect.poll(() => saved).toEqual([{ document_type: 'cpf', document_number: '00123456789', is_primary: true }])
+  })
+}

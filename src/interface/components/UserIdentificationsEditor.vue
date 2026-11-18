@@ -2,6 +2,7 @@
 import { useId } from 'vue'
 import type { UserIdentification } from '@/modules/auth/infrastructure/adapters/users_management_api_adapter'
 import AppDropdown from '@/interface/components/AppDropdown.vue'
+import { displayUserDocument } from '@/interface/utils/user_documents'
 
 const identifications = defineModel<UserIdentification[]>({ required: true })
 
@@ -39,9 +40,19 @@ function onNumberInput(index: number, event: Event) {
   const target = event.target as HTMLInputElement
   const item = identifications.value[index]
   if (!item) return
+  const digitsBeforeCursor = target.value.slice(0, target.selectionStart ?? target.value.length).replace(/\D/g, '').length
   const cleaned = cleanDocumentNumber(item.document_type, target.value)
   item.document_number = cleaned
-  target.value = cleaned
+  target.value = displayUserDocument(item.document_type, cleaned)
+  if (item.document_type === 'cpf') {
+    let cursor = 0
+    let digits = 0
+    while (cursor < target.value.length && digits < digitsBeforeCursor) {
+      if (/\d/.test(target.value[cursor]!)) digits++
+      cursor++
+    }
+    target.setSelectionRange(cursor, cursor)
+  }
 }
 
 function onTypeChange(index: number) {
@@ -103,12 +114,13 @@ function setPrimary(index: number) {
         @update:model-value="onTypeChange(index)"
       />
       <input
-        :value="identification.document_number"
+        :value="displayUserDocument(identification.document_type, identification.document_number)"
         type="text"
         :inputmode="identification.document_type !== 'cnpj' && NUMERIC_TYPE_LENGTHS[identification.document_type] ? 'numeric' : 'text'"
-        :maxlength="NUMERIC_TYPE_LENGTHS[identification.document_type] ?? 40"
+        :maxlength="identification.document_type === 'cpf' ? 14 : NUMERIC_TYPE_LENGTHS[identification.document_type] ?? 40"
         class="form-input w-full rounded-lg border border-[#e5e7eb] bg-white px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
-        placeholder="Número de documento"
+        :placeholder="identification.document_type === 'cpf' ? '000.000.000-00' : 'Número de documento'"
+        aria-label="Número de documento"
         @input="onNumberInput(index, $event)"
       />
       <button

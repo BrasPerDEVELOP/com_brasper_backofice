@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import AppDropdown from '@/interface/components/AppDropdown.vue'
+import { displayUserDocument } from '@/interface/utils/user_documents'
 import UserRowActionsMenu from './UserRowActionsMenu.vue'
 import { USER_ROLE_LABELS } from '../../domain/models'
 import type { UserListItem } from '../../infrastructure/adapters/users_management_api_adapter'
@@ -48,8 +49,8 @@ function documentType(user: UserListItem): string {
 
 function documentNumber(user: UserListItem): string {
   return user.identifications.length > 1
-    ? user.identifications.map((item) => item.document_number).join(', ')
-    : (user.document_number ?? '-')
+    ? user.identifications.map((item) => displayUserDocument(item.document_type, item.document_number)).join(', ')
+    : displayUserDocument(user.document_type ?? '', user.document_number ?? '-')
 }
 </script>
 

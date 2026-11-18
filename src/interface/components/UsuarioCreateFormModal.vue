@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { contactEmails, uniqueEmails } from '@/interface/utils/contact_emails'
+import { normalizeUserDocument } from '@/interface/utils/user_documents'
 import { ref, computed, watch } from 'vue'
 import {
   createUser,
@@ -185,11 +186,15 @@ async function handleSubmit() {
     // Sin espacios internos: "130 028 633 43" y "13002863343" son el mismo documento.
     const normalizedIdentifications = identifications.value.filter(item => item.document_number.trim() || item.document_type).map((item) => ({
       document_type: item.document_type.trim(),
-      document_number: item.document_number.replace(/\s+/g, ''),
+      document_number: normalizeUserDocument(item.document_type, item.document_number),
       is_primary: item.is_primary
     }))
     if (normalizedIdentifications.some((item) => !item.document_type || !item.document_number)) {
       error.value = 'Completa el tipo y número de cada identificación'
+      return
+    }
+    if (normalizedIdentifications.some(item => item.document_type === 'cpf' && !/^\d{11}$/.test(item.document_number))) {
+      error.value = 'El CPF debe contener 11 dígitos: 000.000.000-00.'
       return
     }
     const uniqueDocuments = new Set(
