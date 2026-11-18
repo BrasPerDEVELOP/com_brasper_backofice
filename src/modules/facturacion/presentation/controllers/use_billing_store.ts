@@ -43,6 +43,7 @@ interface BillingState {
   list: InvoiceList
   listLoading: boolean
   listError: string | null
+  listRequestId: number
   requestId: number
 }
 
@@ -56,6 +57,7 @@ export const useBillingStore = defineStore('billing', {
     list: { items: [], total: 0, skip: 0, limit: 50 },
     listLoading: false,
     listError: null,
+    listRequestId: 0,
     requestId: 0
   }),
 
@@ -156,14 +158,18 @@ export const useBillingStore = defineStore('billing', {
     },
 
     async loadList(filters: InvoiceListFilters): Promise<void> {
+      const requestId = ++this.listRequestId
       this.listLoading = true
       try {
-        this.list = await getAdapter().listInvoices(filters)
+        const result = await getAdapter().listInvoices(filters)
+        if (requestId !== this.listRequestId) return
+        this.list = result
         this.listError = null
       } catch (e) {
+        if (requestId !== this.listRequestId) return
         this.listError = billingErrorMessage(e, 'No se pudo cargar el listado de comprobantes.')
       } finally {
-        this.listLoading = false
+        if (requestId === this.listRequestId) this.listLoading = false
       }
     }
   }

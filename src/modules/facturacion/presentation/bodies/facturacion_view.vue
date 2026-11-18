@@ -3,7 +3,7 @@
  * Facturación electrónica: comprobantes emitidos vía APISUNAT (boletas y facturas
  * por la comisión cobrada). Para emitir, ir a Contabilidad → columna Comprobante.
  */
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { AppSpinner } from '@interface/widgets'
 import type { Invoice } from '../../domain/models'
 import { INVOICE_STATUSES, invoiceStatusMeta, isInvoicePending, sunatIdentityLabel } from '../../domain/models'
@@ -18,6 +18,11 @@ defineOptions({ name: 'FacturacionView' })
 const store = useBillingStore()
 
 const issuerFilter = ref('')
+const searchInput = shallowRef('')
+const search = shallowRef('')
+function applySearch() {
+  search.value = searchInput.value.trim()
+}
 const exportIssuer = ref('')
 const statusFilter = ref('')
 const documentTypeFilter = ref('')
@@ -37,8 +42,10 @@ const totalPages = computed(() => store.list.totalPages ?? 1)
 const status = computed(() => store.status)
 const issuers = computed(() => status.value?.issuers ?? [])
 const invalidDateRange = computed(() => Boolean(dateFrom.value && dateTo.value && dateFrom.value > dateTo.value))
-const hasFilters = computed(() => Boolean(issuerFilter.value || statusFilter.value || documentTypeFilter.value || dateFrom.value || dateTo.value))
+const hasFilters = computed(() => Boolean(searchInput.value || search.value || issuerFilter.value || statusFilter.value || documentTypeFilter.value || dateFrom.value || dateTo.value))
 function clearFilters() {
+  searchInput.value = ''
+  search.value = ''
   issuerFilter.value = ''
   statusFilter.value = ''
   documentTypeFilter.value = ''
@@ -56,6 +63,7 @@ function limaDayEnd(day: string): string {
 async function load() {
   if (invalidDateRange.value) return
   await store.loadList({
+    search: search.value || null,
     issuerRuc: issuerFilter.value || null,
     status: statusFilter.value || null,
     documentType: documentTypeFilter.value || null,
@@ -66,7 +74,7 @@ async function load() {
   })
 }
 
-watch([issuerFilter, statusFilter, documentTypeFilter, dateFrom, dateTo, perPage], () => {
+watch([search, issuerFilter, statusFilter, documentTypeFilter, dateFrom, dateTo, perPage], () => {
   if (page.value !== 1) page.value = 1
   else void load()
 })
@@ -158,6 +166,13 @@ const inputClass =
         <h2 id="billing-filters-title" class="text-sm font-semibold text-[#17243b]">Filtrar comprobantes</h2>
         <button v-if="hasFilters" type="button" class="text-sm font-medium text-brasper-indigoStrong hover:underline" @click="clearFilters">Limpiar filtros</button>
       </div>
+      <form class="mb-4 flex flex-wrap items-end gap-3" role="search" @submit.prevent="applySearch">
+        <label class="min-w-0 flex-1 space-y-1 sm:max-w-md">
+          <span class="block text-xs font-medium text-[#4b5563]">Buscar comprobante</span>
+          <input v-model="searchInput" type="search" maxlength="120" placeholder="Código, cliente o documento" :class="[inputClass, 'w-full']" />
+        </label>
+        <button type="submit" class="rounded-lg bg-brasper-indigoStrong px-4 py-2 text-sm font-semibold text-white hover:bg-brasper-indigoDark">Buscar</button>
+      </form>
       <div class="flex flex-wrap items-end gap-3">
       <label v-if="issuers.length > 1" class="space-y-1">
         <span class="block text-xs font-medium text-[#4b5563]">Empresa</span>
@@ -192,7 +207,7 @@ const inputClass =
       <span v-if="store.listLoading" class="pb-2"><AppSpinner size="sm" label="Cargando…" /></span>
       </div>
       <p v-if="invalidDateRange" role="alert" class="mt-3 text-sm text-red-700">La fecha «Desde» debe ser anterior o igual a «Hasta».</p>
-      <p v-else class="mt-3 text-xs text-[#617089]">{{ store.list.total }} comprobantes encontrados</p>
+      <p v-else class="mt-3 text-xs text-[#617089]">{{ store.list.total }} comprobantes encontrados · Código de mayor a menor</p>
     </section>
 
     <p v-if="store.listError" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">

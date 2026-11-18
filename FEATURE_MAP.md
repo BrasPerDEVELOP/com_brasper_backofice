@@ -21,6 +21,12 @@ Vue View (*_view.vue)
 
 ## Mapa de módulos
 
+Facturación (2026-11-18): GET `/billing/invoices` acepta `search` (máximo 120
+caracteres) para código de comprobante, cliente o documento. Admite `BB02-209`
+y el correlativo con ceros. Filtra y cuenta antes de paginar; ordena por serie
+y correlativo descendentes, con emisor e ID como desempate estable. La pantalla
+envía la búsqueda con Buscar/Enter y vuelve a la primera página.
+
 Correo Omie (2026-11-17): GET `/omie/transactions/{id}/email` devuelve los correos
 actuales del cliente y las entregas registradas (`billing.view`). POST al mismo
 endpoint con `{ recipients: string[] }` encola el PDF oficial (`billing.issue`,

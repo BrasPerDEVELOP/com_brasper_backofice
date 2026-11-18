@@ -258,6 +258,7 @@ export interface BillingStatus {
 }
 
 export interface InvoiceListFilters {
+  search?: string | null
   page?: number
   pageSize?: number
   issuerRuc?: string | null

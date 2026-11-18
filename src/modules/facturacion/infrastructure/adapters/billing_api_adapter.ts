@@ -223,6 +223,7 @@ export class BillingApiAdapter {
       params.page_size = filters.pageSize ?? 10
     }
     if (filters.issuerRuc) params.issuer_ruc = filters.issuerRuc
+    if (filters.search?.trim()) params.search = filters.search.trim()
     if (filters.status) params.status = filters.status
     if (filters.documentType) params.document_type = filters.documentType
     if (filters.dateFrom) params.date_from = filters.dateFrom

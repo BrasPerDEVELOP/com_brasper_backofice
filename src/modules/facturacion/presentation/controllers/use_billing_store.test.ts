@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import type { Invoice } from '../../domain/models'
 
 const adapter = vi.hoisted(() => ({
+  listInvoices: vi.fn(),
   latestForTransactions: vi.fn(),
   retryInvoice: vi.fn(),
   issueForTransaction: vi.fn()
@@ -57,6 +58,19 @@ function invoice(overrides: Partial<Invoice>): Invoice {
 }
 
 describe('useBillingStore', () => {
+  it('una respuesta anterior no reemplaza los resultados de la nueva búsqueda', async () => {
+    const store = useBillingStore()
+    let resolveFirst!: (value: unknown) => void
+    adapter.listInvoices.mockReturnValueOnce(new Promise((resolve) => { resolveFirst = resolve }))
+    adapter.listInvoices.mockResolvedValueOnce({ items: [], total: 0, skip: 0, limit: 10 })
+    const first = store.loadList({ search: 'antiguo' })
+    await store.loadList({ search: 'nuevo' })
+    resolveFirst({ items: [invoice({})], total: 99, skip: 0, limit: 10 })
+    await first
+    expect(store.list.total).toBe(0)
+    expect(store.list.items).toEqual([])
+    expect(store.listLoading).toBe(false)
+  })
   beforeEach(() => {
     setActivePinia(createPinia())
     Object.values(adapter).forEach((fn) => fn.mockReset())

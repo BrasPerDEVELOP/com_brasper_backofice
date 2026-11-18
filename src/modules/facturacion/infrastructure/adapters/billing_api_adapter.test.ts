@@ -41,6 +41,15 @@ const RAW_INVOICE = {
 }
 
 describe('BillingApiAdapter', () => {
+  it('envía búsqueda y paginación al backend sin filtrar la respuesta', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ data: { items: [RAW_INVOICE], total: 31, skip: 10, limit: 10 } })
+    const list = await new BillingApiAdapter().listInvoices({ search: ' BB02-209 ', page: 2, pageSize: 10, issuerRuc: '20611936428' })
+    expect(apiClient.get).toHaveBeenCalledWith('billing/invoices', { params: {
+      search: 'BB02-209', page: 2, page_size: 10, issuer_ruc: '20611936428'
+    } })
+    expect(list.total).toBe(31)
+    expect(list.items).toHaveLength(1)
+  })
   it('envía el destinatario editado al backend y refleja el correo pendiente', async () => {
     vi.mocked(apiClient.post).mockResolvedValue({ data: {
       ...RAW_INVOICE, status: 'accepted', customer_email: 'editado@example.com',
