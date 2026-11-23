@@ -45,7 +45,7 @@ import AccountingBillingDateCell from '../components/AccountingBillingDateCell.v
 import { useTagsStore } from '@modules/transacciones/presentation/controllers/use_tags_store_controller'
 import { useAuthStore } from '@modules/auth/presentation/controllers/use_auth_store_controller'
 import type { Invoice } from '@modules/facturacion/domain/models'
-import { billingRouteDisabledReason } from '@modules/facturacion/domain/models'
+import { billingRouteDisabledReason, billingDateDisabledReason } from '@modules/facturacion/domain/models'
 import { useBillingStore } from '@modules/facturacion/presentation/controllers/use_billing_store'
 import { omieApi } from '@modules/omie/infrastructure/omie_api'
 import type { OmieRecord } from '@modules/omie/domain/models'
@@ -107,7 +107,7 @@ const invoiceDetailOpen = ref(false)
 const invoiceDetailId = ref<string | null>(null)
 
 function openIssueDialog(t: Transaction) {
-  if (billingDisabledReason(t)) return
+  if (billingDisabledReason(t) || billingDateBlockReason(t)) return
   issueTarget.value = t
   issueDialogOpen.value = true
 }
@@ -118,6 +118,13 @@ function billingDisabledReason(t: Transaction): string | null {
   return billingRouteDisabledReason(
     rate?.coin_a || currencies.origin || inferOriginCurrencyFromTransactionCode(t.code),
     rate?.coin_b || currencies.destination
+  )
+}
+
+function billingDateBlockReason(t: Transaction): string | null {
+  return billingDateDisabledReason(
+    t.billing_date,
+    Boolean(t.id && (billingStore.invoiceFor(t.id) || omieRecords.value[t.id]))
   )
 }
 
@@ -1578,6 +1585,9 @@ onMounted(() => {
               <OmieInvoiceCell
                 v-if="canViewBilling && t.id && billingDisabledReason(t)"
                 :transaction-id="t.id"
+                :transaction-code="formatTransactionCodeForDisplay(t.code)"
+                :operation-number="t.operation_number"
+                :disabled-reason="billingDateBlockReason(t)"
                 :record="omieRecords[t.id]"
                 @updated="updateOmieRecord(t.id, $event)"
                 :can-issue="canIssueBilling"
@@ -1586,7 +1596,7 @@ onMounted(() => {
                 v-else-if="canViewBilling && t.id"
                 :invoice="billingStore.invoiceFor(t.id)"
                 :can-issue="canIssueBilling"
-                :disabled-reason="billingDisabledReason(t)"
+                :disabled-reason="billingDisabledReason(t) || billingDateBlockReason(t)"
                 :current-environment="billingStore.status?.environment"
                 :loading="billingStore.loadingInvoices"
                 @issue="openIssueDialog(t)"

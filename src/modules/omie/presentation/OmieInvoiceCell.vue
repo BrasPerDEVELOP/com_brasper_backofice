@@ -5,13 +5,22 @@ import { omieApi } from '../infrastructure/omie_api'
 import OmieEmailPanel from './OmieEmailPanel.vue'
 import type { OmieCustomerRegistration, OmiePreview, OmieRecord } from '../domain/models'
 
-const props = defineProps<{ transactionId: string; canIssue: boolean; record?: OmieRecord | null }>()
+const props = defineProps<{
+  transactionId: string
+  transactionCode?: string | null
+  operationNumber?: string | null
+  disabledReason?: string | null
+  canIssue: boolean
+  record?: OmieRecord | null
+}>()
 const emit = defineEmits<{ updated: [record: OmieRecord] }>()
 const currentRecord = computed(() => preview.value?.record ?? props.record)
 const opened = ref(false)
 const busy = ref(false)
 const error = ref('')
 const preview = ref<OmiePreview | null>(null)
+const descriptionDraft = ref('')
+const descriptionValid = computed(() => descriptionDraft.value.trim().length > 0 && descriptionDraft.value.trim().length <= 2000)
 const pdfUrl = ref('')
 const retryAfterSeconds = ref(0)
 let cooldownTimer: ReturnType<typeof setInterval> | undefined
@@ -55,10 +64,12 @@ async function run(action: () => Promise<void>) {
   } finally { busy.value = false }
 }
 async function open() {
+  if (props.disabledReason && !currentRecord.value) return
   opened.value = true
   pdfUrl.value = ''
   if (retryAfterSeconds.value > 0) return
   preview.value = null
+  descriptionDraft.value = ''
   registrationAttempted.value = false
   await consultPreview()
 }
@@ -66,6 +77,7 @@ async function consultPreview() {
   if (retryAfterSeconds.value > 0) return
   await run(async () => {
     preview.value = await omieApi.preview(props.transactionId)
+    descriptionDraft.value = preview.value.description || ''
     if (preview.value.record) emit('updated', preview.value.record)
     if (preview.value.customer_registration_required) {
       registration.value.legal_name = preview.value.customer
@@ -79,6 +91,7 @@ async function registerCustomer() {
   await run(async () => {
     await omieApi.registerCustomer(props.transactionId, registration.value)
     preview.value = await omieApi.preview(props.transactionId)
+    descriptionDraft.value = preview.value.description || ''
     registrationAttempted.value = Boolean(preview.value.customer_registration_required)
     if (registrationAttempted.value) {
       error.value = 'Omie recibió el registro, pero aún no confirma la ficha. Consulta el cliente antes de continuar.'
@@ -86,12 +99,14 @@ async function registerCustomer() {
   })
 }
 async function issue() {
-  if (!preview.value?.can_issue || !props.canIssue) return
+  if (!preview.value?.can_issue || !props.canIssue || props.disabledReason || !descriptionValid.value) return
   // Lock the action even after an ambiguous HTTP failure; reopening consults the backend.
   const current = preview.value
+  const description = descriptionDraft.value.trim()
   current.can_issue = false
   await run(async () => {
-    current.record = await omieApi.issue(props.transactionId, current.total, current.document, current.description)
+    current.record = await omieApi.issue(props.transactionId, current.total, current.document, current.description, description)
+    current.description = description
     emit('updated', current.record)
   })
 }
@@ -118,7 +133,9 @@ onUnmounted(() => { if (statusTimer) clearInterval(statusTimer) })
 </script>
 
 <template>
-  <button type="button" class="rounded-lg border px-2 py-1 text-xs font-semibold"
+  <button type="button" class="rounded-lg border px-2 py-1 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+    :disabled="!!disabledReason && !currentRecord"
+    :title="!currentRecord ? disabledReason || undefined : undefined"
     :class="currentRecord?.status === 'issued' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : currentRecord?.status === 'cancelled' || currentRecord?.status === 'review_required' ? 'border-red-200 bg-red-50 text-red-700' : 'border-indigo-200 bg-indigo-50 text-indigo-700'"
     @click.stop="open">
     <span class="block">{{ currentRecord?.nfse_number ? `NFS-e ${currentRecord.nfse_number}` : 'NFS-e Omie' }}</span>
@@ -129,15 +146,31 @@ onUnmounted(() => { if (statusTimer) clearInterval(statusTimer) })
       <section role="dialog" aria-modal="true" aria-label="Emisión NFS-e Omie" class="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 text-left shadow-xl">
         <h2 class="text-lg font-semibold text-slate-900">Nota fiscal de servicio · Omie</h2>
         <p class="mt-1 text-sm text-slate-500">Emisión en Brasil · Producción</p>
+        <dl class="mt-4 space-y-1 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
+          <div><dt class="text-slate-500">Código de transacción</dt><dd class="break-all font-semibold">{{ transactionCode || '—' }}</dd></div>
+          <div><dt class="text-slate-500">N.º de operación</dt><dd class="break-all font-medium">{{ operationNumber || 'Sin registrar' }}</dd></div>
+        </dl>
         <p v-if="busy" class="mt-4 text-sm" role="status">Consultando Omie…</p>
         <p v-if="error" class="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700" role="alert">{{ error }}</p>
         <dl v-if="preview" class="mt-5 space-y-3 text-sm text-slate-700">
           <div><dt class="text-slate-500">Empresa emisora</dt><dd>{{ preview.issuer }}</dd></div>
           <div><dt class="text-slate-500">Cliente · CPF/CNPJ {{ preview.document }}</dt><dd>{{ preview.customer }}</dd></div>
           <div><dt class="text-slate-500">Servicio</dt><dd>{{ preview.service }}</dd></div>
-          <div v-if="preview.description" class="rounded-lg border border-indigo-100 bg-indigo-50/40 p-3">
+          <div v-if="preview.description || preview.can_issue" class="rounded-lg border border-indigo-100 bg-indigo-50/40 p-3">
             <dt class="font-medium text-slate-700">Descripción en la nota fiscal</dt>
-            <dd class="mt-2 whitespace-pre-line">{{ preview.description }}</dd>
+            <dd v-if="preview.can_issue && canIssue" class="mt-2">
+              <label class="block">
+                <span class="sr-only">Editar descripción de la nota fiscal</span>
+                <textarea v-model="descriptionDraft" rows="6" maxlength="2000" :disabled="busy" required class="w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm disabled:opacity-50" />
+              </label>
+              <div class="mt-1 flex items-center justify-between gap-2 text-xs text-slate-500">
+                <button type="button" class="text-indigo-700 disabled:opacity-50" :disabled="busy" @click="descriptionDraft = preview.description || ''">Restaurar descripción sugerida</button>
+                <span>{{ descriptionDraft.length }}/2000</span>
+              </div>
+              <p v-if="!descriptionValid" class="mt-2 text-xs text-red-700">Completa la descripción antes de emitir.</p>
+              <p class="mt-2 text-xs text-slate-500">Este texto se enviará a Omie como descripción del servicio.</p>
+            </dd>
+            <dd v-else class="mt-2 whitespace-pre-line">{{ preview.description }}</dd>
           </div>
           <div><dt class="text-slate-500">Cuenta de facturación</dt><dd>{{ preview.account }}</dd></div>
           <div class="rounded-lg bg-emerald-50 p-3"><dt>Venta final · Total a facturar</dt><dd class="text-xl font-bold text-emerald-800">{{ totalLabel }}</dd></div>
@@ -196,7 +229,7 @@ onUnmounted(() => { if (statusTimer) clearInterval(statusTimer) })
           <button v-if="preview?.record" type="button" class="rounded-lg border border-indigo-200 px-4 py-2 text-sm text-indigo-700 disabled:opacity-50" :disabled="busy || retryAfterSeconds > 0" @click="refresh">{{ retryAfterSeconds > 0 ? `Consultar en ${retryAfterSeconds} s` : 'Consultar estado' }}</button>
           <button v-if="preview?.record && ['issued', 'cancelled'].includes(preview.record.status) && !pdfUrl" type="button" class="rounded-lg border px-4 py-2 text-sm disabled:opacity-50" :disabled="busy" @click="preparePdf">Preparar PDF</button>
           <a v-if="pdfUrl" :href="pdfUrl" target="_blank" rel="noopener noreferrer" class="rounded-lg bg-indigo-700 px-4 py-2 text-sm text-white">Abrir PDF</a>
-          <button v-if="preview?.can_issue && canIssue" type="button" class="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="busy" @click="issue">Emitir NFS-e</button>
+          <button v-if="preview?.can_issue && canIssue" type="button" class="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="busy || !!disabledReason || !descriptionValid" :title="disabledReason || undefined" @click="issue">Emitir NFS-e</button>
         </div>
       </section>
     </div>

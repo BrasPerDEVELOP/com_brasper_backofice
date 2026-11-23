@@ -10,6 +10,12 @@ export function billingRouteDisabledReason(origin?: string, destination?: string
     : null
 }
 
+export function billingDateDisabledReason(billingDate: string | null | undefined, hasInvoice: boolean): string | null {
+  return billingDate && !hasInvoice
+    ? 'Esta operación ya tiene fecha de facturación y no tiene un comprobante vinculado. La emisión está bloqueada; revisa la facturación registrada.'
+    : null
+}
+
 export const INVOICE_STATUSES = [
   'reserved',
   'sent',

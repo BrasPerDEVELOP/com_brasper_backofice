@@ -21,6 +21,22 @@ Vue View (*_view.vue)
 
 ## Mapa de módulos
 
+Omie (2026-11-23): descripción editable antes de emitir, con texto sugerido,
+restauración y límite de 2000 caracteres. `item_description` envía el texto elegido;
+`expected_description` mantiene el detalle original para detectar cambios en la
+operación. El backend valida y guarda el texto enviado a `cDescServ` en el snapshot.
+Después de iniciar la emisión se muestra como lectura. No modifica notas anteriores.
+
+Contabilidad (2026-11-23): una fecha de facturación sin comprobante vinculado
+bloquea la emisión nueva tanto en APISUNAT como en Omie. La celda explica el motivo.
+El backend revalida al consultar la vista previa y al emitir, antes de reservar un
+correlativo u ordenar una emisión. Los comprobantes existentes conservan su detalle,
+consulta de estado y recuperación. No cambia fechas ni documentos existentes.
+
+Omie (2026-11-19): el modal muestra código de transacción y número de operación
+desde la fila de Contabilidad, incluso durante errores, carga o espera por límite
+de consultas. No depende de la respuesta de la vista previa de Omie.
+
 Omie (2026-11-18): la vista previa incluye `description`, generada por el backend
 con servicio, código de operación, monto enviado y recibido, con sus monedas.
 Se envía como `ServicosPrestados[].cDescServ` y se conserva en el snapshot de emisión.

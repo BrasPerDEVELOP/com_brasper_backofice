@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   canIssueAgain,
   billingRouteDisabledReason,
+  billingDateDisabledReason,
   canRetryInvoice,
   canVoidInvoice,
   invoiceEventLabel,
@@ -11,6 +12,13 @@ import {
 } from '.'
 
 describe('estados del comprobante', () => {
+  it('bloquea fecha registrada sin comprobante y permite consultar registros existentes', () => {
+    expect(billingDateDisabledReason('2026-11-23', false)).toContain('emisión está bloqueada')
+    expect(billingDateDisabledReason('2026-11-23', true)).toBeNull()
+    expect(billingDateDisabledReason(null, false)).toBeNull()
+    expect(billingDateDisabledReason(undefined, false)).toBeNull()
+    expect(billingDateDisabledReason('', false)).toBeNull()
+  })
   it('pausa solo BRL a PEN y USD, independientemente de mayúsculas', () => {
     expect(billingRouteDisabledReason('BRL', 'PEN')).toContain('temporalmente')
     expect(billingRouteDisabledReason(' brl ', 'usd')).toContain('temporalmente')

@@ -37,10 +37,11 @@ export const omieApi = {
       phone_number: details.phone_number || null
     })
   },
-  async issue(id: string, total: string, document: string, description?: string): Promise<OmieRecord> {
+  async issue(id: string, total: string, document: string, description?: string, itemDescription?: string): Promise<OmieRecord> {
     return (await apiClient.post(Domain.apiPath(`omie/transactions/${id}/issue`), {
       expected_total: total, expected_document: document,
-      ...(description !== undefined ? { expected_description: description } : {})
+      ...(description !== undefined ? { expected_description: description } : {}),
+      ...(itemDescription !== undefined ? { item_description: itemDescription } : {})
     })).data
   },
   async refresh(id: string): Promise<OmieRecord> {
