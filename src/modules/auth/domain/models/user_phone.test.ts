@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatUserPhone, parseUserContacts, normalizeWhatsAppUsername } from './user_phone'
+import { formatUserPhone, parseUserContacts, normalizeWhatsAppUsername, validateUserPhone } from './user_phone'
 
 describe('formatUserPhone', () => {
   it('muestra el usuario de WhatsApp sin código telefónico', () => {
@@ -28,5 +28,16 @@ describe('normalizeWhatsAppUsername', () => {
   })
   it.each(['', '@', '@@', '  '])('no guarda un prefijo vacío: %s', value => {
     expect(normalizeWhatsAppUsername(value)).toBeNull()
+  })
+})
+
+
+describe('validateUserPhone', () => {
+  it.each(['@cliente', 'b98990', '+51999', '12e3', '99 88', '１２３'])('rechaza %s en teléfono', value => {
+    expect(() => validateUserPhone(value)).toThrow('solo permite números')
+  })
+  it('conserva ceros iniciales y permite teléfono vacío', () => {
+    expect(validateUserPhone('001234567')).toBe('001234567')
+    expect(validateUserPhone('')).toBeNull()
   })
 })

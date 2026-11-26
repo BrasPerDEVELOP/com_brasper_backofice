@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PhoneNumberInput from '@/interface/components/PhoneNumberInput.vue'
 import { contactEmails, uniqueEmails } from '@/interface/utils/contact_emails'
 import { normalizeUserDocument } from '@/interface/utils/user_documents'
 import { ref, computed, watch } from 'vue'
@@ -381,14 +382,7 @@ watch(
               <label for="usuario-phone" class="mb-1.5 block text-sm font-medium text-[#374151]">
                 Teléfono
               </label>
-              <input
-                id="usuario-phone"
-                v-model="form.phone"
-                type="tel"
-                maxlength="100"
-                class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
-                placeholder="987654321"
-              />
+              <PhoneNumberInput id="usuario-phone" v-model="form.phone" :disabled="creating" />
             </div>
             <div>
               <label for="usuario-whatsapp" class="mb-1.5 block text-sm font-medium text-[#374151]">Usuario de WhatsApp (opcional)</label>

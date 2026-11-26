@@ -5,6 +5,14 @@ export function normalizeUserPhone(value: unknown): string | null {
   return null
 }
 
+export function validateUserPhone(value: unknown): string | null {
+  const phone = normalizeUserPhone(value)
+  if (phone !== null && !/^[0-9]+$/.test(phone)) {
+    throw new Error('El teléfono solo permite números. Usa el campo Usuario de WhatsApp para el @usuario.')
+  }
+  return phone
+}
+
 export function normalizeWhatsAppUsername(value: unknown): string | null {
   if (typeof value !== 'string') return null
   const username = value.trim().replace(/^@+/, '').trim()

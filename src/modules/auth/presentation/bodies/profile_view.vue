@@ -131,15 +131,7 @@
                 </div>
                 <div class="space-y-1.5">
                   <label for="profile-phone" class="block text-xs font-medium text-[#666]">Teléfono</label>
-                  <input
-                    id="profile-phone"
-                    v-model="form.phone"
-                    type="text"
-                    maxlength="100"
-                    autocomplete="off"
-                    class="w-full rounded-xl border border-[#cfdbef] bg-white px-4 py-3 text-sm text-[#333] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
-                    placeholder="987654321"
-                  />
+                  <PhoneNumberInput id="profile-phone" v-model="form.phone" :disabled="authStore.isLoading" />
                 </div>
               </div>
               <div class="mt-5 space-y-1.5">
@@ -282,6 +274,7 @@
 </template>
 
 <script setup lang="ts">
+import PhoneNumberInput from '@/interface/components/PhoneNumberInput.vue'
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { Domain } from '@/interface/infrastructure/services'
 import type { User } from '../../domain/models'

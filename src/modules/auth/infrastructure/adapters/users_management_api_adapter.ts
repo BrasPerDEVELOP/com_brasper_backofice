@@ -3,7 +3,7 @@ import { apiClient } from '@/interface/api/client'
 import { formatApiErrorBody } from '@/interface/api/format_api_error'
 import { Domain } from '@/interface/infrastructure/services'
 import { USER_ROLES } from '../../domain/models'
-import { normalizeUserPhone, normalizeWhatsAppUsername } from '../../domain/models/user_phone'
+import { validateUserPhone, normalizeWhatsAppUsername } from '../../domain/models/user_phone'
 import {
   isClientProfileIncomplete,
   parseUserListItem,
@@ -168,7 +168,7 @@ function appendUserFormFields(form: FormData, payload: CreateUserPayload | Updat
     form.append('whatsapp_username', username)
     if (!username) form.append('clear_whatsapp_username', 'true')
   }
-  if (payload.phone !== undefined) form.append('phone', normalizeUserPhone(payload.phone) ?? '')
+  if (payload.phone !== undefined) form.append('phone', validateUserPhone(payload.phone) ?? '')
   if (payload.code_phone?.trim()) form.append('code_phone', payload.code_phone.trim())
   if (payload.profile_image instanceof File) form.append('profile_image', payload.profile_image)
 }

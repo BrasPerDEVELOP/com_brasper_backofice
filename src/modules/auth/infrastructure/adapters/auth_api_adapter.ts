@@ -12,7 +12,7 @@ import type {
 } from './auth_repository'
 import type { User } from '../../domain/models'
 import { parseUser } from '../parse_user'
-import { normalizeUserPhone, normalizeWhatsAppUsername } from '../../domain/models/user_phone'
+import { validateUserPhone, normalizeWhatsAppUsername } from '../../domain/models/user_phone'
 
 const log = createLoggerWithContext('auth')
 
@@ -190,7 +190,7 @@ export class AuthApiAdapter implements AuthRepository {
     if (payload.document_number != null && payload.document_number !== '') body.document_number = payload.document_number
     if (payload.document_type != null && payload.document_type !== '') body.document_type = payload.document_type
     if (payload.whatsapp_username !== undefined) body.whatsapp_username = normalizeWhatsAppUsername(payload.whatsapp_username)
-    if (payload.phone !== undefined) body.phone = normalizeUserPhone(payload.phone)
+    if (payload.phone !== undefined) body.phone = validateUserPhone(payload.phone)
     if (payload.code_phone != null && payload.code_phone !== '') body.code_phone = payload.code_phone
     if (profileImage) body.profile_image = profileImage
     const response = await apiClient.put<unknown>(authPath('me'), body, {

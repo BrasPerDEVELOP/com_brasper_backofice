@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PhoneNumberInput from '@/interface/components/PhoneNumberInput.vue'
 import WhatsAppUsernameInput from './WhatsAppUsernameInput.vue'
 withDefaults(
   defineProps<{
@@ -30,10 +31,7 @@ function updateNames(event: Event) {
   emit('update:names', (event.target as HTMLInputElement).value)
 }
 
-function updatePhone(event: Event) {
-  const value = (event.target as HTMLInputElement).value.trim()
-  emit('update:phone', value || null)
-}
+
 </script>
 
 <template>
@@ -76,15 +74,8 @@ function updatePhone(event: Event) {
           <label for="quick-user-phone" class="mb-1.5 block text-sm font-medium text-[#374151]">
             Teléfono <span class="text-xs font-normal text-[#6b7280]">(opcional)</span>
           </label>
-          <input
-            :value="phone ?? ''"
-            id="quick-user-phone"
-            type="text"
-            maxlength="100"
-            class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
-            placeholder="987654321"
-            @input="updatePhone"
-          />
+          <PhoneNumberInput id="quick-user-phone" :model-value="phone" :disabled="creating"
+            @update:model-value="emit('update:phone', $event ?? null)" />
         </div>
 
         <div>
