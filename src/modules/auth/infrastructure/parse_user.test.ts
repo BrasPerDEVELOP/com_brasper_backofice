@@ -36,7 +36,7 @@ describe('parseUser (dominio)', () => {
       codigo_telefono: '+51'
     })
     expect(u?.email).toBe('via-username@b.com')
-    expect(u?.phone).toBe(999)
+    expect(u?.phone).toBe('999')
     expect(u?.document_type).toBe('DNI')
     expect(u?.code_phone).toBe('+51')
   })
@@ -176,8 +176,14 @@ describe('parseUserListItem (listado)', () => {
     expect(u?.names).toBe('Ana')
   })
 
-  it('parsea phone string a número y null si no es válido', () => {
-    expect(parseUserListItem({ id: 1, phone: '555' })?.phone).toBe(555)
+  it('conserva el teléfono como texto y null si está vacío', () => {
+    expect(parseUserListItem({ id: 1, phone: '555' })?.phone).toBe('555')
     expect(parseUserListItem({ id: 1, phone: '' })?.phone).toBeNull()
+  })
+
+  it.each(['001234567', 987654321])('conserva el contacto %s al leer perfil y listado', phone => {
+    expect(parseUser({ id: 'contact', phone })?.phone).toBe(String(phone))
+    expect(parseUserListItem({ id: 'contact', phone })?.phone).toBe(String(phone))
+    expect(parseUserListItem({ id: 'contact', phone })?.has_phone).toBe(true)
   })
 })

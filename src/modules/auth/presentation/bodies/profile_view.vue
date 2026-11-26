@@ -130,14 +130,21 @@
                   />
                 </div>
                 <div class="space-y-1.5">
-                  <label class="block text-xs font-medium text-[#666]">Teléfono</label>
+                  <label for="profile-phone" class="block text-xs font-medium text-[#666]">Teléfono</label>
                   <input
-                    v-model.number="form.phone"
-                    type="number"
+                    id="profile-phone"
+                    v-model="form.phone"
+                    type="text"
+                    maxlength="100"
+                    autocomplete="off"
                     class="w-full rounded-xl border border-[#cfdbef] bg-white px-4 py-3 text-sm text-[#333] outline-none focus:border-brasper-indigoStrong focus:ring-2 focus:ring-brasper-indigoStrong/20"
                     placeholder="987654321"
                   />
                 </div>
+              </div>
+              <div class="mt-5 space-y-1.5">
+                <label for="profile-whatsapp" class="block text-xs font-medium text-[#666]">Usuario de WhatsApp (opcional)</label>
+                <WhatsAppUsernameInput id="profile-whatsapp" v-model="form.whatsapp_username" :disabled="authStore.isLoading" />
               </div>
               <div class="mt-6 flex flex-wrap gap-3">
                 <button
@@ -190,10 +197,14 @@
               </span>
             </p>
           </div>
+          <div v-if="authStore.user.whatsapp_username" class="rounded-xl border border-[#dbe7fb] bg-[#fbfdff] px-4 py-3">
+            <p class="text-xs font-medium text-[#666]">Usuario de WhatsApp</p>
+            <p class="mt-1 font-medium text-[#232b4d]">{{ authStore.user.whatsapp_username }}</p>
+          </div>
           <div v-if="authStore.user.phone != null || authStore.user.code_phone" class="rounded-xl border border-[#dbe7fb] bg-[#fbfdff] px-4 py-3">
             <p class="text-xs font-medium text-[#666]">Teléfono</p>
             <p class="mt-1 font-medium text-[#232b4d]">
-              {{ [authStore.user.code_phone, authStore.user.phone].filter(Boolean).join(' ') || '—' }}
+              {{ formatUserPhone(authStore.user.phone, authStore.user.code_phone) || '—' }}
             </p>
           </div>
         </div>
@@ -275,7 +286,9 @@ import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { Domain } from '@/interface/infrastructure/services'
 import type { User } from '../../domain/models'
 import { useAuthStore } from '../controllers/use_auth_store_controller'
+import WhatsAppUsernameInput from '@/interface/components/WhatsAppUsernameInput.vue'
 import AppDropdown from '@/interface/components/AppDropdown.vue'
+import { formatUserPhone } from '../../domain/models/user_phone'
 
 const documentTypeOptions = [
   { value: 'dni', label: 'DNI' },
@@ -312,7 +325,8 @@ const form = ref<{
   lastnames: string
   document_number: string
   document_type: string
-  phone: number | ''
+  whatsapp_username: string
+  phone: string
   code_phone: string
   profile_image: File | null
 }>({
@@ -321,6 +335,7 @@ const form = ref<{
   document_number: '',
   document_type: '',
   phone: '',
+  whatsapp_username: '',
   code_phone: '',
   profile_image: null
 })
@@ -379,6 +394,7 @@ watch(
         document_number: user.document_number ?? '',
         document_type: user.document_type ?? '',
         phone: user.phone ?? '',
+        whatsapp_username: user.whatsapp_username ?? '',
         code_phone: user.code_phone ?? '',
         profile_image: null
       }
@@ -407,6 +423,7 @@ function startEditing() {
       document_number: authStore.user.document_number ?? '',
       document_type: authStore.user.document_type ?? '',
       phone: authStore.user.phone ?? '',
+      whatsapp_username: authStore.user.whatsapp_username ?? '',
       code_phone: authStore.user.code_phone ?? '',
       profile_image: null
     }
@@ -427,7 +444,8 @@ async function saveProfile() {
       lastnames: form.value.lastnames.trim() || null,
       document_number: form.value.document_number.trim() || null,
       document_type: form.value.document_type.trim() || null,
-      phone: form.value.phone === '' ? null : (Number.isFinite(Number(form.value.phone)) ? Number(form.value.phone) : null),
+      phone: form.value.phone.trim() || null,
+      whatsapp_username: form.value.whatsapp_username.trim() || null,
       code_phone: form.value.code_phone.trim() || null,
       profile_image: form.value.profile_image
     })

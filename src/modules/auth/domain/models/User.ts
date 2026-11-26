@@ -14,7 +14,8 @@ export interface User {
   profile_image: string | null
   is_agent: boolean
   role: string | null
-  phone: number | null
+  whatsapp_username?: string | null
+  phone: string | null
   code_phone: string | null
   permissions: string[]
   permissions_granted?: string[]

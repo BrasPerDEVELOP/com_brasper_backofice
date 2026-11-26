@@ -30,7 +30,8 @@ function buildPutPayload(
     lastnames?: string | null
     document_number?: string | null
     document_type?: string | null
-    phone?: number | null
+    whatsapp_username?: string | null
+    phone?: string | null
     code_phone?: string | null
     profile_image?: File | null
   }
@@ -43,7 +44,8 @@ function buildPutPayload(
     profile_image: changes.profile_image instanceof File ? changes.profile_image : undefined,
     document_number: (changes.document_number ?? user.document_number ?? '').trim() || undefined,
     document_type: (changes.document_type ?? user.document_type ?? '').trim() || undefined,
-    phone: changes.phone ?? user.phone ?? undefined,
+    whatsapp_username: changes.whatsapp_username !== undefined ? changes.whatsapp_username : user.whatsapp_username,
+    phone: changes.phone !== undefined ? changes.phone : user.phone,
     code_phone: (changes.code_phone ?? user.code_phone ?? '').trim() || undefined
   }
 }
@@ -207,7 +209,8 @@ export const useAuthStore = defineStore('auth', {
       lastnames?: string | null
       document_number?: string | null
       document_type?: string | null
-      phone?: number | null
+      whatsapp_username?: string | null
+      phone?: string | null
       code_phone?: string | null
       profile_image?: File | null
     }) {

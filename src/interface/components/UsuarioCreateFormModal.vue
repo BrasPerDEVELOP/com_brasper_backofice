@@ -13,6 +13,7 @@ import {
   type UserListItem
 } from '@/modules/auth/infrastructure/adapters/users_management_api_adapter'
 import { USER_ROLE_LABELS, PHONE_CODES } from '@/modules/auth/domain/models'
+import WhatsAppUsernameInput from '@/interface/components/WhatsAppUsernameInput.vue'
 import AppDropdown from '@/interface/components/AppDropdown.vue'
 import UserIdentificationsEditor from '@/interface/components/UserIdentificationsEditor.vue'
 import UserDocumentLookup from '@/interface/components/UserDocumentLookup.vue'
@@ -76,6 +77,7 @@ const form = ref<CreateUserPayload>({
   document_type: '',
   profile_image: null,
   phone: null,
+  whatsapp_username: '',
   code_phone: ''
 })
 
@@ -142,6 +144,7 @@ function resetForm() {
     document_type: props.user?.document_type ?? '',
     profile_image: null,
     phone: props.user?.phone ?? null,
+    whatsapp_username: props.user?.whatsapp_username ?? '',
     code_phone: props.user?.code_phone ?? ''
   }
   // El parser garantiza que `identifications` ya incluya el documento heredado
@@ -168,6 +171,7 @@ async function hydrateFromDetail(id: string) {
     if (!props.modelValue || props.user?.id !== id) return
     if (!detail) throw new Error('Usuario no encontrado')
     if (detail) {
+      form.value.whatsapp_username = detail.whatsapp_username ?? ''
       emailRows.value = contactEmails(detail.emails, detail.email)
       if (!emailRows.value.length) emailRows.value = ['']
       identifications.value = detail.identifications.map((item) => ({ ...item }))
@@ -281,10 +285,12 @@ watch(
       v-if="modelValue && isQuick"
       :names="form.names ?? ''"
       :phone="form.phone ?? null"
+      :whatsapp-username="form.whatsapp_username ?? ''"
       :creating="creating"
       :error="error"
       @update:names="form.names = $event"
       @update:phone="form.phone = $event"
+      @update:whatsapp-username="form.whatsapp_username = $event"
       @advanced="openAdvancedDialog"
       @submit="handleSubmit"
       @close="close"
@@ -372,15 +378,21 @@ watch(
               />
             </div>
             <div>
-              <label class="mb-1.5 block text-sm font-medium text-[#374151]">
+              <label for="usuario-phone" class="mb-1.5 block text-sm font-medium text-[#374151]">
                 Teléfono
               </label>
               <input
-                v-model.number="form.phone"
-                type="number"
+                id="usuario-phone"
+                v-model="form.phone"
+                type="tel"
+                maxlength="100"
                 class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
                 placeholder="987654321"
               />
+            </div>
+            <div>
+              <label for="usuario-whatsapp" class="mb-1.5 block text-sm font-medium text-[#374151]">Usuario de WhatsApp (opcional)</label>
+              <WhatsAppUsernameInput id="usuario-whatsapp" v-model="form.whatsapp_username" :disabled="loadingDetail || creating" />
             </div>
             <div class="sm:col-span-2">
               <label class="mb-1.5 block text-sm font-medium text-[#374151]">

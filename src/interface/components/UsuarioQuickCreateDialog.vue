@@ -1,14 +1,17 @@
 <script setup lang="ts">
+import WhatsAppUsernameInput from './WhatsAppUsernameInput.vue'
 withDefaults(
   defineProps<{
     names?: string
-    phone?: number | string | null
+    whatsappUsername?: string
+    phone?: string | null
     creating?: boolean
     error?: string
   }>(),
   {
     names: '',
     phone: null,
+    whatsappUsername: '',
     creating: false,
     error: ''
   }
@@ -16,6 +19,7 @@ withDefaults(
 
 const emit = defineEmits<{
   'update:names': [value: string]
+  'update:whatsappUsername': [value: string]
   'update:phone': [value: string | null]
   advanced: []
   submit: []
@@ -69,18 +73,24 @@ function updatePhone(event: Event) {
         </div>
 
         <div>
-          <label class="mb-1.5 block text-sm font-medium text-[#374151]">
+          <label for="quick-user-phone" class="mb-1.5 block text-sm font-medium text-[#374151]">
             Teléfono <span class="text-xs font-normal text-[#6b7280]">(opcional)</span>
           </label>
           <input
             :value="phone ?? ''"
-            type="tel"
-            inputmode="numeric"
-            autocomplete="tel"
+            id="quick-user-phone"
+            type="text"
+            maxlength="100"
             class="form-input w-full rounded-lg border border-[#e5e7eb] px-3 py-2.5 text-sm transition focus:border-brasper-indigoStrong focus:outline-none focus:ring-1 focus:ring-brasper-indigoStrong"
             placeholder="987654321"
             @input="updatePhone"
           />
+        </div>
+
+        <div>
+          <label for="quick-user-whatsapp" class="mb-1.5 block text-sm font-medium text-[#374151]">Usuario de WhatsApp (opcional)</label>
+          <WhatsAppUsernameInput id="quick-user-whatsapp" :model-value="whatsappUsername" :disabled="creating"
+            @update:model-value="emit('update:whatsappUsername', $event ?? '')" />
         </div>
 
         <p v-if="error" class="rounded-lg bg-[#dc3545]/10 px-4 py-3 text-sm text-[#dc3545]">

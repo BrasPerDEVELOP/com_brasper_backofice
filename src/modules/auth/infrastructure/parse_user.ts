@@ -5,6 +5,7 @@
 
 import { contactEmails } from '@/interface/utils/contact_emails'
 import { type User, normalizeStoredRole } from '../domain/models'
+import { parseUserContacts } from '../domain/models/user_phone'
 import { parseEffectivePermissions } from '../domain/models/permissions'
 
 /**
@@ -22,7 +23,8 @@ export interface UserListItem {
   document_number?: string
   document_type?: string
   identifications: UserIdentification[]
-  phone?: number | null
+  whatsapp_username?: string | null
+  phone?: string | null
   code_phone?: string | null
   country?: string | null
   local_area_code?: string | null
@@ -98,13 +100,7 @@ export function parseUser(data: unknown): User | null {
   const lastnames = o.lastnames != null ? String(o.lastnames) : null
   const email = (o.email ?? o.username) != null ? String(o.email ?? o.username) : ''
   const displayName = [names, lastnames].filter(Boolean).join(' ') || email
-  const phoneVal = o.phone ?? o.telefono
-  const phone =
-    typeof phoneVal === 'number'
-      ? phoneVal
-      : typeof phoneVal === 'string' && phoneVal
-        ? Number(phoneVal)
-        : null
+  const { phone, whatsapp_username } = parseUserContacts(o)
   const documentType = o.document_type ?? o.documentType ?? o.tipo_documento
   const codePhone = o.code_phone ?? o.codePhone ?? o.codigo_telefono
   const roleNorm = normalizeStoredRole(o.role)
@@ -120,7 +116,8 @@ export function parseUser(data: unknown): User | null {
     profile_image: o.profile_image != null ? String(o.profile_image) : null,
     is_agent: Boolean(o.is_agent),
     role: roleNorm,
-    phone: Number.isFinite(phone) ? phone : null,
+    phone,
+    whatsapp_username,
     code_phone: codePhone != null ? String(codePhone) : null,
     permissions: parseEffectivePermissions(o.permissions),
     permissions_granted: parseEffectivePermissions(o.permissions_granted),
@@ -148,13 +145,7 @@ export function parseUserListItem(item: unknown): UserListItem | null {
     identifications.find((document) => document.is_primary) ?? identifications[0]
   const document_number = primaryIdentification?.document_number
   const document_type = primaryIdentification?.document_type
-  const phoneVal = o.phone ?? o.telefono
-  const phone =
-    typeof phoneVal === 'number'
-      ? phoneVal
-      : typeof phoneVal === 'string' && phoneVal.trim()
-        ? Number(phoneVal)
-        : null
+  const { phone, whatsapp_username } = parseUserContacts(o)
   const codePhone = o.code_phone ?? o.codePhone ?? o.codigo_telefono
   const hasEmailSignal = o.has_email ?? o.hasEmail
   const hasPhoneSignal = o.has_phone ?? o.hasPhone
@@ -169,10 +160,11 @@ export function parseUserListItem(item: unknown): UserListItem | null {
     document_number,
     document_type,
     identifications,
-    phone: Number.isFinite(phone) ? phone : null,
+    phone,
+    whatsapp_username,
     code_phone: codePhone != null ? String(codePhone) : null,
     has_email: typeof hasEmailSignal === 'boolean' ? hasEmailSignal : Boolean(email),
-    has_phone: typeof hasPhoneSignal === 'boolean' ? hasPhoneSignal : Number.isFinite(phone),
+    has_phone: typeof hasPhoneSignal === 'boolean' ? hasPhoneSignal : phone !== null,
     country: typeof o.country === 'string' ? o.country.trim() || null : null,
     local_area_code: o.local_area_code != null ? String(o.local_area_code).trim() || null : null,
     local_area_name: typeof o.local_area_name === 'string' ? o.local_area_name.trim() || null : null

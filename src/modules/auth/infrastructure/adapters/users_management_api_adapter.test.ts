@@ -26,6 +26,25 @@ const post = vi.mocked(apiClient.post)
 const put = vi.mocked(apiClient.put)
 
 describe('users management api adapter', () => {
+  it('guarda teléfono y WhatsApp independientes, permite borrar solo el usuario de WhatsApp', async () => {
+    get.mockResolvedValue({ data: [] })
+    const response = { id: 'contact', names: 'Cliente', phone: '001234567', whatsapp_username: '@cliente', role: 'client' }
+    post.mockResolvedValue({ data: response })
+    const created = await createUser({ ...response })
+    const form = post.mock.calls[0]?.[1] as FormData
+    expect(form.get('phone')).toBe('001234567')
+    expect(form.get('whatsapp_username')).toBe('@cliente')
+    expect(created.phone).toBe('001234567')
+    expect(created.whatsapp_username).toBe('@cliente')
+    put.mockResolvedValue({ data: { ...response, whatsapp_username: null } })
+    const updated = await updateUser({ id: 'contact', whatsapp_username: null })
+    const edit = put.mock.calls[0]?.[1] as FormData
+    expect(edit.get('clear_whatsapp_username')).toBe('true')
+    expect(edit.has('phone')).toBe(false)
+    expect(updated.phone).toBe('001234567')
+    expect(updated.whatsapp_username).toBeNull()
+  })
+
   it('guarda todos los correos y permite vaciar la colección al editar', async () => {
     const emails = ['main@example.com', 'second@example.com']
     get.mockResolvedValue({ data: [] })

@@ -3,6 +3,7 @@ import { apiClient } from '@/interface/api/client'
 import { formatApiErrorBody } from '@/interface/api/format_api_error'
 import { Domain } from '@/interface/infrastructure/services'
 import { USER_ROLES } from '../../domain/models'
+import { normalizeUserPhone, normalizeWhatsAppUsername } from '../../domain/models/user_phone'
 import {
   isClientProfileIncomplete,
   parseUserListItem,
@@ -138,7 +139,8 @@ export interface CreateUserPayload {
   document_type?: string
   identifications?: UserIdentification[]
   profile_image?: File | null
-  phone?: number | string | null
+  whatsapp_username?: string | null
+  phone?: string | null
   code_phone?: string
 }
 
@@ -161,14 +163,12 @@ function appendUserFormFields(form: FormData, payload: CreateUserPayload | Updat
   if (payload.identifications !== undefined) {
     form.append('identifications', JSON.stringify(payload.identifications))
   }
-  const phoneVal = payload.phone
-  const phoneNum =
-    phoneVal != null && phoneVal !== ''
-      ? typeof phoneVal === 'number'
-        ? phoneVal
-        : Number(phoneVal)
-      : null
-  if (phoneNum != null && Number.isFinite(phoneNum)) form.append('phone', String(phoneNum))
+  if (payload.whatsapp_username !== undefined) {
+    const username = normalizeWhatsAppUsername(payload.whatsapp_username) ?? ''
+    form.append('whatsapp_username', username)
+    if (!username) form.append('clear_whatsapp_username', 'true')
+  }
+  if (payload.phone !== undefined) form.append('phone', normalizeUserPhone(payload.phone) ?? '')
   if (payload.code_phone?.trim()) form.append('code_phone', payload.code_phone.trim())
   if (payload.profile_image instanceof File) form.append('profile_image', payload.profile_image)
 }
@@ -201,6 +201,7 @@ function createUserRequestKey(payload: CreateUserPayload): string {
       document_number: item.document_number.replace(/\s+/g, '').toLowerCase(),
       is_primary: item.is_primary
     })),
+    whatsapp_username: normalizeWhatsAppUsername(payload.whatsapp_username) ?? '',
     phone: payload.phone == null ? '' : String(payload.phone).trim(),
     code_phone: payload.code_phone?.trim() ?? '',
     image:
@@ -259,6 +260,7 @@ function completesProfile(payload: CreateUserPayload): boolean {
 }
 
 function phonesAreCompatible(user: UserListItem, payload: CreateUserPayload): boolean {
+  if (user.whatsapp_username && payload.whatsapp_username && user.whatsapp_username !== payload.whatsapp_username.trim()) return false
   if (user.phone == null || payload.phone == null || payload.phone === '') return true
   return String(user.phone).trim() === String(payload.phone).trim()
 }
@@ -302,6 +304,7 @@ async function createOrCompleteUser(payload: CreateUserPayload): Promise<UserLis
     document_type: payload.document_type,
     identifications: payload.identifications,
     profile_image: payload.profile_image,
+    whatsapp_username: payload.whatsapp_username,
     phone: payload.phone,
     code_phone: payload.code_phone
   })
